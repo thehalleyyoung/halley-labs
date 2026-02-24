@@ -265,15 +265,33 @@ def check_matmul_compatible(a: TensorShape, b: TensorShape) -> Optional[str]:
 def compute_reshape_shape(
     original: TensorShape, new_dims: Tuple
 ) -> Optional[TensorShape]:
-    """Compute result shape of reshape(original, new_dims)."""
-    # Count -1's
-    neg_ones = sum(1 for d in new_dims if d == -1)
+    """Compute result shape of reshape(original, new_dims).
+
+    Sentinel value 0 means "copy this dimension from the corresponding
+    input dim" (used when x.size(dim) appears in view/reshape args).
+    """
+    # Resolve sentinel 0 values by copying from input
+    resolved = list(new_dims)
+    copied_symbolic = {}
+    for i, d in enumerate(resolved):
+        if d == 0 and i < original.ndim:
+            inp_d = original.dims[i]
+            if not inp_d.is_symbolic:
+                resolved[i] = inp_d.value
+            else:
+                # Keep symbolic dim name; mark so it's not counted as -1
+                copied_symbolic[i] = inp_d
+
+    # Count -1's (exclude sentinel-resolved positions)
+    neg_ones = sum(1 for i, d in enumerate(resolved) if d == -1 and i not in copied_symbolic)
     if neg_ones > 1:
         return None  # Invalid: at most one -1
 
     result_dims = []
-    for d in new_dims:
-        if isinstance(d, int) and d >= 0:
+    for i, d in enumerate(resolved):
+        if i in copied_symbolic:
+            result_dims.append(copied_symbolic[i])
+        elif isinstance(d, int) and d >= 0:
             result_dims.append(ShapeDim(d))
         elif d == -1:
             result_dims.append(ShapeDim("_inferred"))

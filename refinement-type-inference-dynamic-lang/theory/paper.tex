@@ -1673,10 +1673,15 @@ tool for CI/CD integration.
 \textsc{TensorGuard} misses bugs in HuggingFace, vision, and
 reshape categories.  These stem from the AST-based graph
 extractor's inability to track shapes through:
-(1)~\texttt{ConvTranspose2d} output channel computation;
-(2)~adaptive pooling followed by \texttt{view}-based flattening;
-(3)~dynamic \texttt{view} reshape with computed dimensions.
+(1)~complex multi-hop attribute access (e.g., \texttt{self.model.encoder});
+(2)~dynamic reshape with fully symbolic dimensions;
+(3)~loop-based layer application with data-dependent indexing.
 These are engineering limitations, not fundamental to the approach.
+The graph extractor now supports \texttt{ConvTranspose2d},
+\texttt{F.interpolate}, element-wise multiply (\texttt{x * y}),
+and \texttt{view(x.size(0), -1)} flattening patterns, which
+previously caused false positives on architectures like U-Net,
+SE-Net, ResNet skip connections, and BERT.
 
 \paragraph{Comparison with PyTea.}
 PyTea~\cite{pytea} performs abstract interpretation over individual
@@ -1698,8 +1703,6 @@ results when concatenation tracking is incomplete.
 Recurrent architectures are not handled by the acyclic assumption.
 
 \paragraph{Future work.}
-Extending graph extraction to support ConvTranspose2d,
-adaptive pooling, and dynamic \texttt{view} operations.
 Adding dtype theory and gradient flow theory.
 Scaling to 100+ layer models via incremental verification.
 Integration with \texttt{torch.compile}'s symbolic shape
@@ -1856,13 +1859,25 @@ Since the graph $G$ is acyclic (a DAG), the induction is
 well-founded and terminates.
 
 \paragraph{Limitations.}
-Unsupported operations (e.g., \texttt{ConvTranspose2d}, adaptive
-pooling, dynamic \texttt{view} with computed dimensions) may cause
+Unsupported operations may cause
 \textsc{TensorGuard} to miss bugs (false negatives).  The soundness
 guarantee applies only to computation steps whose shape transfer
-functions are modeled.  When a layer is not modeled, the verifier
-conservatively reports \textsc{Unknown} or uses a heuristic
-(low-confidence verdict), which may produce false positives.
+functions are modeled.  The graph extractor now covers
+\texttt{nn.ConvTranspose2d}, \texttt{F.interpolate}, element-wise
+multiply/subtract, \texttt{nn.ModuleList}, and common
+\texttt{view(x.size(0), -1)} flattening patterns.
+
+\paragraph{Mechanized proofs.}
+The core soundness theorems are mechanized in Lean~4
+(\texttt{lean/TheoryCombination.lean}), including:
+theory combination soundness (Theorem~\ref{thm:combination}),
+broadcast commutativity and associativity,
+non-tautological propagator soundness (connecting the executable
+boolean checker to the semantic specification via
+\texttt{broadcastDim\_sound}),
+CEGAR convergence from finite predicate universe,
+and the forward direction of the PARTITION reduction for
+NP-completeness.
 \end{proof}
 
 

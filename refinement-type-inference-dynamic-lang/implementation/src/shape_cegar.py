@@ -1755,6 +1755,29 @@ class ShapeCEGARLoop:
         current_shape_env: Dict[str, TensorShape] = {}
         last_vresult: Optional[VerificationResult] = None
 
+        # ─── Convergence argument (see Proposition 6 in paper) ───────────
+        # The predicate universe Pred is finite: it is bounded by
+        #   |Pred| ≤ |layers| × |predicate_kinds|
+        # where |layers| is the number of layers in __init__ and
+        # |predicate_kinds| = 7 (DIM_EQ, DIM_GT, DIM_GE, DIM_DIVISIBLE,
+        # DIM_MATCH, NDIM_EQ, SHAPE_EQ).  For a typical nn.Module with
+        # L layers and D shape dimensions per layer, the universe has
+        # at most L × D × 7 candidate predicates.
+        #
+        # Each CEGAR iteration either:
+        #   (a) returns SAFE or REAL_BUG, terminating the loop, or
+        #   (b) adds ≥1 new predicate from Pred \ P to the accumulated
+        #       set P (monotone growth, Houdini-style).
+        #   (c) adds 0 new predicates (no progress) → terminates as SAFE.
+        #
+        # Since P ⊆ Pred grows strictly in case (b) and |Pred| is finite,
+        # the loop terminates in at most |Pred| iterations.  The budget
+        # of max_iterations serves as a safety bound, but convergence is
+        # guaranteed by the finite predicate universe.
+        #
+        # Mechanized: see cegar_terminates in lean/TheoryCombination.lean.
+        # ─────────────────────────────────────────────────────────────────
+
         for iteration in range(self.max_iterations):
             iter_t0 = time.monotonic()
 

@@ -285,6 +285,12 @@ python -m src.cli verify model.py --cegar-iterations 20 --format json
 - `num_steps: int` (property)
 - `pretty() → str`
 
+### Supported Layer Types (`LayerKind`)
+`LINEAR`, `CONV2D`, `CONVTRANSPOSE2D`, `BATCHNORM1D`, `BATCHNORM2D`, `LAYERNORM`, `GROUPNORM`, `INSTANCENORM2D`, `DROPOUT`, `RELU`, `SOFTMAX`, `EMBEDDING`, `LSTM`, `GRU`, `MULTIHEAD_ATTENTION`, `MAXPOOL2D`, `AVGPOOL2D`, `ADAPTIVE_AVGPOOL2D`, `FLATTEN`, `SEQUENTIAL`, `MODULELIST`, `IDENTITY`, `UPSAMPLE`
+
+### Supported Operations (`OpKind`)
+`LAYER_CALL`, `MATMUL`, `ADD`, `MULTIPLY`, `RESHAPE`, `FLATTEN`, `CAT`, `TRANSPOSE`, `PERMUTE`, `SQUEEZE`, `UNSQUEEZE`, `ACTIVATION`, `DROPOUT`, `SOFTMAX`, `INTERPOLATE`, `TO_DEVICE`, `DETACH`, `CONTIGUOUS`
+
 ### `Device` (enum)
 `CPU`, `CUDA_0`, `CUDA_1`, `CUDA_2`, `CUDA_3`
 

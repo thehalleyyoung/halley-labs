@@ -169,6 +169,8 @@ class LayerKind(Enum):
     SEQUENTIAL = auto()
     MODULELIST = auto()
     IDENTITY = auto()
+    CONVTRANSPOSE2D = auto()
+    UPSAMPLE = auto()
     UNKNOWN = auto()
 
 
@@ -192,6 +194,8 @@ class OpKind(Enum):
     CONTIGUOUS = auto()       # x.contiguous()
     CONDITIONAL = auto()      # if/else branch (path-sensitive)
     CUSTOM = auto()           # unrecognised call
+    MULTIPLY = auto()         # x * y  (element-wise, broadcast semantics)
+    INTERPOLATE = auto()      # F.interpolate
     RETURN = auto()           # return statement
 
 
@@ -676,6 +680,10 @@ def _is_nn_layer(name: Optional[str]) -> Tuple[bool, LayerKind]:
         "GroupNorm": LayerKind.GROUPNORM,
         "nn.InstanceNorm2d": LayerKind.INSTANCENORM2D,
         "InstanceNorm2d": LayerKind.INSTANCENORM2D,
+        "nn.ConvTranspose2d": LayerKind.CONVTRANSPOSE2D,
+        "ConvTranspose2d": LayerKind.CONVTRANSPOSE2D,
+        "nn.Upsample": LayerKind.UPSAMPLE,
+        "Upsample": LayerKind.UPSAMPLE,
     }
 
     kind = _map.get(name, LayerKind.UNKNOWN)
@@ -816,6 +824,34 @@ def _extract_layer_params(kind: LayerKind, call: ast.Call,
         layer.num_features = pos[0] if len(pos) > 0 else kw.get("num_features")
         layer.params = {"num_features": layer.num_features}
 
+    elif kind == LayerKind.CONVTRANSPOSE2D:
+        layer.in_channels = pos[0] if len(pos) > 0 else kw.get("in_channels")
+        layer.out_channels = pos[1] if len(pos) > 1 else kw.get("out_channels")
+        ks = pos[2] if len(pos) > 2 else kw.get("kernel_size")
+        if isinstance(ks, int):
+            ks = (ks, ks)
+        layer.kernel_size = ks
+        stride = pos[3] if len(pos) > 3 else kw.get("stride", 1)
+        if isinstance(stride, int):
+            stride = (stride, stride)
+        padding = pos[4] if len(pos) > 4 else kw.get("padding", 0)
+        if isinstance(padding, int):
+            padding = (padding, padding)
+        output_padding = kw.get("output_padding", 0)
+        if isinstance(output_padding, int):
+            output_padding = (output_padding, output_padding)
+        layer.params = {"in_channels": layer.in_channels,
+                        "out_channels": layer.out_channels,
+                        "kernel_size": ks,
+                        "stride": stride,
+                        "padding": padding,
+                        "output_padding": output_padding}
+
+    elif kind == LayerKind.UPSAMPLE:
+        scale = kw.get("scale_factor")
+        size = pos[0] if len(pos) > 0 else kw.get("size")
+        layer.params = {"scale_factor": scale, "size": size}
+
     return layer
 
 
@@ -887,6 +923,7 @@ _FUNCTIONAL_OPS: Dict[str, OpKind] = {
     "log_softmax": OpKind.SOFTMAX,
     "cat": OpKind.CAT,
     "stack": OpKind.CAT,
+    "interpolate": OpKind.INTERPOLATE,
 }
 
 _METHOD_OPS: Dict[str, OpKind] = {
@@ -1094,6 +1131,8 @@ class _ForwardExtractor(ast.NodeVisitor):
                 op = OpKind.MATMUL
             elif isinstance(node.op, ast.Add):
                 op = OpKind.ADD
+            elif isinstance(node.op, (ast.Mult, ast.Sub)):
+                op = OpKind.MULTIPLY
             else:
                 op = OpKind.CUSTOM
             self.steps.append(ComputationStep(
@@ -1158,6 +1197,30 @@ class _ForwardExtractor(ast.NodeVisitor):
 
                 if method in ("view", "reshape"):
                     dims = [_const_value(a) for a in node.args]
+                    # Detect x.size(dim) or x.shape[dim] patterns
+                    size_dim_indices = []
+                    for idx, (d, a) in enumerate(zip(dims, node.args)):
+                        if d is None:
+                            if isinstance(a, ast.Call):
+                                # x.size(dim) → mark as "keep from input"
+                                size_dim_indices.append(idx)
+                            dims[idx] = -1
+                    # Common pattern: view(x.size(0), -1) → flatten(1)
+                    if (size_dim_indices and len(dims) == 2
+                            and dims[0] == -1 and dims[1] == -1
+                            and 0 in size_dim_indices):
+                        self.steps.append(ComputationStep(
+                            op=OpKind.FLATTEN,
+                            inputs=[base],
+                            output=target,
+                            params={"start_dim": 1},
+                            line=line, col=col,
+                        ))
+                        return
+                    # For x.size(dim) args, use sentinel 0 (keep from input)
+                    # to allow the reshape logic to copy that dim from input
+                    for idx in size_dim_indices:
+                        dims[idx] = 0
                     params["dims"] = tuple(
                         d if d is not None else -1 for d in dims
                     )
@@ -1202,7 +1265,12 @@ class _ForwardExtractor(ast.NodeVisitor):
 
             # Functional ops
             if short in _FUNCTIONAL_OPS:
-                inputs = [self._resolve_arg(a) for a in node.args]
+                op = _FUNCTIONAL_OPS[short]
+                # For cat/stack, first arg is a list of tensors
+                if op == OpKind.CAT and node.args and isinstance(node.args[0], ast.List):
+                    inputs = [self._resolve_arg(elt) for elt in node.args[0].elts]
+                else:
+                    inputs = [self._resolve_arg(a) for a in node.args]
                 params_dict: Dict[str, Any] = {}
                 for kw in node.keywords:
                     if kw.arg:
@@ -1908,6 +1976,78 @@ def _propagate_instancenorm2d(
     return input_shape, None
 
 
+def _propagate_convtranspose2d(
+    input_shape: TensorShape, layer: LayerDef
+) -> Tuple[Optional[TensorShape], Optional[str]]:
+    """ConvTranspose2d maps (N, C_in, H, W) → (N, C_out, H', W')."""
+    if input_shape.ndim != 4:
+        return None, f"ConvTranspose2d expects 4D, got {input_shape.ndim}D"
+    in_c = layer.in_channels
+    out_c = layer.out_channels
+    if in_c is not None and not input_shape.dims[1].is_symbolic:
+        if input_shape.dims[1].value != in_c:
+            return None, (
+                f"ConvTranspose2d expects {in_c} input channels, "
+                f"got {input_shape.dims[1].value}"
+            )
+    ks = layer.params.get("kernel_size", (2, 2))
+    stride = layer.params.get("stride", (1, 1))
+    padding = layer.params.get("padding", (0, 0))
+    output_padding = layer.params.get("output_padding", (0, 0))
+    if isinstance(stride, int):
+        stride = (stride, stride)
+    if isinstance(padding, int):
+        padding = (padding, padding)
+    if isinstance(output_padding, int):
+        output_padding = (output_padding, output_padding)
+    if isinstance(ks, int):
+        ks = (ks, ks)
+    h_in = input_shape.dims[2]
+    w_in = input_shape.dims[3]
+    if not h_in.is_symbolic and ks and stride:
+        h_out = (h_in.value - 1) * stride[0] - 2 * padding[0] + ks[0] + output_padding[0]
+        w_out = (w_in.value - 1) * stride[1] - 2 * padding[1] + ks[1] + output_padding[1]
+    else:
+        h_out = "_h_up"
+        w_out = "_w_up"
+    out_channels = out_c if out_c is not None else "_c_out"
+    return TensorShape((
+        input_shape.dims[0],
+        ShapeDim(out_channels),
+        ShapeDim(h_out),
+        ShapeDim(w_out),
+    )), None
+
+
+def _propagate_upsample(
+    input_shape: TensorShape, layer: LayerDef
+) -> Tuple[Optional[TensorShape], Optional[str]]:
+    """Upsample / F.interpolate preserves batch and channel dims."""
+    if input_shape.ndim < 3:
+        return None, f"Upsample expects >=3D, got {input_shape.ndim}D"
+    scale = layer.params.get("scale_factor")
+    size = layer.params.get("size")
+    if input_shape.ndim == 4:
+        if size is not None:
+            if isinstance(size, int):
+                size = (size, size)
+            return TensorShape((
+                input_shape.dims[0], input_shape.dims[1],
+                ShapeDim(size[0]), ShapeDim(size[1]),
+            )), None
+        if scale is not None and not input_shape.dims[2].is_symbolic:
+            s = int(scale) if isinstance(scale, (int, float)) else 2
+            return TensorShape((
+                input_shape.dims[0], input_shape.dims[1],
+                ShapeDim(input_shape.dims[2].value * s),
+                ShapeDim(input_shape.dims[3].value * s),
+            )), None
+    # Fallback: preserve batch + channel, mark spatial as symbolic
+    kept = input_shape.dims[:2]
+    spatial = tuple(ShapeDim("_up") for _ in input_shape.dims[2:])
+    return TensorShape(kept + spatial), None
+
+
 _LAYER_PROPAGATORS = {
     LayerKind.LINEAR: _propagate_linear,
     LayerKind.CONV2D: _propagate_conv2d,
@@ -1921,6 +2061,8 @@ _LAYER_PROPAGATORS = {
     LayerKind.SEQUENTIAL: _propagate_sequential,
     LayerKind.GROUPNORM: _propagate_groupnorm,
     LayerKind.INSTANCENORM2D: _propagate_instancenorm2d,
+    LayerKind.CONVTRANSPOSE2D: _propagate_convtranspose2d,
+    LayerKind.UPSAMPLE: _propagate_upsample,
 }
 
 
@@ -1946,7 +2088,7 @@ class KripkeState:
 
 # Layer kinds whose parameters reside on a device.
 _PARAMETERISED_LAYERS: FrozenSet[LayerKind] = frozenset({
-    LayerKind.LINEAR, LayerKind.CONV2D,
+    LayerKind.LINEAR, LayerKind.CONV2D, LayerKind.CONVTRANSPOSE2D,
     LayerKind.BATCHNORM1D, LayerKind.BATCHNORM2D,
     LayerKind.LAYERNORM, LayerKind.EMBEDDING,
     LayerKind.LSTM, LayerKind.GRU,
@@ -2211,6 +2353,18 @@ class ConstraintVerifier:
                     # ModuleList elements used individually; preserve shape
                     for dp, dq in zip(pre_d, post_d):
                         cs.append(dq == dp)
+                elif layer.kind == LayerKind.CONVTRANSPOSE2D:
+                    # Preserve batch dim; set out_channels
+                    if pre_d and post_d:
+                        cs.append(post_d[0] == pre_d[0])
+                    if layer.out_channels is not None and len(post_d) >= 2:
+                        cs.append(
+                            post_d[1] == z3.IntVal(layer.out_channels)
+                        )
+                elif layer.kind == LayerKind.UPSAMPLE:
+                    # Preserve batch and channel dims
+                    for dp, dq in zip(pre_d[:2], post_d[:2]):
+                        cs.append(dq == dp)
                 else:
                     for dp, dq in zip(pre_d, post_d):
                         cs.append(dq == dp)
@@ -2247,6 +2401,37 @@ class ConstraintVerifier:
                             z3.And(db == z3.IntVal(1), dp == da),
                             z3.And(da == db, dp == da),
                         ))
+
+        elif step.op == OpKind.MULTIPLY and len(step.inputs) >= 2:
+            # Element-wise multiply / sub: same broadcast semantics as ADD
+            a, b = step.inputs[0], step.inputs[1]
+            if (a in pre.shape_vars and b in pre.shape_vars
+                    and step.output in post.shape_vars):
+                ad = pre.shape_vars[a]
+                bd = pre.shape_vars[b]
+                pd = post.shape_vars[step.output]
+                ndim = max(len(ad), len(bd))
+                for i in range(min(ndim, len(pd))):
+                    da = ad[len(ad) - 1 - i] if i < len(ad) else z3.IntVal(1)
+                    db = bd[len(bd) - 1 - i] if i < len(bd) else z3.IntVal(1)
+                    dp = pd[len(pd) - 1 - i]
+                    if self.ctx.broadcast_theory is not None:
+                        cs.append(self.ctx.broadcast_theory.broadcast_result_dim(da, db, dp))
+                    else:
+                        cs.append(z3.Or(
+                            z3.And(da == z3.IntVal(1), dp == db),
+                            z3.And(db == z3.IntVal(1), dp == da),
+                            z3.And(da == db, dp == da),
+                        ))
+
+        elif step.op == OpKind.INTERPOLATE:
+            # F.interpolate preserves batch and channel dims
+            if (inp_name and inp_name in pre.shape_vars
+                    and step.output in post.shape_vars):
+                pre_d = pre.shape_vars[inp_name]
+                post_d = post.shape_vars[step.output]
+                for dp, dq in zip(pre_d[:2], post_d[:2]):
+                    cs.append(dq == dp)
 
         elif step.op == OpKind.RESHAPE:
             dims = step.params.get("dims")
@@ -2474,6 +2659,9 @@ class ConstraintVerifier:
                 elif layer.kind == LayerKind.CONV2D:
                     if layer.in_channels is not None and len(dims) >= 2:
                         cs.append(dims[1] == z3.IntVal(layer.in_channels))
+                elif layer.kind == LayerKind.CONVTRANSPOSE2D:
+                    if layer.in_channels is not None and len(dims) >= 2:
+                        cs.append(dims[1] == z3.IntVal(layer.in_channels))
                 elif layer.kind in (LayerKind.BATCHNORM1D,
                                     LayerKind.BATCHNORM2D):
                     if (layer.num_features is not None
@@ -2499,6 +2687,26 @@ class ConstraintVerifier:
                     elif len(bd) == 1:
                         cs.append(ad[-1] == bd[0])
         elif step.op == OpKind.ADD and len(step.inputs) >= 2:
+            a, b = step.inputs[0], step.inputs[1]
+            if a in k.shape_vars and b in k.shape_vars:
+                ad = k.shape_vars[a]
+                bd = k.shape_vars[b]
+                if self.ctx.broadcast_theory is not None:
+                    cs.append(self.ctx.broadcast_theory.broadcast_compatible(
+                        list(ad), list(bd),
+                    ))
+                else:
+                    ndim = max(len(ad), len(bd))
+                    for i in range(1, ndim + 1):
+                        da = ad[-i] if i <= len(ad) else z3.IntVal(1)
+                        db = bd[-i] if i <= len(bd) else z3.IntVal(1)
+                        cs.append(z3.Or(
+                            da == db,
+                            da == z3.IntVal(1),
+                            db == z3.IntVal(1),
+                        ))
+        elif step.op == OpKind.MULTIPLY and len(step.inputs) >= 2:
+            # Element-wise mul/sub: broadcast compatibility check
             a, b = step.inputs[0], step.inputs[1]
             if a in k.shape_vars and b in k.shape_vars:
                 ad = k.shape_vars[a]
@@ -2551,7 +2759,7 @@ class ConstraintVerifier:
         """Encode device-consistency constraints for *step*."""
         cs: list = []
         # Binary ops: all inputs on the same device
-        if step.op in (OpKind.MATMUL, OpKind.ADD, OpKind.CAT):
+        if step.op in (OpKind.MATMUL, OpKind.ADD, OpKind.CAT, OpKind.MULTIPLY):
             devs = [k.device_vars[i]
                      for i in step.inputs if i in k.device_vars]
             for i in range(1, len(devs)):
@@ -2787,6 +2995,9 @@ class ConstraintVerifier:
             self._apply_matmul(new_state, step, violations)
         elif step.op == OpKind.ADD:
             self._apply_add(new_state, step, violations)
+        elif step.op == OpKind.MULTIPLY:
+            # Element-wise mul/sub: same broadcast shape semantics as ADD
+            self._apply_add(new_state, step, violations)
         elif step.op == OpKind.RESHAPE:
             self._apply_reshape(new_state, step)
         elif step.op == OpKind.FLATTEN:
@@ -2830,6 +3041,16 @@ class ConstraintVerifier:
             self._apply_conditional(new_state, step, violations)
         elif step.op == OpKind.CUSTOM:
             pass
+        elif step.op == OpKind.INTERPOLATE:
+            # F.interpolate preserves batch + channel dims
+            if step.inputs and step.inputs[0] in state.shape_env:
+                inp_shape = state.shape_env[step.inputs[0]]
+                if inp_shape.ndim >= 3:
+                    kept = inp_shape.dims[:2]
+                    spatial = tuple(ShapeDim("_up") for _ in inp_shape.dims[2:])
+                    new_state.shape_env[step.output] = TensorShape(kept + spatial)
+                else:
+                    new_state.shape_env[step.output] = inp_shape
 
         # ---- Propagate device if not explicitly set ----------------------
         if step.output not in new_state.device_map:
@@ -2938,7 +3159,14 @@ class ConstraintVerifier:
         a_name, b_name = step.inputs[0], step.inputs[1]
         a_shape = state.shape_env.get(a_name)
         b_shape = state.shape_env.get(b_name)
-        if a_shape is None or b_shape is None:
+        if a_shape is None and b_shape is None:
+            return
+        # If one operand has unknown shape, conservatively use the other
+        if a_shape is None:
+            state.shape_env[step.output] = b_shape
+            return
+        if b_shape is None:
+            state.shape_env[step.output] = a_shape
             return
         result = compute_broadcast_shape(a_shape, b_shape)
         if result is None:
@@ -3668,6 +3896,25 @@ class SymbolicShapePropagator:
                     result = compute_broadcast_shape(a, b)
                     if result:
                         env[step.output] = result
+
+        elif step.op == OpKind.MULTIPLY:
+            # Element-wise multiply/sub: same broadcast semantics as ADD
+            if len(step.inputs) >= 2:
+                a = env.get(step.inputs[0])
+                b = env.get(step.inputs[1])
+                if a and b:
+                    result = compute_broadcast_shape(a, b)
+                    if result:
+                        env[step.output] = result
+
+        elif step.op == OpKind.INTERPOLATE:
+            # F.interpolate preserves batch and channel dims
+            inp = step.inputs[0] if step.inputs else None
+            inp_shape = env.get(inp) if inp else None
+            if inp_shape and inp_shape.ndim >= 3:
+                kept = inp_shape.dims[:2]
+                spatial = tuple(ShapeDim("_up") for _ in inp_shape.dims[2:])
+                env[step.output] = TensorShape(kept + spatial)
 
         elif step.op == OpKind.RESHAPE:
             inp = step.inputs[0] if step.inputs else None
