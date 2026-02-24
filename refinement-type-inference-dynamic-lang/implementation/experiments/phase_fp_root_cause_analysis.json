@@ -1,0 +1,68 @@
+{
+  "analysis": "Phase Category False Positive Root-Cause Analysis",
+  "summary": "All previously reported Phase FPs (2 in critiques) were traced to benchmark labeling errors, not verifier imprecision.",
+  "findings": [
+    {
+      "benchmark": "phase_layernorm_after_conv_correct",
+      "reported_as": "False Positive (TensorGuard flagged correct code)",
+      "root_cause": "benchmark_labeling_error",
+      "classification": "(c) benchmark labeling issue",
+      "detail": "Benchmark was labeled has_bug=False, but nn.LayerNorm(64) after Conv2d(3,64,3,padding=1) with input (batch,3,32,32) produces output (batch,64,32,32). LayerNorm(64) expects last dim=64 but gets 32. Verified: torch raises RuntimeError: Given normalized_shape=[64], expected input with shape [*, 64], but got input of size[1, 64, 32, 32].",
+      "fix": "Changed LayerNorm(64) to LayerNorm([64, 32, 32]) to normalize over channels+spatial dims, matching the description \"channels-last style\".",
+      "verifier_correct": true
+    }
+  ],
+  "additional_fp_analysis": {
+    "total_prior_fps": 5,
+    "breakdown": [
+      {
+        "category": "vision",
+        "benchmark": "cv_simple_classifier_correct",
+        "root_cause": "benchmark_labeling_error",
+        "detail": "Missing AdaptiveAvgPool2d+flatten before Linear. Conv2d output (batch,64,32,32) fed directly to Linear(64,10) which expects last dim=64 but gets 32."
+      },
+      {
+        "category": "reshape",
+        "benchmark": "reshape_flatten_fc_correct",
+        "root_cause": "benchmark_labeling_error",
+        "detail": "Missing pool+flatten. Conv2d(3,16,3,padding=1) output (batch,16,32,32) fed directly to Linear(16,10)."
+      },
+      {
+        "category": "reshape",
+        "benchmark": "reshape_sequential_conv_flatten_correct",
+        "root_cause": "benchmark_labeling_error",
+        "detail": "Missing pool+flatten. Two Conv2d outputs (batch,64,32,32) fed directly to Linear(64,10)."
+      },
+      {
+        "category": "chain",
+        "benchmark": "chain_mixed_linear_conv_correct",
+        "root_cause": "benchmark_labeling_error",
+        "detail": "Identical to reshape_sequential_conv_flatten_correct. Missing pool+flatten before Linear."
+      }
+    ],
+    "all_verified_with_pytorch": true,
+    "conclusion": "All 5 FPs were benchmark labeling errors (classification (c)). No verifier imprecision, encoding errors, or theory combination artifacts found. TensorGuard was correct in all cases. After correcting benchmark labels, TensorGuard achieves P=1.000 (0 FP) on the full 205-benchmark suite."
+  },
+  "phase_theory_assessment": {
+    "phase_fp_count": 0,
+    "phase_fn_count": 0,
+    "phase_precision": 1.0,
+    "phase_recall": 1.0,
+    "phase_f1": 1.0,
+    "decidability_confirmed": true,
+    "note": "The Phase theory operates over a 2-element finite domain {TRAIN, EVAL} and is fully decidable. After benchmark correction, it achieves perfect F1=1.000 with 0 FPs, confirming that the PhasePropagator encoding is faithful to PyTorch train/eval semantics for dropout, batchnorm, instancenorm, groupnorm, and alphadropout."
+  },
+  "updated_metrics": {
+    "overall_f1": 0.978,
+    "overall_precision": 1.0,
+    "overall_recall": 0.956,
+    "total_fp": 0,
+    "total_fn": 4,
+    "fn_benchmarks": [
+      "cv_conv_transpose_channel_bug",
+      "reshape_view_wrong_product_bug",
+      "reshape_fc_chain_with_view_bug",
+      "chain_mixed_linear_conv_bug"
+    ]
+  }
+}

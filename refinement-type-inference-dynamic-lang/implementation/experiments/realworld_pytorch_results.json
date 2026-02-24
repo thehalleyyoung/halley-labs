@@ -1,0 +1,624 @@
+{
+  "benchmark_suite": "realworld_pytorch",
+  "n_benchmarks": 56,
+  "n_evaluated": 56,
+  "n_parse_failures": 0,
+  "aggregate_metrics": {
+    "f1": 0.889,
+    "precision": 0.889,
+    "recall": 0.889,
+    "accuracy": 0.857,
+    "tp": 32,
+    "fp": 4,
+    "tn": 16,
+    "fn": 4
+  },
+  "coverage": {
+    "avg_operation_coverage": 0.982,
+    "full_coverage_count": 49,
+    "total_models": 56,
+    "custom_op_warnings": 0
+  },
+  "per_category": {
+    "broadcast": {
+      "precision": 0.75,
+      "recall": 0.75,
+      "f1": 0.75,
+      "tp": 3,
+      "fp": 1,
+      "tn": 0,
+      "fn": 1
+    },
+    "shape_mismatch": {
+      "precision": 0.88,
+      "recall": 0.88,
+      "f1": 0.88,
+      "tp": 22,
+      "fp": 3,
+      "tn": 14,
+      "fn": 3
+    },
+    "phase": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 2,
+      "fp": 0,
+      "tn": 0,
+      "fn": 0
+    },
+    "reshape": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 5,
+      "fp": 0,
+      "tn": 2,
+      "fn": 0
+    }
+  },
+  "total_time_ms": 21740.5,
+  "per_benchmark": {
+    "attention_scale_broadcast_bug": {
+      "verdict": "FN",
+      "detected_bug": false,
+      "is_buggy": true,
+      "category": "broadcast",
+      "time_ms": 597.7,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Attention scaling broadcast bug \u2014 learned scale creates wrong broadcasting with attention matrix"
+    },
+    "autoencoder_bottleneck_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 16.6,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Autoencoder bottleneck mismatch \u2014 common in VAE tutorials when latent_dim is edited"
+    },
+    "autoencoder_correct": {
+      "verdict": "TN",
+      "detected_bug": false,
+      "is_buggy": false,
+      "category": "shape_mismatch",
+      "time_ms": 56.8,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Symmetric autoencoder with matching bottleneck \u2014 correct"
+    },
+    "batchnorm_eval_mismatch": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "phase",
+      "time_ms": 628.4,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "BatchNorm2d channel mismatch after conv \u2014 manifests in both train and eval but often caught late in eval"
+    },
+    "bert_encoder_correct": {
+      "verdict": "FP",
+      "detected_bug": true,
+      "is_buggy": false,
+      "category": "shape_mismatch",
+      "time_ms": 416.7,
+      "warnings": 0,
+      "coverage_ratio": 0.8666666666666667,
+      "source_description": "BERT encoder with correct embeddings and pooler \u2014 correct"
+    },
+    "bert_pooler_dim_bug": {
+      "verdict": "FN",
+      "detected_bug": false,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 183.8,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "BERT pooler dense layer input dimension bug \u2014 GitHub PR pattern where hidden_size was changed but pooler not updated"
+    },
+    "cifar_pool_flatten_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 510.2,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "CIFAR tutorial model \u2014 forgot a pooling layer but computed FC dim assuming two pools"
+    },
+    "classification_head_after_attention_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 381.1,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Using AdaptiveAvgPool2d on 3D tensor \u2014 common confusion between sequence and image pooling"
+    },
+    "conv_batchnorm_mismatch": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 277.1,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Conv-BatchNorm channel mismatch \u2014 high-frequency bug in PyTorch GitHub Issues"
+    },
+    "convnext_block_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 237.5,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "ConvNeXt block residual dimension mismatch \u2014 pwconv2 output != input channels"
+    },
+    "convnext_block_correct": {
+      "verdict": "TN",
+      "detected_bug": false,
+      "is_buggy": false,
+      "category": "shape_mismatch",
+      "time_ms": 690.0,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "ConvNeXt block with correct inverted bottleneck and residual"
+    },
+    "dcgan_generator_conv_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 150.2,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "DCGAN generator channel mismatch \u2014 pattern from PyTorch DCGAN tutorial Issues"
+    },
+    "dcgan_generator_correct": {
+      "verdict": "TN",
+      "detected_bug": false,
+      "is_buggy": false,
+      "category": "reshape",
+      "time_ms": 211.5,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "DCGAN generator with correct reshape and channel progression"
+    },
+    "dcgan_reshape_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "reshape",
+      "time_ms": 566.8,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "DCGAN generator reshape bug \u2014 StackOverflow pattern: wrong view dimensions after projection"
+    },
+    "detr_correct": {
+      "verdict": "FP",
+      "detected_bug": true,
+      "is_buggy": false,
+      "category": "shape_mismatch",
+      "time_ms": 777.2,
+      "warnings": 0,
+      "coverage_ratio": 0.8333333333333334,
+      "source_description": "DETR-style detector with correct query and feature dimensions"
+    },
+    "detr_query_dim_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 633.7,
+      "warnings": 0,
+      "coverage_ratio": 0.8333333333333334,
+      "source_description": "DETR object query dimension mismatch \u2014 query embedding dim != transformer hidden dim"
+    },
+    "dropout_eval_shape_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "phase",
+      "time_ms": 195.4,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Dropout does not change shape but developer confused about output dim \u2014 StackOverflow pattern"
+    },
+    "dual_encoder_concat_bug": {
+      "verdict": "FN",
+      "detected_bug": false,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 153.6,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Multi-modal fusion concatenation dimension error \u2014 text+image feature concat wrong total"
+    },
+    "efficientnet_se_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "broadcast",
+      "time_ms": 1199.8,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Squeeze-and-Excitation block channel mismatch \u2014 se_fc2 outputs wrong channel count"
+    },
+    "embedding_layernorm_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 501.0,
+      "warnings": 0,
+      "coverage_ratio": 0.8,
+      "source_description": "Positional embedding dimension mismatch with token embedding \u2014 GPT/BERT config error pattern"
+    },
+    "feature_pyramid_broadcast_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "broadcast",
+      "time_ms": 459.2,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Feature Pyramid Network lateral fusion without upsampling \u2014 missing F.interpolate"
+    },
+    "flatten_wrong_start_dim": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "reshape",
+      "time_ms": 121.7,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Flatten start_dim=0 bug \u2014 flattens batch dimension, common beginner mistake on StackOverflow"
+    },
+    "gan_discriminator_correct": {
+      "verdict": "TN",
+      "detected_bug": false,
+      "is_buggy": false,
+      "category": "shape_mismatch",
+      "time_ms": 146.2,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "GAN discriminator with correct flatten dimension for 32x32 input"
+    },
+    "gan_discriminator_fc_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 130.9,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "GAN discriminator flatten dimension calculation error \u2014 common when changing image size"
+    },
+    "gpt_ffn_inner_dim_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 447.5,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "GPT feed-forward network inner dimension mismatch \u2014 second Linear input != first Linear output"
+    },
+    "gpt_lm_head_dim_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 307.3,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "GPT language model head dimension mismatch \u2014 pattern from nanoGPT Issues where d_model was changed"
+    },
+    "layernorm_dim_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 275.9,
+      "warnings": 0,
+      "coverage_ratio": 0.8333333333333334,
+      "source_description": "LayerNorm normalized_shape mismatch \u2014 from HuggingFace Transformers Issues"
+    },
+    "mlp_correct": {
+      "verdict": "TN",
+      "detected_bug": false,
+      "is_buggy": false,
+      "category": "shape_mismatch",
+      "time_ms": 323.5,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Standard MNIST MLP with dropout \u2014 correct baseline"
+    },
+    "mlp_hidden_chain_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 81.7,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Classic MLP layer chain mismatch \u2014 most common StackOverflow beginner error"
+    },
+    "mobilenet_correct": {
+      "verdict": "TN",
+      "detected_bug": false,
+      "is_buggy": false,
+      "category": "shape_mismatch",
+      "time_ms": 287.3,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "MobileNet-style depthwise separable block \u2014 correct"
+    },
+    "mobilenet_depthwise_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 458.0,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "MobileNet-style depthwise separable conv channel mismatch \u2014 common when editing channel multiplier"
+    },
+    "multihead_attention_embed_dim_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 64.7,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "MultiheadAttention embed_dim mismatch \u2014 common when changing hidden size in transformer configs"
+    },
+    "residual_broadcast_dim_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "broadcast",
+      "time_ms": 166.7,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "ResNet residual spatial dimension mismatch \u2014 stride-2 conv without matching downsample on skip"
+    },
+    "resnet_block_correct": {
+      "verdict": "TN",
+      "detected_bug": false,
+      "is_buggy": false,
+      "category": "shape_mismatch",
+      "time_ms": 559.2,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "ResNet basic block with matching channels \u2014 correct skip connection"
+    },
+    "resnet_downsample_correct": {
+      "verdict": "TN",
+      "detected_bug": false,
+      "is_buggy": false,
+      "category": "shape_mismatch",
+      "time_ms": 655.5,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "ResNet block with correct 1x1 projection downsample"
+    },
+    "resnet_fc_after_pool_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 73.5,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "ResNet-style flatten-to-FC dimension mismatch \u2014 common in GitHub Issues when changing backbone width"
+    },
+    "resnet_skip_channel_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 136.1,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "ResNet skip connection channel mismatch \u2014 GitHub Issue #5305 pattern: forgetting 1x1 projection"
+    },
+    "se_block_correct": {
+      "verdict": "FP",
+      "detected_bug": true,
+      "is_buggy": false,
+      "category": "broadcast",
+      "time_ms": 1088.0,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Squeeze-and-Excitation block with correct channel dimensions"
+    },
+    "seq2seq_correct": {
+      "verdict": "TN",
+      "detected_bug": false,
+      "is_buggy": false,
+      "category": "shape_mismatch",
+      "time_ms": 568.5,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Seq2Seq encoder-decoder with correct cross-attention dimensions"
+    },
+    "seq2seq_decoder_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 499.8,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Seq2Seq decoder output projection dim bug \u2014 pattern from fairseq Issues"
+    },
+    "siamese_correct": {
+      "verdict": "TN",
+      "detected_bug": false,
+      "is_buggy": false,
+      "category": "shape_mismatch",
+      "time_ms": 133.6,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "SimCLR-style siamese network with correct projection head"
+    },
+    "siamese_projection_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 111.4,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "SimCLR/BYOL projection head dim mismatch \u2014 common in self-supervised learning repos"
+    },
+    "simple_cnn_correct": {
+      "verdict": "TN",
+      "detected_bug": false,
+      "is_buggy": false,
+      "category": "shape_mismatch",
+      "time_ms": 757.6,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Standard CIFAR-10 CNN \u2014 correct baseline"
+    },
+    "swin_patch_merge_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 895.5,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Swin Transformer head dimension mismatch \u2014 head not updated after adding patch merging stage"
+    },
+    "text_classifier_correct": {
+      "verdict": "TN",
+      "detected_bug": false,
+      "is_buggy": false,
+      "category": "shape_mismatch",
+      "time_ms": 483.0,
+      "warnings": 0,
+      "coverage_ratio": 0.9,
+      "source_description": "Transformer-based text classifier with mean pooling \u2014 correct"
+    },
+    "transformer_encoder_correct": {
+      "verdict": "TN",
+      "detected_bug": false,
+      "is_buggy": false,
+      "category": "shape_mismatch",
+      "time_ms": 632.2,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Standard transformer encoder block with pre-norm \u2014 correct"
+    },
+    "transformer_seq_reshape_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "reshape",
+      "time_ms": 300.2,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Transformer output reshape bug \u2014 flattening sequence dimension before classification head"
+    },
+    "unet_correct": {
+      "verdict": "FP",
+      "detected_bug": true,
+      "is_buggy": false,
+      "category": "shape_mismatch",
+      "time_ms": 765.9,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "U-Net with correct skip connections and channel handling"
+    },
+    "unet_encoder_decoder_channel_bug": {
+      "verdict": "FN",
+      "detected_bug": false,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 610.8,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "U-Net decoder skip connection channel mismatch \u2014 common mistake in medical imaging repos"
+    },
+    "unet_skip_spatial_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "reshape",
+      "time_ms": 873.8,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "U-Net upsampling spatial size mismatch \u2014 ConvTranspose2d stride doesn't match MaxPool stride"
+    },
+    "vgg_classifier_mismatch": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 162.0,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "VGG classifier dimension bug \u2014 StackOverflow pattern: trained on ImageNet 224x224, deployed on CIFAR 32x32"
+    },
+    "vgg_style_correct": {
+      "verdict": "TN",
+      "detected_bug": false,
+      "is_buggy": false,
+      "category": "shape_mismatch",
+      "time_ms": 54.3,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "VGG-style network for CIFAR-10 with correct flatten dimensions"
+    },
+    "vit_classifier_correct": {
+      "verdict": "TN",
+      "detected_bug": false,
+      "is_buggy": false,
+      "category": "reshape",
+      "time_ms": 336.8,
+      "warnings": 0,
+      "coverage_ratio": 0.9166666666666666,
+      "source_description": "Vision Transformer with correct patch embedding reshape and classification"
+    },
+    "vit_patch_reshape_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "reshape",
+      "time_ms": 149.0,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "Vision Transformer patch embedding reshape bug \u2014 missing transpose after conv, from ViT reimplementation Issues"
+    },
+    "wav2vec_correct": {
+      "verdict": "TN",
+      "detected_bug": false,
+      "is_buggy": false,
+      "category": "shape_mismatch",
+      "time_ms": 125.3,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "wav2vec-style speech model with correct feature extraction and classification"
+    },
+    "wav2vec_feature_proj_bug": {
+      "verdict": "TP",
+      "detected_bug": true,
+      "is_buggy": true,
+      "category": "shape_mismatch",
+      "time_ms": 112.7,
+      "warnings": 0,
+      "coverage_ratio": 1.0,
+      "source_description": "wav2vec 2.0 feature projection \u2192 classifier dim mismatch \u2014 projection changes dim but classifier not updated"
+    }
+  },
+  "parse_failures": []
+}

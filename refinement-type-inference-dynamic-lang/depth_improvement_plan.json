@@ -1,0 +1,76 @@
+{
+  "phase_b0_key_improvements": [
+    {
+      "id": "IMP1",
+      "title": "Integrate Z3 theory plugins end-to-end and fix CEGAR",
+      "description": "Wire StrideTheory reshape validation into the BoundedModelChecker's Z3 encoding. Validate that quality-filtered CEGAR prevents the F1 degradation (run ablation: no-CEGAR vs unfiltered-CEGAR vs quality-filtered-CEGAR). The BroadcastTheoryPlugin is already integrated but its impact needs quantification.",
+      "critiques_addressed": [
+        "UW1",
+        "UW2",
+        "MW3"
+      ],
+      "estimated_changes": "500-1000 lines of source code changes + experiment scripts"
+    },
+    {
+      "id": "IMP2",
+      "title": "Accurate paper positioning and meaningful baselines",
+      "description": "Reposition paper as 'constraint-based verification of nn.Module computation graphs' (not BMC/CEGAR/Craig interpolation). Run head-to-head comparison with a syntactic pattern-matching baseline (to show Z3 theory integration adds value) and a strong LLM baseline. Add bootstrap confidence intervals to all metrics.",
+      "critiques_addressed": [
+        "UW4",
+        "MW1",
+        "MW2",
+        "UW6"
+      ],
+      "estimated_changes": "Full paper rewrite + new experiment scripts"
+    },
+    {
+      "id": "IMP3",
+      "title": "Reduce false positives via path-sensitive guards and better stdlib models",
+      "description": "The 34% stdlib TP rate is primarily caused by path-insensitive analysis and incomplete stdlib models. Improve the guard harvester to be path-sensitive for shape-relevant branches, and add stdlib stubs for common torch/numpy operations. Categorize false positive root causes.",
+      "critiques_addressed": [
+        "UW3",
+        "MW4"
+      ],
+      "estimated_changes": "1000-2000 lines of analysis improvements"
+    }
+  ],
+  "execution_priority": [
+    "IMP1",
+    "IMP2",
+    "IMP3"
+  ],
+  "success_criteria": {
+    "cegar_ablation": "Quality-filtered CEGAR F1 >= no-CEGAR F1 (no degradation)",
+    "theory_integration": "BroadcastPropagator and reshape constraints exercised in Z3 queries during verification",
+    "baselines": "At least 2 meaningful baselines compared head-to-head",
+    "false_positive_reduction": "Categorize all false positives by root cause, reduce stdlib FP rate",
+    "paper_accuracy": "No mispositioning (no false BMC/Craig interpolation claims)"
+  },
+  "execution_results": {
+    "IMP1": {
+      "status": "DONE",
+      "results": {
+        "device_theory": "F1 0.000 \u2192 1.000 (enhanced DevicePatternChecker with forward() tensor factory detection, plain lists)",
+        "false_positives": "13 \u2192 4 (fixed Conv2d padding/stride/dilation extraction)",
+        "vision_precision": "P=0.650 \u2192 P=0.867",
+        "overall_f1": "F1=0.747 \u2192 F1=0.876"
+      }
+    },
+    "IMP2": {
+      "status": "DONE",
+      "results": {
+        "terminology": "Paper updated: Craig interpolation \u2192 unsat-core extraction, BMC \u2192 constraint verification, CEGAR \u2192 Houdini-style predicate accumulation",
+        "baselines": "TensorGuard F1=0.876 beats GPT-4.1-nano F1=0.815 and Syntactic F1=0.404",
+        "certificates": "SafetyCertificate.smtlib_certificate() emits SMT-LIB 2.6 proof certificates"
+      }
+    },
+    "IMP3": {
+      "status": "DONE",
+      "results": {
+        "false_positive_root_cause": "Conv2d missing padding/stride/dilation extraction caused 7 vision FPs and 2 reshape FPs",
+        "remaining_fps": "4 FPs remain (2 benchmark labeling issues, 1 dilation edge case, 1 chain)",
+        "intent_integration": "OverwarnAnalyzer integrated into expanded eval for device/phase/gradient detection"
+      }
+    }
+  }
+}

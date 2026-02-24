@@ -1,0 +1,52 @@
+[
+  {
+    "scenario": "A lock-free ring buffer where the producer writes data then updates the tail pointer, and the consumer reads the tail then reads data. What memory ordering pattern does this match?",
+    "llm_pattern": "mp",
+    "llm_explanation": "The producer writes data then updates the tail pointer, and the consumer reads the tail before reading data, matching the message passing (mp) pattern which relies on proper memory ordering to ensure visibility of the data after the tail update.",
+    "llm_portability_risk": "medium",
+    "tool_match": "mp_data",
+    "tool_confidence": 0.6666666666666666,
+    "bugs_found": 5,
+    "agreement": true
+  },
+  {
+    "scenario": "A hazard pointer implementation where a thread publishes its hazard pointer before reading a shared node. What concurrent pattern is this?",
+    "llm_pattern": "mp",
+    "llm_explanation": "This pattern resembles the 'Memory Pool' (mp) pattern where a thread publishes its hazard pointer before accessing shared data, which can lead to potential data races if not properly synchronized.",
+    "llm_portability_risk": "medium",
+    "tool_match": "lb",
+    "tool_confidence": 0.7083333333333334,
+    "bugs_found": 5,
+    "agreement": false
+  },
+  {
+    "scenario": "A work-stealing deque where the owner pushes/pops from the bottom and thieves steal from the top using compare-and-swap. What memory ordering issues arise when porting from x86 to ARM?",
+    "llm_pattern": "mp",
+    "llm_explanation": "This pattern resembles the message passing (mp) litmus test, where the producer's store may not be visible to the consumer without proper memory barriers, especially on weaker memory models like ARM.",
+    "llm_portability_risk": "high",
+    "tool_match": "mp_data",
+    "tool_confidence": 0.75,
+    "bugs_found": 5,
+    "agreement": true
+  },
+  {
+    "scenario": "A sequence lock (seqlock) where the writer increments a counter, modifies data, then increments again, and the reader checks the counter before and after reading. What litmus test pattern matches the reader?",
+    "llm_pattern": "wrc",
+    "llm_explanation": "The sequence lock pattern relies on the writer updating a counter before and after data modifications, and the reader checking the counter before and after reading data, matching the Write-Read-Check (wrc) pattern. This ensures data consistency if the counter remains unchanged during the read.",
+    "llm_portability_risk": "medium",
+    "tool_match": "dekker",
+    "tool_confidence": 0.6166666666666667,
+    "bugs_found": 5,
+    "agreement": false
+  },
+  {
+    "scenario": "An epoch-based memory reclamation scheme where threads enter/exit epochs and defer deallocation. What ordering pattern governs the enter-epoch / read-shared-object interaction?",
+    "llm_pattern": "mp",
+    "llm_explanation": "This pattern reflects the 'message passing' (mp) pattern where a thread signals its participation in an epoch before accessing shared data, ensuring proper synchronization for reclamation.\n",
+    "llm_portability_risk": "medium",
+    "tool_match": "dekker",
+    "tool_confidence": 0.7000000000000001,
+    "bugs_found": 5,
+    "agreement": false
+  }
+]

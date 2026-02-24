@@ -1,0 +1,27 @@
+C wrc_fence
+
+{ int x=0; int y=0; }
+
+P0(
+  int* x
+) {
+  WRITE_ONCE(*x, 1);
+}
+
+P1(
+  int* x, int* y
+) {
+  int r0 = READ_ONCE(*x);
+  smp_mb();
+  WRITE_ONCE(*y, 1);
+}
+
+P2(
+  int* x, int* y
+) {
+  int r1 = READ_ONCE(*y);
+  smp_mb();
+  int r2 = READ_ONCE(*x);
+}
+
+exists (1:r0=1 /\ 2:r1=1 /\ 2:r2=0)

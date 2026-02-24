@@ -1,0 +1,666 @@
+{
+  "project": "staging-refinement-type-inference-dynamic-lang",
+  "description": "Real experiments on actual Python code using guard-harvesting CEGAR",
+  "total_time_sec": 0.47,
+  "n_experiments": 6,
+  "n_passed": 6,
+  "experiments": [
+    {
+      "experiment": "H1_Guard_Harvesting",
+      "hypothesis": "Guard harvesting extracts meaningful predicates from real Python code",
+      "metrics": {
+        "n_functions": 12,
+        "total_guards_extracted": 34,
+        "mean_guards_per_function": 2.83,
+        "per_function": [
+          {
+            "function": "isinstance_guard",
+            "n_guards": 1,
+            "patterns": {
+              "TypeTag": 1
+            },
+            "variables": [
+              "x"
+            ],
+            "extraction_time_us": 2676.9
+          },
+          {
+            "function": "none_guard",
+            "n_guards": 3,
+            "patterns": {
+              "Nullity": 2,
+              "TypeTag": 1
+            },
+            "variables": [
+              "obj",
+              "val"
+            ],
+            "extraction_time_us": 244.3
+          },
+          {
+            "function": "bound_check",
+            "n_guards": 3,
+            "patterns": {
+              "TypeTag": 2,
+              "Comparison": 1
+            },
+            "variables": [
+              "len",
+              "lst",
+              "idx"
+            ],
+            "extraction_time_us": 292.8
+          },
+          {
+            "function": "division_guard",
+            "n_guards": 3,
+            "patterns": {
+              "TypeTag": 2,
+              "Comparison": 1
+            },
+            "variables": [
+              "b",
+              "a"
+            ],
+            "extraction_time_us": 203.7
+          },
+          {
+            "function": "complex_guards",
+            "n_guards": 11,
+            "patterns": {
+              "Nullity": 2,
+              "TypeTag": 5,
+              "Membership": 1,
+              "Comparison": 2,
+              "Truthiness": 1
+            },
+            "variables": [
+              "len",
+              "data",
+              "config",
+              "item"
+            ],
+            "extraction_time_us": 627.2
+          },
+          {
+            "function": "unguarded_null_bug",
+            "n_guards": 0,
+            "patterns": {},
+            "variables": [],
+            "extraction_time_us": 40.7
+          },
+          {
+            "function": "unguarded_index_bug",
+            "n_guards": 0,
+            "patterns": {},
+            "variables": [],
+            "extraction_time_us": 32.5
+          },
+          {
+            "function": "unguarded_div_bug",
+            "n_guards": 0,
+            "patterns": {},
+            "variables": [],
+            "extraction_time_us": 20.3
+          },
+          {
+            "function": "nested_guards",
+            "n_guards": 5,
+            "patterns": {
+              "Nullity": 1,
+              "TypeTag": 2,
+              "Membership": 1,
+              "Comparison": 1
+            },
+            "variables": [
+              "len",
+              "val",
+              "a"
+            ],
+            "extraction_time_us": 213.3
+          },
+          {
+            "function": "multi_return",
+            "n_guards": 4,
+            "patterns": {
+              "TypeTag": 1,
+              "Comparison": 2,
+              "Nullity": 1
+            },
+            "variables": [
+              "x",
+              "len"
+            ],
+            "extraction_time_us": 263.8
+          },
+          {
+            "function": "exception_pattern",
+            "n_guards": 3,
+            "patterns": {
+              "TypeTag": 1,
+              "Comparison": 2
+            },
+            "variables": [
+              "parts",
+              "len",
+              "text"
+            ],
+            "extraction_time_us": 185.9
+          },
+          {
+            "function": "partially_guarded",
+            "n_guards": 1,
+            "patterns": {
+              "TypeTag": 1
+            },
+            "variables": [
+              "x"
+            ],
+            "extraction_time_us": 60.0
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "experiment": "H2_Bug_Detection",
+      "hypothesis": "Analysis detects known bugs with high precision and recall",
+      "metrics": {
+        "n_programs": 12,
+        "true_positives": 5,
+        "false_positives": 0,
+        "true_negatives": 6,
+        "false_negatives": 1,
+        "precision": 1.0,
+        "recall": 0.8333,
+        "accuracy": 0.9167,
+        "f1_score": 0.9091,
+        "per_case": [
+          {
+            "name": "null_deref_1",
+            "expected": "bug",
+            "detected": true,
+            "correct": true
+          },
+          {
+            "name": "null_deref_2",
+            "expected": "bug",
+            "detected": true,
+            "correct": true
+          },
+          {
+            "name": "div_zero_1",
+            "expected": "bug",
+            "detected": true,
+            "correct": true
+          },
+          {
+            "name": "div_zero_2",
+            "expected": "bug",
+            "detected": true,
+            "correct": true
+          },
+          {
+            "name": "oob_1",
+            "expected": "bug",
+            "detected": true,
+            "correct": true
+          },
+          {
+            "name": "oob_2",
+            "expected": "bug",
+            "detected": false,
+            "correct": false
+          },
+          {
+            "name": "safe_1",
+            "expected": "safe",
+            "detected": false,
+            "correct": true
+          },
+          {
+            "name": "safe_2",
+            "expected": "safe",
+            "detected": false,
+            "correct": true
+          },
+          {
+            "name": "safe_3",
+            "expected": "safe",
+            "detected": false,
+            "correct": true
+          },
+          {
+            "name": "safe_4",
+            "expected": "safe",
+            "detected": false,
+            "correct": true
+          },
+          {
+            "name": "safe_5",
+            "expected": "safe",
+            "detected": false,
+            "correct": true
+          },
+          {
+            "name": "safe_6",
+            "expected": "safe",
+            "detected": false,
+            "correct": true
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "experiment": "H3_Guard_Seeding",
+      "hypothesis": "Guard seeding provides more predicates for CEGAR refinement",
+      "metrics": {
+        "n_functions": 12,
+        "mean_predicates_with_guards": 3.08,
+        "mean_predicates_without_guards": 0.0,
+        "predicate_improvement": 3.08,
+        "per_function": [
+          {
+            "function": "isinstance_guard",
+            "with_guards": {
+              "iterations": 2,
+              "predicates": 4,
+              "converged": true,
+              "time_ms": 67.43
+            },
+            "without_guards": {
+              "iterations": 1,
+              "predicates": 0,
+              "converged": true,
+              "time_ms": 10.56
+            },
+            "seed_predicates": 1
+          },
+          {
+            "function": "none_guard",
+            "with_guards": {
+              "iterations": 2,
+              "predicates": 8,
+              "converged": true,
+              "time_ms": 9.79
+            },
+            "without_guards": {
+              "iterations": 1,
+              "predicates": 0,
+              "converged": true,
+              "time_ms": 6.19
+            },
+            "seed_predicates": 3
+          },
+          {
+            "function": "bound_check",
+            "with_guards": {
+              "iterations": 1,
+              "predicates": 0,
+              "converged": true,
+              "time_ms": 5.32
+            },
+            "without_guards": {
+              "iterations": 1,
+              "predicates": 0,
+              "converged": true,
+              "time_ms": 6.29
+            },
+            "seed_predicates": 3
+          },
+          {
+            "function": "division_guard",
+            "with_guards": {
+              "iterations": 2,
+              "predicates": 3,
+              "converged": true,
+              "time_ms": 9.55
+            },
+            "without_guards": {
+              "iterations": 1,
+              "predicates": 0,
+              "converged": true,
+              "time_ms": 6.13
+            },
+            "seed_predicates": 3
+          },
+          {
+            "function": "complex_guards",
+            "with_guards": {
+              "iterations": 1,
+              "predicates": 6,
+              "converged": true,
+              "time_ms": 3.75
+            },
+            "without_guards": {
+              "iterations": 1,
+              "predicates": 0,
+              "converged": true,
+              "time_ms": 6.49
+            },
+            "seed_predicates": 11
+          },
+          {
+            "function": "unguarded_null_bug",
+            "with_guards": {
+              "iterations": 1,
+              "predicates": 0,
+              "converged": true,
+              "time_ms": 6.23
+            },
+            "without_guards": {
+              "iterations": 1,
+              "predicates": 0,
+              "converged": true,
+              "time_ms": 6.13
+            },
+            "seed_predicates": 0
+          },
+          {
+            "function": "unguarded_index_bug",
+            "with_guards": {
+              "iterations": 1,
+              "predicates": 0,
+              "converged": true,
+              "time_ms": 5.11
+            },
+            "without_guards": {
+              "iterations": 1,
+              "predicates": 0,
+              "converged": true,
+              "time_ms": 7.33
+            },
+            "seed_predicates": 0
+          },
+          {
+            "function": "unguarded_div_bug",
+            "with_guards": {
+              "iterations": 1,
+              "predicates": 0,
+              "converged": true,
+              "time_ms": 4.62
+            },
+            "without_guards": {
+              "iterations": 1,
+              "predicates": 0,
+              "converged": true,
+              "time_ms": 5.0
+            },
+            "seed_predicates": 0
+          },
+          {
+            "function": "nested_guards",
+            "with_guards": {
+              "iterations": 2,
+              "predicates": 9,
+              "converged": true,
+              "time_ms": 7.89
+            },
+            "without_guards": {
+              "iterations": 1,
+              "predicates": 0,
+              "converged": true,
+              "time_ms": 7.97
+            },
+            "seed_predicates": 5
+          },
+          {
+            "function": "multi_return",
+            "with_guards": {
+              "iterations": 1,
+              "predicates": 3,
+              "converged": true,
+              "time_ms": 3.97
+            },
+            "without_guards": {
+              "iterations": 1,
+              "predicates": 0,
+              "converged": true,
+              "time_ms": 9.0
+            },
+            "seed_predicates": 4
+          },
+          {
+            "function": "exception_pattern",
+            "with_guards": {
+              "iterations": 1,
+              "predicates": 0,
+              "converged": true,
+              "time_ms": 5.92
+            },
+            "without_guards": {
+              "iterations": 1,
+              "predicates": 0,
+              "converged": true,
+              "time_ms": 4.42
+            },
+            "seed_predicates": 3
+          },
+          {
+            "function": "partially_guarded",
+            "with_guards": {
+              "iterations": 2,
+              "predicates": 4,
+              "converged": true,
+              "time_ms": 5.21
+            },
+            "without_guards": {
+              "iterations": 1,
+              "predicates": 0,
+              "converged": true,
+              "time_ms": 7.13
+            },
+            "seed_predicates": 1
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "experiment": "H4_SMT_Correctness",
+      "hypothesis": "Z3 solver produces correct satisfiability results",
+      "metrics": {
+        "n_formulas": 8,
+        "correct": 8,
+        "accuracy": 1.0,
+        "per_formula": [
+          {
+            "formula": "x > 0",
+            "expected": "sat",
+            "actual": "sat",
+            "correct": true,
+            "time_us": 12248.9
+          },
+          {
+            "formula": "x > 0 AND x < 0",
+            "expected": "unsat",
+            "actual": "unsat",
+            "correct": true,
+            "time_us": 2630.8
+          },
+          {
+            "formula": "x == 5",
+            "expected": "sat",
+            "actual": "sat",
+            "correct": true,
+            "time_us": 4877.2
+          },
+          {
+            "formula": "isinstance(x,int) AND isinstance(x,str)",
+            "expected": "unsat",
+            "actual": "unsat",
+            "correct": true,
+            "time_us": 1768.3
+          },
+          {
+            "formula": "is_none(x) AND NOT is_none(x)",
+            "expected": "unsat",
+            "actual": "unsat",
+            "correct": true,
+            "time_us": 90.3
+          },
+          {
+            "formula": "x >= 0 AND x <= 10",
+            "expected": "sat",
+            "actual": "sat",
+            "correct": true,
+            "time_us": 3727.7
+          },
+          {
+            "formula": "True",
+            "expected": "sat",
+            "actual": "sat",
+            "correct": true,
+            "time_us": 4095.1
+          },
+          {
+            "formula": "False",
+            "expected": "unsat",
+            "actual": "unsat",
+            "correct": true,
+            "time_us": 110.6
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "experiment": "H5_Pipeline_Performance",
+      "hypothesis": "Pipeline analyzes real Python code in reasonable time",
+      "metrics": {
+        "n_benchmarks": 12,
+        "total_loc": 99,
+        "mean_analysis_time_ms": 6.46,
+        "max_analysis_time_ms": 12.34,
+        "min_analysis_time_ms": 4.71,
+        "total_guards": 34,
+        "total_bugs": 6,
+        "total_predicates": 37,
+        "per_benchmark": [
+          {
+            "function": "isinstance_guard",
+            "analysis_time_ms": 6.88,
+            "functions_analyzed": 1,
+            "guards_found": 1,
+            "bugs_found": 0,
+            "predicates_inferred": 4,
+            "loc": 8
+          },
+          {
+            "function": "none_guard",
+            "analysis_time_ms": 12.34,
+            "functions_analyzed": 1,
+            "guards_found": 3,
+            "bugs_found": 0,
+            "predicates_inferred": 8,
+            "loc": 9
+          },
+          {
+            "function": "bound_check",
+            "analysis_time_ms": 6.56,
+            "functions_analyzed": 1,
+            "guards_found": 3,
+            "bugs_found": 0,
+            "predicates_inferred": 0,
+            "loc": 8
+          },
+          {
+            "function": "division_guard",
+            "analysis_time_ms": 8.57,
+            "functions_analyzed": 1,
+            "guards_found": 3,
+            "bugs_found": 1,
+            "predicates_inferred": 3,
+            "loc": 8
+          },
+          {
+            "function": "complex_guards",
+            "analysis_time_ms": 5.37,
+            "functions_analyzed": 1,
+            "guards_found": 11,
+            "bugs_found": 0,
+            "predicates_inferred": 6,
+            "loc": 19
+          },
+          {
+            "function": "unguarded_null_bug",
+            "analysis_time_ms": 5.85,
+            "functions_analyzed": 1,
+            "guards_found": 0,
+            "bugs_found": 2,
+            "predicates_inferred": 0,
+            "loc": 4
+          },
+          {
+            "function": "unguarded_index_bug",
+            "analysis_time_ms": 4.82,
+            "functions_analyzed": 1,
+            "guards_found": 0,
+            "bugs_found": 1,
+            "predicates_inferred": 0,
+            "loc": 3
+          },
+          {
+            "function": "unguarded_div_bug",
+            "analysis_time_ms": 5.32,
+            "functions_analyzed": 1,
+            "guards_found": 0,
+            "bugs_found": 1,
+            "predicates_inferred": 0,
+            "loc": 2
+          },
+          {
+            "function": "nested_guards",
+            "analysis_time_ms": 7.17,
+            "functions_analyzed": 1,
+            "guards_found": 5,
+            "bugs_found": 0,
+            "predicates_inferred": 9,
+            "loc": 9
+          },
+          {
+            "function": "multi_return",
+            "analysis_time_ms": 4.71,
+            "functions_analyzed": 1,
+            "guards_found": 4,
+            "bugs_found": 0,
+            "predicates_inferred": 3,
+            "loc": 16
+          },
+          {
+            "function": "exception_pattern",
+            "analysis_time_ms": 4.82,
+            "functions_analyzed": 1,
+            "guards_found": 3,
+            "bugs_found": 0,
+            "predicates_inferred": 0,
+            "loc": 9
+          },
+          {
+            "function": "partially_guarded",
+            "analysis_time_ms": 5.15,
+            "functions_analyzed": 1,
+            "guards_found": 1,
+            "bugs_found": 1,
+            "predicates_inferred": 4,
+            "loc": 4
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "experiment": "H6_Incremental_Analysis",
+      "hypothesis": "Incremental re-analysis is faster than full analysis",
+      "metrics": {
+        "full_corpus_functions": 12,
+        "full_analysis_time_ms": 101.29,
+        "changed_functions": 2,
+        "incremental_time_ms": 17.1,
+        "speedup": 5.92
+      },
+      "pass": true
+    }
+  ]
+}

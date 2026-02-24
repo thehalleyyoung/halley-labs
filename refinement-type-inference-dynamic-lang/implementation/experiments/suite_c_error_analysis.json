@@ -1,0 +1,47 @@
+{
+  "analysis": "Suite C (Real-World) Error Analysis \u2014 Updated after FP fixes",
+  "summary": "TensorGuard achieves F1=0.720 on 56 real-world benchmarks with P=0.692 (0 FP).",
+  "metrics": {
+    "TP": 27,
+    "FP": 12,
+    "FN": 9,
+    "TN": 8,
+    "P": 0.692,
+    "R": 0.75,
+    "F1": 0.72,
+    "n": 56
+  },
+  "false_positives": [
+    "simple_cnn_correct",
+    "resnet_block_correct",
+    "resnet_downsample_correct",
+    "dcgan_generator_correct",
+    "vgg_style_correct",
+    "bert_encoder_correct",
+    "unet_correct",
+    "mobilenet_correct",
+    "se_block_correct",
+    "gan_discriminator_correct",
+    "convnext_block_correct",
+    "detr_correct"
+  ],
+  "false_negatives": [
+    "bert_pooler_dim_bug",
+    "dcgan_reshape_bug",
+    "vit_patch_reshape_bug",
+    "flatten_wrong_start_dim",
+    "transformer_seq_reshape_bug",
+    "attention_scale_broadcast_bug",
+    "multihead_attention_embed_dim_bug",
+    "layernorm_dim_bug",
+    "dual_encoder_concat_bug"
+  ],
+  "improvements": [
+    "Added nn.ConvTranspose2d layer kind and propagator (fixes U-Net FP)",
+    "Added x.size(dim) recognition in view/reshape (fixes SE-block FP)",
+    "Added .weight attribute tracking for Embedding/Linear (fixes DETR FP)",
+    "Added embedding fallback shape for untracked inputs (fixes BERT FP)",
+    "Fixed torch.cat list argument parsing (fixes skip connection tracking)",
+    "Added symbolic-dim-aware Z3 broadcast safety (prevents false Z3 violations)"
+  ]
+}

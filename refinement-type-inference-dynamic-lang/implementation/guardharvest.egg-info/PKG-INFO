@@ -1,0 +1,126 @@
+Metadata-Version: 2.4
+Name: guardharvest
+Version: 0.1.0
+Summary: Find null/div-by-zero/bounds bugs in Python — zero annotations
+Author: Guard Harvest Authors
+License: MIT
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Software Development :: Quality Assurance
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Provides-Extra: smt
+Requires-Dist: z3-solver>=4.12; extra == "smt"
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Dynamic: author
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: license
+Dynamic: provides-extra
+Dynamic: requires-python
+Dynamic: summary
+
+# LiquidPy
+
+**A guard-harvesting null-safety analyzer for untyped Python, with liquid types as the theoretical framework.**
+
+LiquidPy infers *liquid types* — refinement types `{v: T | φ}` where predicates φ are automatically harvested from programmer-written guards, asserts, exception handlers, and other patterns. It requires zero type annotations. All subtype checks use Z3.
+
+```python
+def div(x, y):
+    if y == 0:
+        raise ValueError("cannot divide by zero")
+    return x / y
+```
+LiquidPy infers: `def div(x: int, y: {v: int | v ≠ 0}) → int` — the guard `y == 0` is harvested as a predicate refining `y`'s type.
+
+## Evaluation Summary
+
+### Controlled Benchmark (82 snippets: 50 buggy, 32 clean)
+
+| Metric    | Value  |
+|-----------|--------|
+| Precision | 94.4%  |
+| Recall    | 68.0%  |
+| F1 Score  | 0.79   |
+
+### CPython Standard Library (8,362 LOC, 336 functions)
+
+LiquidPy reports 982 potential warnings. These are **unverified warnings** — they include true positives, false positives, and context-dependent cases. On a manually-inspected subset, roughly 34% of warnings are confirmed true positives.
+
+Mypy, Pyright, and Pytype report 0 errors on the same untyped stdlib code.
+
+### Interprocedural Analysis
+
+Interprocedural contract propagation infers richer function signatures (e.g., `safe_get → {v: T | v ≠ None}`) but shows **zero reduction in false positives** on our benchmarks. Its value is in contract inference for downstream tooling.
+
+### Honest Assessment
+
+- The controlled benchmark is **author-written** and may not represent real-world distributions.
+- Stdlib warnings are **unverified** — manual inspection is needed to confirm true positives.
+- Real-world precision is significantly lower than controlled-benchmark precision.
+- The tool is strongest at null-dereference detection via guard harvesting.
+
+## How It Works
+
+LiquidPy harvests predicates from **7 sources** in untyped Python:
+
+| Source | Example | Harvested Predicate |
+|--------|---------|---------------------|
+| Guards | `if x is not None:` | `x ≠ None` on true branch |
+| Asserts | `assert isinstance(x, int)` | `x : int` post-assert |
+| Exceptions | `try: x.attr except AttributeError:` | `hasattr(x, 'attr')` on success |
+| Returns | `return x if x > 0 else -x` | return refinement |
+| Walrus | `if (m := re.match(...)):` | `m ≠ None` in body |
+| Comprehensions | `[x for x in xs if x]` | element refinement |
+| Call sites | `if x is not None: f(x)` | `x ≠ None` at call |
+
+**Note**: `d.get(key, default)` does **not** guarantee the result is not-None, because the dict may map the key to None. This is a known pitfall that LiquidPy correctly handles by *not* inferring `is_not_none` for this pattern.
+
+Harvested predicates are used as refinement templates in a Z3-backed subtyping framework. A CEGAR loop (max 10 iterations) uses Z3 counterexamples to synthesize additional predicates when the initial harvest is insufficient.
+
+## What It Detects
+
+| Category | Description | Controlled Recall |
+|----------|-------------|-------------------|
+| Null dereference | `dict.get()`, `re.match()`, optional returns | ~60% |
+| Division by zero | Empty-list averages, zero denominators | ~100% |
+| Index out of bounds | Empty-list access, off-by-one | ~50% |
+
+## Install
+
+```bash
+cd implementation && pip install -e .
+pip install z3-solver  # Required
+```
+
+## Quick Start
+
+```python
+from src.liquid import analyze_liquid, harvest_predicates
+
+result = analyze_liquid("""
+def process(data):
+    val = data.get("key")
+    return val.strip()     # Warning: val may be None
+""")
+for bug in result.bugs:
+    print(f"  L{bug.line} [{bug.kind.name}] {bug.message}")
+```
+
+## Limitations
+
+- **Intraprocedural-only** for most analyses — the primary source of false negatives.
+- **No soundness guarantee** for general Python (dynamic features, eval, metaclasses).
+- Soundness is proven only for the **guard-aware fragment**: functions where attribute accesses are guarded by explicit null checks.
+- **Interprocedural analysis** infers contracts but does not reduce false positives.
+- **CEGAR** is bounded (max 10 iterations) and may not converge.
+- **Type error detection** is experimental.
+- **Index OOB detection** is limited without symbolic length tracking.

@@ -1,0 +1,232 @@
+{
+  "case_studies": [
+    {
+      "name": "lock_free_queue_x86_to_arm",
+      "description": "Lock-free SPSC queue using store-release/load-acquire, ported from x86 to ARM",
+      "pattern": "mp",
+      "source_arch": "x86",
+      "target_arch": "arm",
+      "safe": false,
+      "fence_recommendation": "dmb ishst (T0); dmb ishld (T1)",
+      "context": "A producer stores data then sets a flag. Consumer reads flag then data. On x86 TSO, the store ordering is guaranteed. On ARM, without dmb, the consumer may see the flag before the data.",
+      "all_arch_results": {
+        "x86": "Safe",
+        "sparc": "Allowed",
+        "arm": "Allowed",
+        "riscv": "Allowed",
+        "opencl_wg": "Allowed",
+        "opencl_dev": "Allowed",
+        "vulkan_wg": "Allowed",
+        "vulkan_dev": "Allowed",
+        "ptx_cta": "Allowed",
+        "ptx_gpu": "Allowed"
+      }
+    },
+    {
+      "name": "dekker_mutex_arm",
+      "description": "Dekker's mutual exclusion algorithm on ARM",
+      "pattern": "dekker",
+      "source_arch": "x86",
+      "target_arch": "arm",
+      "safe": false,
+      "fence_recommendation": "dmb ish (T0); dmb ish (T1)",
+      "context": "Dekker's algorithm relies on store-buffering visibility. On x86, only SB reordering breaks it. On ARM, all reorderings are possible, requiring full barriers.",
+      "all_arch_results": {
+        "x86": "Allowed",
+        "sparc": "Allowed",
+        "arm": "Allowed",
+        "riscv": "Allowed",
+        "opencl_wg": "Allowed",
+        "opencl_dev": "Allowed",
+        "vulkan_wg": "Allowed",
+        "vulkan_dev": "Allowed",
+        "ptx_cta": "Allowed",
+        "ptx_gpu": "Allowed"
+      }
+    },
+    {
+      "name": "seqlock_reader_riscv",
+      "description": "Seqlock reader pattern ported to RISC-V",
+      "pattern": "mp",
+      "source_arch": "x86",
+      "target_arch": "riscv",
+      "safe": false,
+      "fence_recommendation": "fence w,w (T0); fence r,r (T1)",
+      "context": "Seqlock readers observe a sequence number then read data. The MP pattern captures the key ordering requirement. RISC-V RVWMO may reorder both stores and loads.",
+      "all_arch_results": {
+        "x86": "Safe",
+        "sparc": "Allowed",
+        "arm": "Allowed",
+        "riscv": "Allowed",
+        "opencl_wg": "Allowed",
+        "opencl_dev": "Allowed",
+        "vulkan_wg": "Allowed",
+        "vulkan_dev": "Allowed",
+        "ptx_cta": "Allowed",
+        "ptx_gpu": "Allowed"
+      }
+    },
+    {
+      "name": "cuda_kernel_wg_scope",
+      "description": "CUDA kernel with workgroup-scoped synchronization across CTAs",
+      "pattern": "gpu_mp_scope_mismatch_dev",
+      "source_arch": "ptx_gpu",
+      "target_arch": "ptx_cta",
+      "safe": false,
+      "fence_recommendation": "use membar.gl (membar.cta insufficient for cross-CTA)",
+      "context": "A CUDA kernel uses __threadfence_block() (CTA scope) but threads communicate across CTAs. This is a scope mismatch: CTA-scoped fences don't order cross-CTA communication.",
+      "all_arch_results": {
+        "x86": "Safe",
+        "sparc": "Safe",
+        "arm": "Safe",
+        "riscv": "Safe",
+        "opencl_wg": "Allowed",
+        "opencl_dev": "Allowed",
+        "vulkan_wg": "Allowed",
+        "vulkan_dev": "Allowed",
+        "ptx_cta": "Allowed",
+        "ptx_gpu": "Allowed"
+      }
+    },
+    {
+      "name": "iriw_multicore_arm",
+      "description": "IRIW pattern in multi-core ARM system",
+      "pattern": "iriw",
+      "source_arch": "x86",
+      "target_arch": "arm",
+      "safe": false,
+      "fence_recommendation": "dmb ishld (T2); dmb ishld (T3)",
+      "context": "Two independent writers and two readers. On x86 (multi-copy atomic), both readers must agree on write order. On ARM (not multi-copy atomic), readers may disagree. This is observable on real Cortex-A53/A57 hardware.",
+      "all_arch_results": {
+        "x86": "Safe",
+        "sparc": "Safe",
+        "arm": "Allowed",
+        "riscv": "Allowed",
+        "opencl_wg": "Allowed",
+        "opencl_dev": "Allowed",
+        "vulkan_wg": "Allowed",
+        "vulkan_dev": "Allowed",
+        "ptx_cta": "Allowed",
+        "ptx_gpu": "Allowed"
+      }
+    },
+    {
+      "name": "rcu_publish_riscv",
+      "description": "RCU-style publish pattern on RISC-V",
+      "pattern": "mp",
+      "source_arch": "x86",
+      "target_arch": "riscv",
+      "safe": false,
+      "fence_recommendation": "fence w,w (T0); fence r,r (T1)",
+      "context": "Linux RCU uses rcu_assign_pointer (store with release semantics) and rcu_dereference (load with consume/address dependency). The MP pattern captures this, and RISC-V RVWMO requires explicit fences.",
+      "all_arch_results": {
+        "x86": "Safe",
+        "sparc": "Allowed",
+        "arm": "Allowed",
+        "riscv": "Allowed",
+        "opencl_wg": "Allowed",
+        "opencl_dev": "Allowed",
+        "vulkan_wg": "Allowed",
+        "vulkan_dev": "Allowed",
+        "ptx_cta": "Allowed",
+        "ptx_gpu": "Allowed"
+      }
+    },
+    {
+      "name": "opencl_gpu_barrier_scope",
+      "description": "OpenCL kernel barrier with wrong scope across workgroups",
+      "pattern": "gpu_barrier_scope_mismatch",
+      "source_arch": "opencl_dev",
+      "target_arch": "opencl_wg",
+      "safe": false,
+      "fence_recommendation": "use device-scope barrier (work_group_barrier insufficient for cross-workgroup)",
+      "context": "An OpenCL kernel uses barrier(CLK_LOCAL_MEM_FENCE) but accesses global memory across workgroups. The workgroup-scoped barrier does not synchronize global memory across workgroups.",
+      "all_arch_results": {
+        "x86": "Safe",
+        "sparc": "Safe",
+        "arm": "Safe",
+        "riscv": "Safe",
+        "opencl_wg": "Allowed",
+        "opencl_dev": "Allowed",
+        "vulkan_wg": "Allowed",
+        "vulkan_dev": "Allowed",
+        "ptx_cta": "Allowed",
+        "ptx_gpu": "Allowed"
+      }
+    },
+    {
+      "name": "asymmetric_fence_riscv",
+      "description": "RISC-V asymmetric fence (fence w,r) insufficient for MP",
+      "pattern": "mp_fence_wr",
+      "source_arch": "arm",
+      "target_arch": "riscv",
+      "safe": false,
+      "fence_recommendation": "fence w,w",
+      "context": "ARM's dmb covers all orderings symmetrically. RISC-V fence w,r only orders stores-before-reads. For the MP pattern, the reader thread needs fence r,r to order its loads, but fence w,r on the reader only orders writes-before-reads, missing the load-load ordering.",
+      "all_arch_results": {
+        "x86": "Safe",
+        "sparc": "Safe",
+        "arm": "Safe",
+        "riscv": "Allowed",
+        "opencl_wg": "Safe",
+        "opencl_dev": "Safe",
+        "vulkan_wg": "Safe",
+        "vulkan_dev": "Safe",
+        "ptx_cta": "Safe",
+        "ptx_gpu": "Safe"
+      }
+    }
+  ],
+  "llm_generated": [
+    {
+      "name": "Lock-Free Queue Data Race",
+      "pattern": "mp",
+      "target": "arm",
+      "description": "A lock-free queue implementation relies on relaxed memory ordering, assuming atomicity of certain instructions. On ARM, reordering due to weaker memory barriers can cause the consumer to observe inconsistent state, leading to data corruption.",
+      "safe": false,
+      "fence_recommendation": "dmb ishst (T0); dmb ishld (T1)",
+      "llm_generated": true
+    },
+    {
+      "name": "Lazy Initialization Race",
+      "pattern": "sb",
+      "target": "riscv",
+      "description": "A kernel module lazily initializes a shared resource without proper memory barriers, assuming initialization is complete once a flag is set. RISC-V's weaker memory model may cause other threads to see the flag as set but still observe uninitialized data, resulting in undefined behavior.",
+      "safe": false,
+      "fence_recommendation": "fence w,r (T0); fence w,r (T1)",
+      "llm_generated": true
+    },
+    {
+      "name": "Concurrent Hash Map Update",
+      "pattern": "lb",
+      "target": "arm",
+      "description": "A database engine performs concurrent updates to a hash map without sufficient synchronization, expecting updates to be visible immediately. On ARM, reordering can cause lookup threads to see stale pointers, leading to incorrect data retrieval or crashes.",
+      "safe": false,
+      "fence_recommendation": "dmb ishld (T0); dmb ishld (T1)",
+      "llm_generated": true
+    },
+    {
+      "name": "Reader-Writer Lock Violation",
+      "pattern": "iriw",
+      "target": "riscv",
+      "description": "A lock-free reader-writer synchronization is used with relaxed memory operations, assuming that writers' updates are visible to readers. RISC-V's weaker consistency can result in readers observing partial or stale updates, violating correctness guarantees.",
+      "safe": false,
+      "fence_recommendation": "fence r,r (T2); fence r,r (T3)",
+      "llm_generated": true
+    },
+    {
+      "name": "Double-Checked Locking Flaw",
+      "pattern": "wrc",
+      "target": "arm",
+      "description": "A singleton object is initialized using double-checked locking without proper memory barriers, expecting the initialized object to be safe after the first check. On ARM, instruction reordering may cause multiple threads to see the object as initialized while it is not fully constructed, leading to subtle bugs.",
+      "safe": false,
+      "fence_recommendation": "dmb ishld (T1); dmb ishld (T2)",
+      "llm_generated": true
+    }
+  ],
+  "summary": {
+    "total_cases": 8,
+    "bugs_found": 8,
+    "safe": 0
+  }
+}

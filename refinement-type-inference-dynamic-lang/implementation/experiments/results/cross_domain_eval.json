@@ -1,0 +1,1303 @@
+{
+  "experiment": "cross_domain_bug_detection",
+  "description": "Evaluation of LiquidPy product theory T_shape \u00d7 T_device \u00d7 T_phase for detecting cross-domain bugs that no single analysis domain catches.",
+  "z3_available": true,
+  "num_models": 27,
+  "results": [
+    {
+      "name": "ResNetBlockShapeMismatch",
+      "bug_domain": "shape_only",
+      "description": "ResNet skip connection dimension mismatch: shortcut outputs 256 channels but conv2 outputs 128",
+      "full_catches": true,
+      "shape_only_catches": true,
+      "device_only_catches": false,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": true,
+      "pytea_reason": "Pure shape mismatch on add \u2014 PyTea handles broadcast checks",
+      "mode_details": {
+        "shape_only": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Cannot broadcast (batch, 128, 28, 28) and (batch, 256, 32, 32)",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 3:\n  dev_out_s3 = CPU_1\n  dev_out_s2 ="
+          ],
+          "time_ms": 87.68
+        },
+        "device_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 84.75
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 252.42
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Cannot broadcast (batch, 128, 28, 28) and (batch, 256, 32, 32)",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 3:\n  grad_identity_s1 = True\n  dev_ide"
+          ],
+          "time_ms": 199.71
+        }
+      }
+    },
+    {
+      "name": "MLPDimMismatch",
+      "bug_domain": "shape_only",
+      "description": "MLP fc2 expects 512 features but fc1 outputs 256",
+      "full_catches": true,
+      "shape_only_catches": true,
+      "device_only_catches": false,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": true,
+      "pytea_reason": "Linear dimension mismatch \u2014 basic PyTea capability",
+      "mode_details": {
+        "shape_only": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Linear expects last dim=512, got 256",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 1:\n  phase_s1 = TRAIN_6\n  phase_s0 = T"
+          ],
+          "time_ms": 39.04
+        },
+        "device_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 363.59
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 228.54
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Linear expects last dim=512, got 256",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 1:\n  dev_x_s1 = CPU_10\n  batch = 1\n  p"
+          ],
+          "time_ms": 71.35
+        }
+      }
+    },
+    {
+      "name": "ConvChannelMismatch",
+      "bug_domain": "shape_only",
+      "description": "Conv2 expects 32 input channels but conv1 outputs 16",
+      "full_catches": true,
+      "shape_only_catches": true,
+      "device_only_catches": false,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": true,
+      "pytea_reason": "Channel mismatch in convolution \u2014 PyTea handles this",
+      "mode_details": {
+        "shape_only": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Conv2d expects 32 input channels, got 16",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 2:\n  phase_s0 = TRAIN_11\n  phase_s1 = "
+          ],
+          "time_ms": 90.56
+        },
+        "device_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 41.97
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 106.82
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Conv2d expects 32 input channels, got 16",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 2:\n  batch = 1\n  phase_s1 = TRAIN_15\n "
+          ],
+          "time_ms": 139.47
+        }
+      }
+    },
+    {
+      "name": "CrossDeviceAdd",
+      "bug_domain": "device_only",
+      "description": "x moved to CUDA but y stays on CPU \u2014 cross-device addition",
+      "full_catches": true,
+      "shape_only_catches": false,
+      "device_only_catches": true,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "PyTea has no device tracking domain",
+      "mode_details": {
+        "shape_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 256.35
+        },
+        "device_only": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Device mismatch: x is on cuda:0 but y is on cpu",
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  grad_y_s0 = False\n  grad_y_s1 = Fals",
+            "device_mismatch: Z3 violation (device_mismatch) at step 2:\n  grad_y_s0 = False\n  dev_x_s0 = CPU_1"
+          ],
+          "time_ms": 245.35
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 148.97
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Device mismatch: x is on cuda:0 but y is on cpu",
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  dev_y_s0 = CPU_20\n  dev_x_s1 = CUDA_",
+            "device_mismatch: Z3 violation (device_mismatch) at step 2:\n  grad_y_s0 = False\n  grad_y_s2 = Fals",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 2:\n  grad_y_s0 = False\n  grad_y_s2"
+          ],
+          "time_ms": 288.15
+        }
+      }
+    },
+    {
+      "name": "GANDiscriminatorCrossDevice",
+      "bug_domain": "device_only",
+      "description": "GAN discriminator: real_img on CUDA, fake_img on CPU \u2014 cross-device add",
+      "full_catches": true,
+      "shape_only_catches": true,
+      "device_only_catches": true,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "PyTea has no device tracking domain",
+      "mode_details": {
+        "shape_only": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Linear expects last dim=128, got 58",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 4:\n  grad_real_img_s2 = False\n  grad_r"
+          ],
+          "time_ms": 146.95
+        },
+        "device_only": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Device mismatch: real_img is on cuda:0 but fake_img is on cpu",
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  grad_fake_img_s0 = False\n  grad_real",
+            "device_mismatch: Z3 violation (device_mismatch) at step 2:\n  grad_real_img_s2 = False\n  grad_real",
+            "device_mismatch: Z3 violation (device_mismatch) at step 3:\n  grad_real_img_s2 = False\n  grad_real",
+            "device_mismatch: Z3 violation (device_mismatch) at step 4:\n  grad_real_img_s2 = False\n  grad_real"
+          ],
+          "time_ms": 382.95
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 1120.41
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Linear expects last dim=128, got 58",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 4:\n  grad_real_img_s2 = False\n  grad_r",
+            "device_mismatch: Device mismatch: real_img is on cuda:0 but fake_img is on cpu",
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  grad_fake_img_s0 = False\n  grad_real",
+            "device_mismatch: Z3 violation (device_mismatch) at step 2:\n  grad_real_img_s2 = False\n  grad_real",
+            "device_mismatch: Z3 violation (device_mismatch) at step 3:\n  grad_real_img_s2 = False\n  grad_real",
+            "device_mismatch: Z3 violation (device_mismatch) at step 4:\n  grad_real_img_s2 = False\n  grad_real",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 2:\n  grad_real_img_s2 = False\n  gr",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 3:\n  grad_real_img_s2 = False\n  gr",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 4:\n  grad_real_img_s2 = False\n  gr"
+          ],
+          "time_ms": 209.87
+        }
+      }
+    },
+    {
+      "name": "MultiGPUSplit",
+      "bug_domain": "device_only",
+      "description": "Encoder output moved to CPU but added to x still on CUDA",
+      "full_catches": true,
+      "shape_only_catches": false,
+      "device_only_catches": true,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "PyTea has no device tracking domain",
+      "mode_details": {
+        "shape_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 349.33
+        },
+        "device_only": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  phase_s1 = TRAIN_27\n  batch = 1\n  ph",
+            "device_mismatch: Device mismatch: out is on cpu but x is on cuda:0",
+            "device_mismatch: Z3 violation (device_mismatch) at step 4:\n  dev_h_s4 = CPU_27\n  grad_out_s4 = Tr"
+          ],
+          "time_ms": 668.55
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 534.2
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  phase_s0 = TRAIN_30\n  batch = 1\n  de",
+            "device_mismatch: Device mismatch: out is on cpu but x is on cuda:0",
+            "device_mismatch: Z3 violation (device_mismatch) at step 4:\n  phase_s0 = TRAIN_30\n  dev_h_s2 = CUD",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 1:\n  phase_s0 = TRAIN_30\n  batch ="
+          ],
+          "time_ms": 638.31
+        }
+      }
+    },
+    {
+      "name": "BatchNormEvalSingleSample",
+      "bug_domain": "phase_only",
+      "description": "BatchNorm with batch_size=1 fails in train mode (needs running stats in eval)",
+      "full_catches": false,
+      "shape_only_catches": false,
+      "device_only_catches": false,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "PyTea has no phase/train-eval mode tracking",
+      "mode_details": {
+        "shape_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 410.87
+        },
+        "device_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 205.0
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 456.99
+        },
+        "full_product": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 218.29
+        }
+      }
+    },
+    {
+      "name": "DropoutTrainOnlyPath",
+      "bug_domain": "phase_only",
+      "description": "Dropout active in training changes effective output distribution \u2014 phase-dependent behavior",
+      "full_catches": false,
+      "shape_only_catches": false,
+      "device_only_catches": false,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "PyTea has no phase/train-eval mode tracking",
+      "mode_details": {
+        "shape_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 456.03
+        },
+        "device_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 124.99
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 68.03
+        },
+        "full_product": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 265.46
+        }
+      }
+    },
+    {
+      "name": "ResNetGPUShapeBug",
+      "bug_domain": "shape+device",
+      "description": "Conv+pool output is 4D but fc expects 2D; also moves to CUDA \u2014 shape error manifests on GPU",
+      "full_catches": true,
+      "shape_only_catches": true,
+      "device_only_catches": true,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "Shape part detectable but device transfer context missed by PyTea",
+      "mode_details": {
+        "shape_only": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Linear expects last dim=64, got 72",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 3:\n  dev_x_s0 = CPU_49\n  grad_x_s0 = F"
+          ],
+          "time_ms": 95.99
+        },
+        "device_only": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  batch = 1\n  dev_x_s1 = CUDA_0_50\n  g",
+            "device_mismatch: Z3 violation (device_mismatch) at step 3:\n  grad_x_s0 = False\n  dev_x_s2 = CUDA_"
+          ],
+          "time_ms": 422.03
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 144.08
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Linear expects last dim=64, got 72",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 3:\n  dev_x_s2 = CUDA_0_53\n  dev_x_s3 =",
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  batch = 1\n  dev_x_s1 = CUDA_0_53\n  g",
+            "device_mismatch: Z3 violation (device_mismatch) at step 3:\n  dev_x_s2 = CUDA_0_53\n  dev_x_s3 = CU",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 1:\n  batch = 1\n  dev_x_s1 = CUDA_0",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 3:\n  dev_x_s2 = CUDA_0_53\n  dev_x_"
+          ],
+          "time_ms": 56.45
+        }
+      }
+    },
+    {
+      "name": "TransformerDeviceShapeMix",
+      "bug_domain": "shape+device",
+      "description": "Query (256) and key (128) have mismatched dims for matmul; also on CUDA",
+      "full_catches": true,
+      "shape_only_catches": true,
+      "device_only_catches": true,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "PyTea might catch matmul shape mismatch but misses the device context",
+      "mode_details": {
+        "shape_only": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 4:\n  dev_tokens_s2 = CUDA_0_54\n  dev_e"
+          ],
+          "time_ms": 99.76
+        },
+        "device_only": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  dev_tokens_s0 = CPU_55\n  grad_tokens",
+            "device_mismatch: Z3 violation (device_mismatch) at step 2:\n  phase_s2 = TRAIN_55\n  dev_tokens_s1 ",
+            "device_mismatch: Z3 violation (device_mismatch) at step 3:\n  phase_s2 = TRAIN_55\n  phase_s3 = TRA"
+          ],
+          "time_ms": 165.72
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 493.09
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 4:\n  dev_emb_s2 = CUDA_0_58\n  seq_len ",
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  phase_s1 = TRAIN_58\n  phase_s0 = TRA",
+            "device_mismatch: Z3 violation (device_mismatch) at step 2:\n  dev_emb_s2 = CUDA_0_58\n  grad_tokens",
+            "device_mismatch: Z3 violation (device_mismatch) at step 3:\n  dev_emb_s2 = CUDA_0_58\n  grad_tokens",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 1:\n  phase_s1 = TRAIN_58\n  phase_s",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 2:\n  dev_emb_s2 = CUDA_0_58\n  grad",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 3:\n  dev_emb_s2 = CUDA_0_58\n  grad"
+          ],
+          "time_ms": 124.38
+        }
+      }
+    },
+    {
+      "name": "UNetSkipDeviceShape",
+      "bug_domain": "shape+device",
+      "description": "U-Net skip connection: shapes differ after convolutions AND skip moved to CUDA mid-forward",
+      "full_catches": true,
+      "shape_only_catches": true,
+      "device_only_catches": true,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "PyTea cannot track device placement of skip connections",
+      "mode_details": {
+        "shape_only": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Cannot broadcast (batch, 64, 58, 58) and (batch, 64, 62, 62)",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 4:\n  dev_skip_s4 = CUDA_0_59\n  dev_ski"
+          ],
+          "time_ms": 177.68
+        },
+        "device_only": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 2:\n  grad_skip_s1 = True\n  grad_x_s0 = Fa",
+            "device_mismatch: Z3 violation (device_mismatch) at step 3:\n  dev_skip_s3 = CUDA_0_60\n  grad_skip_",
+            "device_mismatch: Device mismatch: x is on cpu but skip is on cuda:0"
+          ],
+          "time_ms": 163.13
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 543.93
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Cannot broadcast (batch, 64, 58, 58) and (batch, 64, 62, 62)",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 4:\n  dev_x_s4 = CUDA_0_63\n  dev_x_s1 =",
+            "device_mismatch: Z3 violation (device_mismatch) at step 2:\n  dev_x_s1 = CPU_63\n  grad_skip_s1 = T",
+            "device_mismatch: Z3 violation (device_mismatch) at step 3:\n  dev_x_s1 = CPU_63\n  grad_skip_s1 = T",
+            "device_mismatch: Device mismatch: x is on cpu but skip is on cuda:0",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 2:\n  dev_x_s1 = CPU_63\n  grad_skip",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 3:\n  dev_x_s1 = CPU_63\n  grad_skip"
+          ],
+          "time_ms": 486.11
+        }
+      }
+    },
+    {
+      "name": "BatchNormShapePhaseBug",
+      "bug_domain": "shape+phase",
+      "description": "fc2 expects 128 but bn outputs 64; BatchNorm behavior differs train vs eval",
+      "full_catches": true,
+      "shape_only_catches": true,
+      "device_only_catches": false,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "PyTea cannot reason about BatchNorm phase-dependent behavior",
+      "mode_details": {
+        "shape_only": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Linear expects last dim=128, got 64",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 2:\n  phase_s2 = TRAIN_64\n  dev_x_s1 = "
+          ],
+          "time_ms": 181.73
+        },
+        "device_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 24.96
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 106.05
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Linear expects last dim=128, got 64",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 2:\n  phase_s1 = TRAIN_70\n  dev_x_s0 = "
+          ],
+          "time_ms": 79.89
+        }
+      }
+    },
+    {
+      "name": "DropoutReshapePhaseBug",
+      "bug_domain": "shape+phase",
+      "description": "fc2 expects 256 but fc1 outputs 128; dropout masks vary by phase",
+      "full_catches": true,
+      "shape_only_catches": true,
+      "device_only_catches": false,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "PyTea has no phase tracking to correlate with shape",
+      "mode_details": {
+        "shape_only": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Linear expects last dim=256, got 128",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 2:\n  phase_s1 = TRAIN_73\n  batch = 1\n "
+          ],
+          "time_ms": 53.52
+        },
+        "device_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 234.9
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 210.35
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Linear expects last dim=256, got 128",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 2:\n  dev_x_s0 = CPU_79\n  dev_x_s2 = CP"
+          ],
+          "time_ms": 249.21
+        }
+      }
+    },
+    {
+      "name": "ConvBNMismatchPhase",
+      "bug_domain": "shape+phase",
+      "description": "BatchNorm2d expects 64 channels but conv1 outputs 32; BN behaves differently per phase",
+      "full_catches": true,
+      "shape_only_catches": true,
+      "device_only_catches": false,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "Phase-dependent BatchNorm shape interaction not modeled by PyTea",
+      "mode_details": {
+        "shape_only": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: BatchNorm expects 64 features, got 32",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 1:\n  batch = 1\n  dev_x_s0 = CPU_82\n  p"
+          ],
+          "time_ms": 90.17
+        },
+        "device_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 226.26
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 200.5
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: BatchNorm expects 64 features, got 32",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 1:\n  dev_x_s1 = CPU_88\n  batch = 1\n  g"
+          ],
+          "time_ms": 56.14
+        }
+      }
+    },
+    {
+      "name": "TrainGPUEvalCPU",
+      "bug_domain": "device+phase",
+      "description": "Model moves input to CUDA in forward; eval code on CPU would fail. BN behavior differs per phase",
+      "full_catches": true,
+      "shape_only_catches": false,
+      "device_only_catches": true,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "PyTea tracks neither device nor phase",
+      "mode_details": {
+        "shape_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 284.56
+        },
+        "device_only": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  dev_x_s0 = CPU_92\n  batch = 1\n  grad",
+            "device_mismatch: Z3 violation (device_mismatch) at step 2:\n  dev_x_s0 = CPU_92\n  batch = 1\n  dev_",
+            "device_mismatch: Z3 violation (device_mismatch) at step 3:\n  dev_x_s0 = CPU_92\n  grad_x_s0 = Fals"
+          ],
+          "time_ms": 101.04
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 345.87
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  batch = 1\n  phase_s1 = TRAIN_97\n  de",
+            "device_mismatch: Z3 violation (device_mismatch) at step 2:\n  batch = 1\n  dev_x_s1 = CUDA_0_97\n  p",
+            "device_mismatch: Z3 violation (device_mismatch) at step 3:\n  phase_s1 = TRAIN_97\n  phase_s0 = TRA",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 1:\n  batch = 1\n  phase_s1 = TRAIN_",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 2:\n  batch = 1\n  dev_x_s1 = CUDA_0",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 3:\n  phase_s1 = TRAIN_97\n  phase_s"
+          ],
+          "time_ms": 343.6
+        }
+      }
+    },
+    {
+      "name": "DropoutDeviceTransfer",
+      "bug_domain": "device+phase",
+      "description": "x moved to CUDA, mask stays CPU; dropout is phase-dependent \u2014 device+phase interaction",
+      "full_catches": true,
+      "shape_only_catches": false,
+      "device_only_catches": true,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "PyTea has neither device nor phase tracking",
+      "mode_details": {
+        "shape_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 418.68
+        },
+        "device_only": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  grad_mask_s0 = False\n  dev_mask_s0 =",
+            "device_mismatch: Device mismatch: x is on cuda:0 but mask is on cpu",
+            "device_mismatch: Z3 violation (device_mismatch) at step 3:\n  grad_mask_s0 = False\n  dev_mask_s0 =",
+            "device_mismatch: Z3 violation (device_mismatch) at step 4:\n  dev_mask_s0 = CPU_101\n  phase_s3 = T"
+          ],
+          "time_ms": 140.3
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 502.79
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  grad_mask_s0 = False\n  phase_s0 = TR",
+            "device_mismatch: Device mismatch: x is on cuda:0 but mask is on cpu",
+            "device_mismatch: Z3 violation (device_mismatch) at step 3:\n  grad_mask_s0 = False\n  phase_s0 = TR",
+            "device_mismatch: Z3 violation (device_mismatch) at step 4:\n  phase_s0 = TRAIN_106\n  dev_x_s3 = CU",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 1:\n  grad_mask_s0 = False\n  phase_",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 4:\n  phase_s0 = TRAIN_106\n  dev_x_"
+          ],
+          "time_ms": 163.86
+        }
+      }
+    },
+    {
+      "name": "EvalDeviceMismatchBN",
+      "bug_domain": "device+phase",
+      "description": "running_mean moved to CUDA but x stays CPU; BN uses different stats per phase",
+      "full_catches": true,
+      "shape_only_catches": false,
+      "device_only_catches": true,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "No device or phase tracking in PyTea",
+      "mode_details": {
+        "shape_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 267.22
+        },
+        "device_only": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Device mismatch: x is on cpu but running_mean is on cuda:0",
+            "device_mismatch: Z3 violation (device_mismatch) at step 3:\n  dev_x_s1 = CPU_110\n  dev_running_mea"
+          ],
+          "time_ms": 89.95
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 593.64
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Device mismatch: x is on cpu but running_mean is on cuda:0",
+            "device_mismatch: Z3 violation (device_mismatch) at step 3:\n  dev_running_mean_s3 = CUDA_0_115\n  g"
+          ],
+          "time_ms": 351.36
+        }
+      }
+    },
+    {
+      "name": "TransformerTripleBug",
+      "bug_domain": "shape+device+phase",
+      "description": "Triple bug: q(128) @ k(64) shape mismatch + CUDA device + dropout phase dependence",
+      "full_catches": true,
+      "shape_only_catches": true,
+      "device_only_catches": true,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "PyTea might catch matmul shape issue but misses device+phase context",
+      "mode_details": {
+        "shape_only": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 5:\n  grad_tokens_s5 = False\n  dev_toke",
+            "shape_incompatible: Linear expects last dim=128, got 64",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 6:\n  dev_q_s4 = CUDA_0_118\n  seq_len ="
+          ],
+          "time_ms": 459.71
+        },
+        "device_only": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  phase_s0 = TRAIN_119\n  dev_tokens_s0",
+            "device_mismatch: Z3 violation (device_mismatch) at step 2:\n  dev_tokens_s0 = CPU_119\n  dev_tokens",
+            "device_mismatch: Z3 violation (device_mismatch) at step 3:\n  dev_tokens_s0 = CPU_119\n  dev_tokens",
+            "device_mismatch: Z3 violation (device_mismatch) at step 6:\n  dev_tokens_s2 = CUDA_0_119\n  dev_emb"
+          ],
+          "time_ms": 320.6
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 1054.52
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 5:\n  grad_tokens_s5 = False\n  dev_toke",
+            "shape_incompatible: Linear expects last dim=128, got 64",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 6:\n  dev_tokens_s4 = CUDA_0_124\n  dev_",
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  dev_tokens_s1 = CUDA_0_124\n  grad_to",
+            "device_mismatch: Z3 violation (device_mismatch) at step 2:\n  dev_tokens_s1 = CUDA_0_124\n  grad_to",
+            "device_mismatch: Z3 violation (device_mismatch) at step 3:\n  dev_tokens_s1 = CUDA_0_124\n  dev_tok",
+            "device_mismatch: Z3 violation (device_mismatch) at step 6:\n  dev_tokens_s4 = CUDA_0_124\n  dev_emb",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 1:\n  dev_tokens_s1 = CUDA_0_124\n  ",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 2:\n  dev_tokens_s1 = CUDA_0_124\n  ",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 3:\n  dev_tokens_s1 = CUDA_0_124\n  ",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 6:\n  dev_tokens_s4 = CUDA_0_124\n  "
+          ],
+          "time_ms": 178.77
+        }
+      }
+    },
+    {
+      "name": "GANGeneratorTripleBug",
+      "bug_domain": "shape+device+phase",
+      "description": "GAN generator: fc2 expects 512 but bn1 outputs 256 + CUDA + BN/dropout phase sensitivity",
+      "full_catches": true,
+      "shape_only_catches": true,
+      "device_only_catches": true,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "Triple-domain interaction not representable in PyTea's shape-only theory",
+      "mode_details": {
+        "shape_only": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Linear expects last dim=512, got 256",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 4:\n  dev_x_s4 = CUDA_0_127\n  dev_z_s2 "
+          ],
+          "time_ms": 286.89
+        },
+        "device_only": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  batch = 1\n  grad_z_s1 = False\n  phas",
+            "device_mismatch: Z3 violation (device_mismatch) at step 2:\n  phase_s2 = TRAIN_128\n  grad_z_s2 = F",
+            "device_mismatch: Z3 violation (device_mismatch) at step 4:\n  phase_s2 = TRAIN_128\n  phase_s4 = TR"
+          ],
+          "time_ms": 170.96
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 720.42
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Linear expects last dim=512, got 256",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 4:\n  phase_s1 = TRAIN_133\n  dev_z_s2 =",
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  phase_s1 = TRAIN_133\n  phase_s0 = TR",
+            "device_mismatch: Z3 violation (device_mismatch) at step 2:\n  phase_s1 = TRAIN_133\n  grad_z_s2 = F",
+            "device_mismatch: Z3 violation (device_mismatch) at step 4:\n  phase_s1 = TRAIN_133\n  dev_z_s2 = CU",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 1:\n  phase_s1 = TRAIN_133\n  phase_",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 2:\n  phase_s1 = TRAIN_133\n  grad_z",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 4:\n  phase_s1 = TRAIN_133\n  dev_z_"
+          ],
+          "time_ms": 228.24
+        }
+      }
+    },
+    {
+      "name": "AutoencoderTripleBug",
+      "bug_domain": "shape+device+phase",
+      "description": "Autoencoder: decoder expects 256 but encoder outputs 128 + noise on CPU + BN/dropout phase",
+      "full_catches": true,
+      "shape_only_catches": true,
+      "device_only_catches": true,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "Triple-domain bug: shape+device+phase interaction",
+      "mode_details": {
+        "shape_only": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Linear expects last dim=256, got 128",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 5:\n  dev_x_s1 = CUDA_0_136\n  dev_noise"
+          ],
+          "time_ms": 420.47
+        },
+        "device_only": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  dev_noise_s0 = CPU_137\n  grad_noise_",
+            "device_mismatch: Z3 violation (device_mismatch) at step 2:\n  dev_noise_s0 = CPU_137\n  phase_s2 = ",
+            "device_mismatch: Device mismatch: h is on cuda:0 but noise is on cpu",
+            "device_mismatch: Z3 violation (device_mismatch) at step 4:\n  phase_s3 = TRAIN_137\n  grad_x_s0 = F",
+            "device_mismatch: Z3 violation (device_mismatch) at step 5:\n  phase_s3 = TRAIN_137\n  grad_x_s0 = F"
+          ],
+          "time_ms": 261.45
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 644.12
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "shape_incompatible: Linear expects last dim=256, got 128",
+            "shape_incompatible: Z3 violation (shape_incompatible) at step 5:\n  grad_x_s0 = False\n  grad_h_s4 = F",
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  phase_s0 = TRAIN_142\n  dev_x_s1 = CU",
+            "device_mismatch: Z3 violation (device_mismatch) at step 2:\n  dev_noise_s1 = CPU_142\n  phase_s2 = ",
+            "device_mismatch: Device mismatch: h is on cuda:0 but noise is on cpu",
+            "device_mismatch: Z3 violation (device_mismatch) at step 4:\n  grad_x_s0 = False\n  grad_h_s4 = Fals",
+            "device_mismatch: Z3 violation (device_mismatch) at step 5:\n  grad_x_s0 = False\n  grad_h_s4 = Fals",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 1:\n  phase_s0 = TRAIN_142\n  dev_x_",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 2:\n  dev_noise_s1 = CPU_142\n  phas",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 5:\n  grad_x_s0 = False\n  grad_h_s4"
+          ],
+          "time_ms": 378.96
+        }
+      }
+    },
+    {
+      "name": "SafeResNetBlock",
+      "bug_domain": "safe",
+      "description": "Correct ResNet block with matching channels",
+      "full_catches": false,
+      "shape_only_catches": false,
+      "device_only_catches": false,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": true,
+      "pytea_reason": "Safe model \u2014 PyTea would also verify this",
+      "mode_details": {
+        "shape_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 30.68
+        },
+        "device_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 28.45
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 65.82
+        },
+        "full_product": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 60.69
+        }
+      }
+    },
+    {
+      "name": "SafeMLP",
+      "bug_domain": "safe",
+      "description": "Correct 3-layer MLP with matching dimensions",
+      "full_catches": false,
+      "shape_only_catches": false,
+      "device_only_catches": false,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": true,
+      "pytea_reason": "Safe model \u2014 PyTea would also verify this",
+      "mode_details": {
+        "shape_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 41.71
+        },
+        "device_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 107.79
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 101.43
+        },
+        "full_product": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 79.8
+        }
+      }
+    },
+    {
+      "name": "SafeDropoutModel",
+      "bug_domain": "safe",
+      "description": "Correct model with dropout \u2014 safe in both train and eval",
+      "full_catches": false,
+      "shape_only_catches": false,
+      "device_only_catches": false,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": true,
+      "pytea_reason": "Safe model \u2014 PyTea verifies shapes correctly",
+      "mode_details": {
+        "shape_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 229.25
+        },
+        "device_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 66.96
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 132.78
+        },
+        "full_product": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 145.96
+        }
+      }
+    },
+    {
+      "name": "LinearParamDeviceCross",
+      "bug_domain": "shape+device",
+      "description": "Shapes match (128\u219264) and no binary-op device clash, but fc params on CPU while input on CUDA",
+      "full_catches": true,
+      "shape_only_catches": false,
+      "device_only_catches": true,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "PyTea has no device tracking \u2014 cannot detect param/input device mismatch",
+      "mode_details": {
+        "shape_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 242.17
+        },
+        "device_only": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  phase_s0 = TRAIN_165\n  batch = 1\n  d"
+          ],
+          "time_ms": 28.36
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 86.31
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  dev_x_s1 = CUDA_0_168\n  batch = 1\n  ",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 1:\n  dev_x_s1 = CUDA_0_168\n  batch"
+          ],
+          "time_ms": 212.75
+        }
+      }
+    },
+    {
+      "name": "ConvParamDeviceCross",
+      "bug_domain": "shape+device",
+      "description": "Shapes valid (Conv2d 3\u219216) but conv params on CPU while input moved to CUDA",
+      "full_catches": true,
+      "shape_only_catches": false,
+      "device_only_catches": true,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "PyTea cannot detect parameter-input device mismatches",
+      "mode_details": {
+        "shape_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 166.98
+        },
+        "device_only": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  phase_s1 = TRAIN_170\n  dev_x_s1 = CU"
+          ],
+          "time_ms": 31.03
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 279.87
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  phase_s0 = TRAIN_173\n  grad_x_s1 = F",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 1:\n  phase_s0 = TRAIN_173\n  grad_x"
+          ],
+          "time_ms": 78.48
+        }
+      }
+    },
+    {
+      "name": "EmbeddingParamDeviceCross",
+      "bug_domain": "shape+device",
+      "description": "Shapes valid but embedding/fc params on CPU while tokens moved to CUDA \u2014 cross-domain only",
+      "full_catches": true,
+      "shape_only_catches": false,
+      "device_only_catches": true,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "PyTea has no device domain to detect this",
+      "mode_details": {
+        "shape_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 32.67
+        },
+        "device_only": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  dev_tokens_s1 = CUDA_0_175\n  grad_to",
+            "device_mismatch: Z3 violation (device_mismatch) at step 2:\n  dev_tokens_s1 = CUDA_0_175\n  grad_to"
+          ],
+          "time_ms": 284.79
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 181.2
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  grad_tokens_s1 = False\n  batch = 1\n ",
+            "device_mismatch: Z3 violation (device_mismatch) at step 2:\n  phase_s1 = TRAIN_178\n  phase_s0 = TR",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 1:\n  grad_tokens_s1 = False\n  batc",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 2:\n  phase_s1 = TRAIN_178\n  phase_"
+          ],
+          "time_ms": 78.19
+        }
+      }
+    },
+    {
+      "name": "LSTMParamDeviceCross",
+      "bug_domain": "shape+device",
+      "description": "LSTM params on CPU but input on CUDA \u2014 only detectable by shape\u00d7device product",
+      "full_catches": true,
+      "shape_only_catches": false,
+      "device_only_catches": true,
+      "phase_only_catches": false,
+      "only_full_catches": false,
+      "pytea_can_catch": false,
+      "pytea_reason": "PyTea cannot model device placement of RNN parameters",
+      "mode_details": {
+        "shape_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 35.98
+        },
+        "device_only": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  dev_x_s1 = CUDA_0_180\n  batch = 1\n  "
+          ],
+          "time_ms": 43.88
+        },
+        "phase_only": {
+          "safe": true,
+          "violations": [],
+          "time_ms": 294.03
+        },
+        "full_product": {
+          "safe": false,
+          "violations": [
+            "device_mismatch: Z3 violation (device_mismatch) at step 1:\n  batch = 1\n  dev_x_s1 = CUDA_0_183\n  ",
+            "cross_domain_violation: Z3 violation (cross_domain_violation) at step 1:\n  batch = 1\n  dev_x_s1 = CUDA_0"
+          ],
+          "time_ms": 65.32
+        }
+      }
+    }
+  ],
+  "confusion_matrix": {
+    "shape_only": {
+      "TP": 13,
+      "FP": 0,
+      "TN": 3,
+      "FN": 11,
+      "precision": 1.0,
+      "recall": 0.542,
+      "F1": 0.703
+    },
+    "device_only": {
+      "TP": 16,
+      "FP": 0,
+      "TN": 3,
+      "FN": 8,
+      "precision": 1.0,
+      "recall": 0.667,
+      "F1": 0.8
+    },
+    "phase_only": {
+      "TP": 0,
+      "FP": 0,
+      "TN": 3,
+      "FN": 24,
+      "precision": 0.0,
+      "recall": 0.0,
+      "F1": 0.0
+    },
+    "full_product": {
+      "TP": 22,
+      "FP": 0,
+      "TN": 3,
+      "FN": 2,
+      "precision": 1.0,
+      "recall": 0.917,
+      "F1": 0.957
+    }
+  },
+  "pytea_comparison": {
+    "total_bugs": 24,
+    "liquidpy_catches": 22,
+    "pytea_catches": 3,
+    "only_liquidpy_catches": 19,
+    "pytea_structural_misses": [
+      {
+        "name": "CrossDeviceAdd",
+        "domain": "device_only",
+        "reason": "PyTea has no device tracking domain"
+      },
+      {
+        "name": "GANDiscriminatorCrossDevice",
+        "domain": "device_only",
+        "reason": "PyTea has no device tracking domain"
+      },
+      {
+        "name": "MultiGPUSplit",
+        "domain": "device_only",
+        "reason": "PyTea has no device tracking domain"
+      },
+      {
+        "name": "BatchNormEvalSingleSample",
+        "domain": "phase_only",
+        "reason": "PyTea has no phase/train-eval mode tracking"
+      },
+      {
+        "name": "DropoutTrainOnlyPath",
+        "domain": "phase_only",
+        "reason": "PyTea has no phase/train-eval mode tracking"
+      },
+      {
+        "name": "ResNetGPUShapeBug",
+        "domain": "shape+device",
+        "reason": "Shape part detectable but device transfer context missed by PyTea"
+      },
+      {
+        "name": "TransformerDeviceShapeMix",
+        "domain": "shape+device",
+        "reason": "PyTea might catch matmul shape mismatch but misses the device context"
+      },
+      {
+        "name": "UNetSkipDeviceShape",
+        "domain": "shape+device",
+        "reason": "PyTea cannot track device placement of skip connections"
+      },
+      {
+        "name": "BatchNormShapePhaseBug",
+        "domain": "shape+phase",
+        "reason": "PyTea cannot reason about BatchNorm phase-dependent behavior"
+      },
+      {
+        "name": "DropoutReshapePhaseBug",
+        "domain": "shape+phase",
+        "reason": "PyTea has no phase tracking to correlate with shape"
+      },
+      {
+        "name": "ConvBNMismatchPhase",
+        "domain": "shape+phase",
+        "reason": "Phase-dependent BatchNorm shape interaction not modeled by PyTea"
+      },
+      {
+        "name": "TrainGPUEvalCPU",
+        "domain": "device+phase",
+        "reason": "PyTea tracks neither device nor phase"
+      },
+      {
+        "name": "DropoutDeviceTransfer",
+        "domain": "device+phase",
+        "reason": "PyTea has neither device nor phase tracking"
+      },
+      {
+        "name": "EvalDeviceMismatchBN",
+        "domain": "device+phase",
+        "reason": "No device or phase tracking in PyTea"
+      },
+      {
+        "name": "TransformerTripleBug",
+        "domain": "shape+device+phase",
+        "reason": "PyTea might catch matmul shape issue but misses device+phase context"
+      },
+      {
+        "name": "GANGeneratorTripleBug",
+        "domain": "shape+device+phase",
+        "reason": "Triple-domain interaction not representable in PyTea's shape-only theory"
+      },
+      {
+        "name": "AutoencoderTripleBug",
+        "domain": "shape+device+phase",
+        "reason": "Triple-domain bug: shape+device+phase interaction"
+      },
+      {
+        "name": "LinearParamDeviceCross",
+        "domain": "shape+device",
+        "reason": "PyTea has no device tracking \u2014 cannot detect param/input device mismatch"
+      },
+      {
+        "name": "ConvParamDeviceCross",
+        "domain": "shape+device",
+        "reason": "PyTea cannot detect parameter-input device mismatches"
+      },
+      {
+        "name": "EmbeddingParamDeviceCross",
+        "domain": "shape+device",
+        "reason": "PyTea has no device domain to detect this"
+      },
+      {
+        "name": "LSTMParamDeviceCross",
+        "domain": "shape+device",
+        "reason": "PyTea cannot model device placement of RNN parameters"
+      }
+    ],
+    "advantage_ratio": "19/24 bugs ONLY caught by LiquidPy"
+  }
+}

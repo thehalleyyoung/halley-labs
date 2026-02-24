@@ -1,0 +1,33 @@
+C 3sb
+
+{ int w=0; int x=0; int y=0; int z=0; }
+
+P0(
+  int* x, int* y
+) {
+  WRITE_ONCE(*x, 1);
+  int r0 = READ_ONCE(*y);
+}
+
+P1(
+  int* y, int* z
+) {
+  WRITE_ONCE(*y, 1);
+  int r1 = READ_ONCE(*z);
+}
+
+P2(
+  int* w, int* z
+) {
+  WRITE_ONCE(*z, 1);
+  int r2 = READ_ONCE(*w);
+}
+
+P3(
+  int* w, int* x
+) {
+  WRITE_ONCE(*w, 1);
+  int r3 = READ_ONCE(*x);
+}
+
+exists (0:r0=0 /\ 1:r1=0 /\ 2:r2=0 /\ 3:r3=0)

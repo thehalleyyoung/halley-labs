@@ -1,0 +1,19 @@
+C s
+
+{ int x=0; int y=0; }
+
+P0(
+  int* x, int* y
+) {
+  WRITE_ONCE(*x, 1);
+  WRITE_ONCE(*y, 1);
+}
+
+P1(
+  int* x, int* y
+) {
+  int r0 = READ_ONCE(*y);
+  WRITE_ONCE(*x, 2);
+}
+
+exists (1:r0=1)

@@ -1,0 +1,236 @@
+{
+  "experiment": "baseline_comparison_v2",
+  "date": "2026-02-24 02:29:18",
+  "num_benchmarks": 12,
+  "num_buggy": 7,
+  "num_correct": 5,
+  "llm_available": false,
+  "tools": {
+    "syntactic": {
+      "label": "Syntactic Pattern Matching",
+      "metrics": {
+        "tp": 7,
+        "fp": 0,
+        "fn": 0,
+        "tn": 5,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "avg_time_ms": 0.37
+      },
+      "confidence_intervals_95": {
+        "precision": [
+          1.0,
+          1.0
+        ],
+        "recall": [
+          1.0,
+          1.0
+        ],
+        "f1": [
+          1.0,
+          1.0
+        ]
+      },
+      "per_benchmark": [
+        {
+          "name": "mlp_bug",
+          "ground_truth": true,
+          "detected_bug": true,
+          "time_ms": 0.46,
+          "details": "Shape mismatch at self.fc2: input has 256 features but nn.Linear expects 128"
+        },
+        {
+          "name": "mlp_correct",
+          "ground_truth": false,
+          "detected_bug": false,
+          "time_ms": 0.34,
+          "details": ""
+        },
+        {
+          "name": "cnn_bug",
+          "ground_truth": true,
+          "detected_bug": true,
+          "time_ms": 0.31,
+          "details": "Shape mismatch at self.conv2: input has 32 channels but nn.Conv2d expects 64"
+        },
+        {
+          "name": "cnn_correct",
+          "ground_truth": false,
+          "detected_bug": false,
+          "time_ms": 0.34,
+          "details": ""
+        },
+        {
+          "name": "transformer_bug",
+          "ground_truth": true,
+          "detected_bug": true,
+          "time_ms": 0.38,
+          "details": "Shape mismatch at self.ff: input has 512 features but nn.Linear expects 768"
+        },
+        {
+          "name": "resnet_correct",
+          "ground_truth": false,
+          "detected_bug": false,
+          "time_ms": 0.45,
+          "details": ""
+        },
+        {
+          "name": "unet_bug",
+          "ground_truth": true,
+          "detected_bug": true,
+          "time_ms": 0.28,
+          "details": "Shape mismatch at self.conv2: input has 64 channels but nn.Conv2d expects 32"
+        },
+        {
+          "name": "gan_bug",
+          "ground_truth": true,
+          "detected_bug": true,
+          "time_ms": 0.32,
+          "details": "Shape mismatch at self.fc2: input has 512 features but nn.Linear expects 256"
+        },
+        {
+          "name": "autoencoder_correct",
+          "ground_truth": false,
+          "detected_bug": false,
+          "time_ms": 0.41,
+          "details": ""
+        },
+        {
+          "name": "lstm_style_bug",
+          "ground_truth": true,
+          "detected_bug": true,
+          "time_ms": 0.37,
+          "details": "Shape mismatch at self.output_proj: input has 128 features but nn.Linear expects 64"
+        },
+        {
+          "name": "deep_cnn_fc_bug",
+          "ground_truth": true,
+          "detected_bug": true,
+          "time_ms": 0.36,
+          "details": "Shape mismatch at self.fc1: input has 128 features but nn.Linear expects 256"
+        },
+        {
+          "name": "multihead_correct",
+          "ground_truth": false,
+          "detected_bug": false,
+          "time_ms": 0.47,
+          "details": ""
+        }
+      ]
+    },
+    "tensorguard": {
+      "label": "TensorGuard (CEGAR + quality filter)",
+      "metrics": {
+        "tp": 7,
+        "fp": 0,
+        "fn": 0,
+        "tn": 5,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "avg_time_ms": 41.79
+      },
+      "confidence_intervals_95": {
+        "precision": [
+          1.0,
+          1.0
+        ],
+        "recall": [
+          1.0,
+          1.0
+        ],
+        "f1": [
+          1.0,
+          1.0
+        ]
+      },
+      "per_benchmark": [
+        {
+          "name": "mlp_bug",
+          "ground_truth": true,
+          "detected_bug": true,
+          "time_ms": 21.34,
+          "details": "Linear expects last dim=128, got 256; Z3 violation (shape_incompatible) at step 2:\n  phase_s1 = TRAIN_1\n  phase_s0 = TRAIN_1\n  batch = 1\n  dev_x_s0 = CPU_1\n  dev_x_s2 = CPU_1\n  grad_x_s0 = False\n  grad_x_s2 = False\n  phase_s2 = TRAIN_1\n  dev_x_s1 = CPU_1\n  grad_x_s1 = True"
+        },
+        {
+          "name": "mlp_correct",
+          "ground_truth": false,
+          "detected_bug": false,
+          "time_ms": 29.31,
+          "details": ""
+        },
+        {
+          "name": "cnn_bug",
+          "ground_truth": true,
+          "detected_bug": true,
+          "time_ms": 43.95,
+          "details": "Conv2d expects 64 input channels, got 32; Z3 violation (shape_incompatible) at step 2:\n  grad___inner_1_s2 = True\n  dev_x_s0 = CPU_3\n  grad_x_s0 = False\n  phase_s2 = TRAIN_3\n  dev___inner_1_s2 = CPU_3\n  phase_s1 = TRAIN_3\n  batch = 1\n  phase_s0 = TRAIN_3\n  dev___inner_1_s1 = CPU_3\n  grad___inner_1_s1 = True\n  grad_x_s2 = False\n  dev_x_s2 = CPU_3\n  grad_x_s1 = False\n  dev_x_s1 = CPU_3"
+        },
+        {
+          "name": "cnn_correct",
+          "ground_truth": false,
+          "detected_bug": false,
+          "time_ms": 35.68,
+          "details": ""
+        },
+        {
+          "name": "transformer_bug",
+          "ground_truth": true,
+          "detected_bug": true,
+          "time_ms": 50.49,
+          "details": "Linear expects last dim=768, got 512; Z3 violation (shape_incompatible) at step 4:\n  grad_k_s3 = True\n  grad_v_s4 = True\n  grad_q_s2 = True\n  dev_q_s2 = CPU_5\n  grad_x_s0 = False\n  seq_len = 1\n  phase_s2 = TRAIN_5\n  phase_s4 = TRAIN_5\n  phase_s1 = TRAIN_5\n  phase_s0 = TRAIN_5\n  dev_q_s1 = CPU_5\n  dev_x_s1 = CPU_5\n  dev_q_s3 = CPU_5\n  grad_q_s1 = True\n  grad_q_s3 = True\n  grad_k_s4 = True\n  dev_k_s3 = CPU_5\n  dev_x_s0 = CPU_5\n  grad_x_s1 = False\n  dev_q_s4 = CPU_5\n  grad_q_s4 = True\n  dev_k_s2 = CPU_5\n  grad_k_s2 = True\n  grad_v_s3 = True\n  dev_k_s4 = CPU_5\n  dev_v_s3 = CPU_5\n  dev_x_s2 = CPU_5\n  phase_s3 = TRAIN_5\n  dev_x_s3 = CPU_5\n  grad_x_s3 = False\n  grad_x_s4 = True\n  batch = 1\n  dev_x_s4 = CPU_5\n  grad_x_s2 = False\n  dev_v_s4 = CPU_5"
+        },
+        {
+          "name": "resnet_correct",
+          "ground_truth": false,
+          "detected_bug": false,
+          "time_ms": 54.5,
+          "details": ""
+        },
+        {
+          "name": "unet_bug",
+          "ground_truth": true,
+          "detected_bug": true,
+          "time_ms": 17.2,
+          "details": "Conv2d expects 32 input channels, got 64; Z3 violation (shape_incompatible) at step 1:\n  batch = 1\n  phase_s1 = TRAIN_7\n  dev_x_s0 = CPU_7\n  phase_s0 = TRAIN_7\n  grad_x_s0 = False\n  dev_x_s1 = CPU_7\n  grad_x_s1 = True"
+        },
+        {
+          "name": "gan_bug",
+          "ground_truth": true,
+          "detected_bug": true,
+          "time_ms": 29.22,
+          "details": "Linear expects last dim=256, got 512; Z3 violation (shape_incompatible) at step 2:\n  dev___inner_1_s2 = CPU_8\n  grad___inner_1_s2 = True\n  phase_s2 = TRAIN_8\n  dev___inner_1_s1 = CPU_8\n  grad_x_s0 = False\n  dev_x_s2 = CPU_8\n  phase_s1 = TRAIN_8\n  phase_s0 = TRAIN_8\n  dev_x_s1 = CPU_8\n  batch = 1\n  grad___inner_1_s1 = True\n  grad_x_s2 = False\n  dev_x_s0 = CPU_8\n  grad_x_s1 = False"
+        },
+        {
+          "name": "autoencoder_correct",
+          "ground_truth": false,
+          "detected_bug": false,
+          "time_ms": 64.19,
+          "details": ""
+        },
+        {
+          "name": "lstm_style_bug",
+          "ground_truth": true,
+          "detected_bug": true,
+          "time_ms": 51.15,
+          "details": "Linear expects last dim=64, got 128; Z3 violation (shape_incompatible) at step 4:\n  dev___inner_1_s4 = CPU_10\n  grad___inner_1_s4 = True\n  grad_x_s0 = False\n  phase_s3 = TRAIN_10\n  dev___inner_1_s2 = CPU_10\n  grad___inner_1_s3 = True\n  dev___inner_1_s1 = CPU_10\n  grad_x_s1 = False\n  dev_x_s1 = CPU_10\n  grad___inner_2_s4 = True\n  grad___inner_1_s2 = True\n  dev_x_s0 = CPU_10\n  dev___inner_1_s3 = CPU_10\n  phase_s2 = TRAIN_10\n  dev___inner_2_s3 = CPU_10\n  phase_s4 = TRAIN_10\n  grad_x_s3 = False\n  grad_x_s4 = False\n  batch = 1\n  phase_s1 = TRAIN_10\n  phase_s0 = TRAIN_10\n  grad___inner_1_s1 = True\n  grad_x_s2 = False\n  grad___inner_2_s3 = True\n  dev_x_s2 = CPU_10\n  dev_x_s3 = CPU_10\n  dev_x_s4 = CPU_10\n  dev___inner_2_s4 = CPU_10"
+        },
+        {
+          "name": "deep_cnn_fc_bug",
+          "ground_truth": true,
+          "detected_bug": true,
+          "time_ms": 46.91,
+          "details": "Linear expects last dim=256, got 28; Z3 violation (shape_incompatible) at step 4:\n  phase_s0 = TRAIN_11\n  dev___inner_1_s1 = CPU_11\n  grad___inner_1_s4 = True\n  grad_x_s0 = False\n  dev_x_s1 = CPU_11\n  grad___inner_1_s3 = True\n  dev_x_s0 = CPU_11\n  dev___inner_1_s3 = CPU_11\n  phase_s3 = TRAIN_11\n  dev___inner_2_s3 = CPU_11\n  grad_x_s1 = False\n  grad___inner_2_s4 = True\n  grad___inner_1_s2 = True\n  dev_x_s2 = CPU_11\n  dev_x_s3 = CPU_11\n  dev_x_s4 = CPU_11\n  dev___inner_2_s4 = CPU_11\n  dev___inner_1_s4 = CPU_11\n  grad_x_s3 = False\n  grad_x_s4 = False\n  batch = 1\n  phase_s2 = TRAIN_11\n  grad___inner_1_s1 = True\n  grad_x_s2 = False\n  grad___inner_2_s3 = True\n  phase_s4 = TRAIN_11\n  dev___inner_1_s2 = CPU_11\n  phase_s1 = TRAIN_11"
+        },
+        {
+          "name": "multihead_correct",
+          "ground_truth": false,
+          "detected_bug": false,
+          "time_ms": 57.54,
+          "details": ""
+        }
+      ]
+    }
+  }
+}

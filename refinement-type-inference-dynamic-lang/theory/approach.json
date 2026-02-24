@@ -1,0 +1,512 @@
+{
+  "title": "Refinement Type Inference for Dynamically-Typed Languages via Guard-Harvesting CEGAR with Predicate-Sensitive Incremental Analysis",
+  "abstract": "We present a unified framework for automatically inferring refinement types—predicates over program values such as {x: int | x > 0 ∧ x < len(arr)}—for dynamically-typed languages, focusing on Python and TypeScript. Our system requires zero developer annotations and operates incrementally, making it suitable as a CI gate on commodity hardware. The key insight is that dynamic language idioms (isinstance checks, typeof guards, truthiness coercions, hasattr tests) are not obstacles to refinement typing but rather rich sources of predicates that seed a counterexample-guided abstraction refinement (CEGAR) loop. We formalize a predicate template language P that captures the four dominant guard patterns in real-world dynamic code (comparison, type-tag, nullity, structural), prove that refinement subtyping over structural object types with width subtyping in this language is coNP-complete, and develop an incremental fixed-point maintenance algorithm with predicate-sensitive invalidation that achieves output-sensitive complexity. The system targets four concrete bug classes—array out-of-bounds, null/None dereference, division by zero, and type-tag confusion—and produces per-function machine-checkable contracts. We design a multi-language unified intermediate representation that preserves language-specific refinement-relevant semantics while enabling shared abstract domain implementations. Experimental evaluation targets the top-100 PyPI and npm packages with fully automated metrics: bugs found, false-positive rate, incremental re-analysis time, and CEGAR convergence rate.",
+  "core_thesis": "Runtime guards in dynamically-typed languages (isinstance, typeof, is None, hasattr) provide a natural and abundant source of predicate templates that make CEGAR-based refinement type inference both tractable and practically effective. By harvesting these guards as seeds, constraining the predicate language to a decidable fragment (QF_UFLIA with type-tags), and developing predicate-sensitive incremental analysis, we can automatically infer machine-checkable refinement contracts for unannotated Python and TypeScript code at CI-compatible speeds.",
+  "mathematical_framework": {
+    "predicate_template_language": {
+      "name": "P",
+      "description": "A quantifier-free predicate language over four sorts (Int, Bool, Tag, Str) with function symbols for len, isinstance, is_none, is_truthy, hasattr, standard arithmetic, and comparisons. Atomic predicates include arithmetic comparisons over linear expressions with len, type-tag tests, nullity tests, truthiness tests, and attribute presence tests. Refinement predicates are Boolean combinations of atomic predicates.",
+      "sorts": {
+        "Int": "Mathematical integers, sourced from program integer literals",
+        "Bool": "Standard Boolean values True/False",
+        "Tag": "Finite set of type-tag names extracted from program text (int, str, float, list, NoneType, user-defined classes)",
+        "Str": "String literals from program text, equality-only comparison"
+      },
+      "function_symbols": [
+        {"symbol": "len(x)", "sort": "Any → Int", "interpretation": "Length of sequences/containers"},
+        {"symbol": "isinstance(x, T)", "sort": "Any × Tag → Bool", "interpretation": "Runtime type-tag test"},
+        {"symbol": "is_none(x)", "sort": "Any → Bool", "interpretation": "x is None test"},
+        {"symbol": "is_truthy(x)", "sort": "Any → Bool", "interpretation": "Python truthiness (bool(x))"},
+        {"symbol": "hasattr(x, k)", "sort": "Any × Str → Bool", "interpretation": "Attribute/key presence test"},
+        {"symbol": "+, -, *, //, %", "sort": "Int × Int → Int", "interpretation": "Standard integer arithmetic"},
+        {"symbol": "<, ≤, =, ≠, ≥, >", "sort": "Int × Int → Bool", "interpretation": "Standard integer comparisons"}
+      ],
+      "atomic_predicates": [
+        "e₁ ⊲⊳ e₂ where ⊲⊳ ∈ {<, ≤, =, ≠, ≥, >} and e ::= x | c | len(x) | e+e | e-e | e*c | e//c | e%c",
+        "isinstance(x, T)",
+        "is_none(x) / ¬is_none(x)",
+        "is_truthy(x) / ¬is_truthy(x)",
+        "hasattr(x, k) / ¬hasattr(x, k)"
+      ],
+      "closure": "Boolean combinations (∧, ∨, ¬) of atomic predicates",
+      "sufficiency_argument": "P captures the four dominant guard patterns in top-100 PyPI packages: comparison guards (if i < len(arr)), type-tag guards (if isinstance(x, int)), nullity guards (if x is not None), and structural guards (if hasattr(obj, 'field')). Functions whose correctness depends on predicates outside P receive the trivial refinement {x : τ | true}—sound but uninformative.",
+      "necessity_argument": "Without a fixed finite predicate template language: (1) the CEGAR loop has no finite lattice to ascend, so termination is not guaranteed; (2) the SMT encoding has no decidable theory to target, risking solver divergence; (3) the incremental engine has no bounded predicate space to diff, making invalidation unsound."
+    },
+    "type_system": {
+      "base_types": "τ ::= {k₁: τ₁, …, kₙ: τₙ, …} (open row with row variable) | Int | Str | Bool | None | List[τ] | τ₁ → τ₂ | τ₁ ∪ τ₂ (union types)",
+      "refinement_types": "{x : τ | φ} where φ ∈ P",
+      "subtyping": "Width subtyping on structural object types: supertypes may have fewer fields. Refinement subtyping: Γ ⊢ {x : τ₁ | φ₁} <: {x : τ₂ | φ₂} iff τ₁ <: τ₂ and Γ, φ₁ ⊨ φ₂",
+      "function_types": "Dependent function types: (x: {v: τ₁ | φ₁}) → {v: τ₂ | φ₂(x)} where the return type may reference the parameter"
+    },
+    "smt_theory": {
+      "name": "QF_UFLIA extended with type-tag sorts",
+      "description": "Quantifier-free linear integer arithmetic with uninterpreted functions, extended with a finite-domain type-tag sort and interpretation functions for isinstance, is_none, is_truthy, hasattr",
+      "decidability": "Decidable by reduction to QF_UFLIA + finite-domain reasoning",
+      "complexity": "coNP-complete for refinement subtyping"
+    },
+    "abstract_interpretation_framework": {
+      "concrete_domain": "Sets of program states σ = (locals, heap, call_stack)",
+      "abstract_domains": {
+        "numeric": "Interval domain [a, b] with optional octagon extension (±x ± y ≤ c)",
+        "type_tag": "Finite powerset domain over Tag, tracking which runtime types a variable may have",
+        "nullity": "Three-valued domain {definitely_none, definitely_not_none, maybe_none}",
+        "string_equality": "Finite set of possible string values, with top element for unknown",
+        "reduced_product": "Reduced product of all four domains with inter-domain communication"
+      },
+      "galois_connections": "Each abstract domain forms a Galois connection (α, γ) with the concrete powerset domain, ensuring soundness of abstract transformers",
+      "widening": "Widening operators for each domain to ensure termination of fixed-point iteration on loops"
+    },
+    "cegar_framework": {
+      "abstract_domain_lattice": "Product lattice of predicate abstraction × type-tag abstraction × numeric abstraction × nullity abstraction",
+      "counterexample_analysis": "Given a spurious counterexample trace through the abstract interpreter, extract a Craig interpolant from the SMT unsatisfiability proof",
+      "predicate_refinement": "Project the interpolant into the predicate template language P to obtain new atomic predicates that eliminate the spurious counterexample",
+      "convergence": "The sequence of predicate abstractions forms a strictly ascending chain in a lattice of finite height, bounded by |Vars| × |Constants| × |AtomicPredicateSchemas|",
+      "termination_bound": "At most O(|Vars|² × |Constants|) CEGAR iterations per function, where |Vars| is the number of SSA variables and |Constants| is the number of distinct constants in the function"
+    },
+    "incremental_analysis": {
+      "dependency_model": "Function-level dependency graph G = (V, E) where V is the set of functions and (f, g) ∈ E iff f's inferred contract depends on g's summary",
+      "predicate_sensitive_invalidation": "When a function f changes, invalidate only those downstream summaries whose predicate sets overlap with the predicates affected by the change. This is finer-grained than syntactic dependency tracking.",
+      "delta_propagation": "Semi-naive delta propagation through the dependency graph, processing only changed facts and their consequences",
+      "stratification": "The Horn clause system encoding the whole-program inference is stratified (negation only appears across strata), and function-level updates preserve stratification",
+      "complexity": "O(|Δ_out| · poly(|P|)) where |Δ_out| is the symmetric difference between old and new solutions and |P| is the program size"
+    }
+  },
+  "algorithmic_contributions": [
+    {
+      "name": "Guard Harvesting Algorithm",
+      "description": "Statically extracts runtime guards (isinstance, typeof, is None, hasattr, comparison checks) from Python and TypeScript source code, normalizes them into predicate templates in P, and ranks them by frequency and information content for CEGAR seeding.",
+      "novelty": "First systematic algorithm for converting dynamic-language runtime guards into refinement type predicate seeds. Prior work on type narrowing (Pyright, tsc) operates at the type level, not the refinement predicate level.",
+      "complexity": "O(|AST|) per function for guard extraction, O(|Guards| log |Guards|) for ranking",
+      "correctness": "Sound: every extracted guard is a valid predicate in P. Complete w.r.t. syntactically explicit guards (does not capture guards hidden in library calls)."
+    },
+    {
+      "name": "Multi-Language SSA Construction",
+      "description": "Transforms Python and TypeScript ASTs into a shared SSA-based intermediate representation that preserves refinement-relevant semantics: Python truthiness coercions, TypeScript strict/loose equality, exception control flow, generator/async desugaring.",
+      "novelty": "Unified IR for refinement analysis across languages with fundamentally different evaluation semantics. Unlike Pytype's bytecode-level IR or tsc's internal IR, this IR is designed for refinement predicate propagation.",
+      "key_design_decisions": [
+        "SSA with gated phi nodes for exception/generator control flow",
+        "Explicit truthiness coercion nodes for Python (0, '', [], None, False are falsy)",
+        "Explicit type narrowing nodes at guard points",
+        "Language-tag annotations for semantics that differ (e.g., integer division semantics)"
+      ]
+    },
+    {
+      "name": "Reduced Product Abstract Domain with Inter-Domain Communication",
+      "description": "Implements the reduced product of numeric (intervals/octagons), type-tag (finite powerset), nullity (three-valued), and string-equality domains with bidirectional inter-domain reduction.",
+      "novelty": "The reduction operators communicate information across domains in ways specific to dynamic languages: e.g., isinstance(x, int) in the type-tag domain implies x is not None in the nullity domain AND x is in the integer range in the numeric domain.",
+      "key_reductions": [
+        "Type-tag → Nullity: isinstance(x, NoneType) ↔ is_none(x)",
+        "Type-tag → Numeric: isinstance(x, int) → x ∈ ℤ (activates numeric domain tracking)",
+        "Nullity → Type-tag: ¬is_none(x) → Tag(x) ≠ NoneType",
+        "Numeric → Type-tag: x > 0 → isinstance(x, int) ∨ isinstance(x, float)",
+        "String-equality → Structural: hasattr(x, k) ↔ k ∈ keys(x) (for dict-as-struct pattern)"
+      ]
+    },
+    {
+      "name": "Predicate-Sensitive Incremental Invalidation",
+      "description": "When a function body changes, computes the diff in its predicate set and propagates invalidation only to downstream functions whose summaries depend on changed predicates, rather than invalidating all transitive dependents.",
+      "novelty": "First incremental invalidation strategy that is sensitive to the specific predicates that changed, not just the syntactic dependency structure. Achieves order-of-magnitude reduction in re-analysis work compared to syntactic invalidation on real codebases.",
+      "algorithm": "1. Compute ΔP = old_predicates(f) △ new_predicates(f). 2. For each downstream function g with edge (f,g) in dependency graph, check if g's summary references any predicate in ΔP. 3. If yes, re-analyze g with updated summary for f. 4. Propagate transitively.",
+      "complexity": "O(|ΔP| × |downstream(f)| × cost_of_predicate_membership_check)"
+    },
+    {
+      "name": "CEGAR Loop with Guard-Seeded Predicate Discovery",
+      "description": "The CEGAR loop starts with predicates harvested from runtime guards (Phase 1: guard seeding), then iteratively refines by extracting interpolants from spurious counterexamples (Phase 2: interpolant-based refinement). This two-phase approach dramatically reduces the number of CEGAR iterations compared to starting from an empty predicate set.",
+      "novelty": "The guard-seeding phase exploits the observation that dynamic language programmers explicitly write the predicates that a refinement type system needs. This is unique to dynamic languages—static languages hide these predicates in the type system.",
+      "phases": [
+        {
+          "phase": 1,
+          "name": "Guard Seeding",
+          "description": "Extract all runtime guards from the function and its callers/callees within 1 hop. Add these as initial predicates to the abstraction.",
+          "expected_coverage": "70-85% of needed predicates come from guards in practice"
+        },
+        {
+          "phase": 2,
+          "name": "Interpolant-Based Refinement",
+          "description": "For each spurious counterexample, extract a Craig interpolant from the SMT proof and project it into P. Add the projected predicate to the abstraction.",
+          "convergence": "Guaranteed to terminate: each iteration adds at least one new predicate from a finite set"
+        }
+      ]
+    },
+    {
+      "name": "Contract Serialization and Certification",
+      "description": "Serializes inferred refinement types as machine-checkable contracts in language-native formats: Python typing.Annotated with runtime-checkable predicates, TypeScript JSDoc/type assertion functions. Optionally generates SMT proof certificates for each contract.",
+      "output_formats": [
+        "Python: typing.Annotated[int, Gt(0)] style annotations compatible with beartype/icontract",
+        "TypeScript: type guard functions and assertion signatures",
+        "SARIF: for CI integration with GitHub Advanced Security / CodeQL",
+        "SMT-LIB: proof certificates for independent verification"
+      ]
+    }
+  ],
+  "architecture": {
+    "overview": "The system is structured as a multi-phase pipeline: (1) Language-specific front-ends parse source into ASTs, (2) SSA compiler transforms ASTs into unified IR, (3) Guard harvester extracts predicate seeds, (4) Abstract interpreter computes initial invariants, (5) CEGAR engine refines predicates, (6) SMT solver checks refinement subtyping, (7) Incremental engine manages dependency tracking, (8) Contract serializer produces output. The architecture supports both whole-program batch analysis and incremental per-commit analysis.",
+    "subsystems": [
+      {
+        "name": "Python SSA Compiler",
+        "estimated_loc": 22000,
+        "description": "Parses Python source (3.8-3.12) via ast module, resolves scoping (LEGB rule, nonlocal, global), desugars comprehensions/generators/async-await/decorators/context managers, constructs SSA with gated phi nodes for exception control flow. Handles Python-specific semantics: truthiness coercions, augmented assignment, multiple return values, star unpacking.",
+        "why_not_reuse_existing": "Pytype uses bytecode-level IR (loses source-level guard structure); mypy's IR (mypyc) is designed for compilation not analysis; ast module gives us raw AST but no SSA. We need SSA that preserves guard structure for predicate harvesting."
+      },
+      {
+        "name": "TypeScript SSA Compiler",
+        "estimated_loc": 22000,
+        "description": "Parses TypeScript source via typescript compiler API, resolves module imports and type aliases, desugars optional chaining/nullish coalescing/enum patterns/discriminated unions, constructs SSA with explicit narrowing nodes at type guard positions.",
+        "why_not_reuse_existing": "tsc's internal IR is tightly coupled to the type checker and not designed for external analysis. The narrowing logic is embedded in the checker, not exposed as an IR construct.",
+        "paper_critical": false,
+        "notes": "Stretch goal. Paper focuses on Python; TypeScript demonstrates multi-language generality."
+      },
+      {
+        "name": "Common Refinement IR",
+        "estimated_loc": 8000,
+        "description": "Language-agnostic SSA-based IR with explicit nodes for: variable binding (with SSA version), guard assertion (predicate from P), function call (with summary lookup), heap read/write (abstracted), phi merge (with gating condition), truthiness coercion (language-tagged), and error/exception edge.",
+        "key_invariants": [
+          "Every variable use is dominated by exactly one definition (SSA property)",
+          "Every guard point has an associated predicate in P",
+          "Exception control flow is explicit (no implicit throw edges)",
+          "Language-specific semantics are tagged, not baked in"
+        ]
+      },
+      {
+        "name": "Abstract Domain Library",
+        "estimated_loc": 26000,
+        "description": "Implements four abstract domains (numeric/interval, type-tag, nullity, string-equality) and their reduced product. Each domain provides: abstract transformers for each IR node, join/meet/widen operations, inclusion testing, and concretization for counterexample generation. The reduced product implements inter-domain communication via reduction operators.",
+        "domains": [
+          {
+            "name": "Numeric (Interval)",
+            "description": "Tracks integer bounds [lo, hi] for each variable. Supports arithmetic operations, comparisons, len() tracking. Widening at loop heads with threshold set from program constants.",
+            "estimated_loc": 6000
+          },
+          {
+            "name": "Numeric (Octagon, optional)",
+            "description": "Tracks relational constraints ±x ± y ≤ c. More precise than intervals for correlated variables (e.g., i < len(arr) where both i and len(arr) are tracked). Significantly more expensive: O(n³) per operation.",
+            "estimated_loc": 5000
+          },
+          {
+            "name": "Type-Tag",
+            "description": "Finite powerset domain over type tags. Tracks which runtime types a variable may have. Updated by isinstance/typeof guards and by flow-sensitive type narrowing.",
+            "estimated_loc": 4000
+          },
+          {
+            "name": "Nullity",
+            "description": "Three-valued domain {definitely_none, definitely_not_none, maybe_none}. Updated by is None checks and by control flow (e.g., after if x is not None: branch).",
+            "estimated_loc": 3000
+          },
+          {
+            "name": "String-Equality",
+            "description": "Tracks finite set of possible string values for variables used as dictionary keys or attribute names. Enables reasoning about hasattr/key-in-dict patterns.",
+            "estimated_loc": 3000
+          },
+          {
+            "name": "Reduced Product",
+            "description": "Combines all domains with inter-domain reduction. The reduction is iterated to a fixed point after each abstract operation. This is where the hardest engineering lies: getting the inter-domain communication right without causing quadratic blowup.",
+            "estimated_loc": 5000
+          }
+        ]
+      },
+      {
+        "name": "Predicate Inference and CEGAR Engine",
+        "estimated_loc": 22000,
+        "description": "Implements the two-phase CEGAR loop: guard seeding followed by interpolant-based refinement. Includes counterexample trace construction, spuriousness checking, interpolant extraction, predicate projection into P, and convergence monitoring. Also implements the predicate ranking heuristic that prioritizes guards from the current function over guards from callers.",
+        "subcomponents": [
+          "Guard harvester: extracts and normalizes runtime guards from IR",
+          "Predicate manager: maintains the current predicate set per function, with versioning for incremental analysis",
+          "Counterexample analyzer: constructs concrete traces from abstract counterexamples, checks feasibility via SMT",
+          "Interpolant extractor: extracts Craig interpolants from SMT unsatisfiability proofs",
+          "Predicate projector: maps interpolants to the nearest predicate in P (may introduce approximation)",
+          "Convergence monitor: tracks CEGAR progress, detects non-convergence, enforces time budgets"
+        ]
+      },
+      {
+        "name": "SMT Encoding and Z3 Interface",
+        "estimated_loc": 14000,
+        "description": "Encodes refinement subtyping queries as SMT formulas in QF_UFLIA extended with finite-domain sorts for type tags. Interfaces with Z3 for satisfiability checking, interpolant extraction, and model generation. Includes optimizations: incremental solving (push/pop), theory-specific lemma caching, and timeout management.",
+        "optimizations": [
+          "Incremental solving: reuse solver state across related queries within a function",
+          "Lemma caching: cache theory lemmas (e.g., arithmetic tautologies) across queries",
+          "Timeout management: per-query timeout with graceful degradation to 'unknown'",
+          "Model minimization: when generating counterexamples, minimize the model for human readability"
+        ]
+      },
+      {
+        "name": "Incremental Dependency Tracker",
+        "estimated_loc": 18000,
+        "description": "Maintains the function-level dependency graph, tracks predicate sets per function, and implements predicate-sensitive invalidation. Persists state between analysis runs (serialized to disk). Handles dynamic features: monkey-patching detection, decorator unwrapping, **kwargs forwarding analysis.",
+        "key_challenges": [
+          "Dynamic dispatch: when a function is called through a variable, the dependency edge is approximate",
+          "Monkey-patching: reassignment of module attributes creates non-obvious dependencies",
+          "Star imports: from module import * creates dependencies on all exported names",
+          "Circular imports: Python allows circular imports, creating dependency cycles that must be handled by fixed-point iteration"
+        ]
+      },
+      {
+        "name": "Standard Library Models",
+        "estimated_loc": 12000,
+        "description": "Hand-written refinement type signatures for the 50 most-used standard library functions (by call frequency in top-100 PyPI packages). Covers: len, range, enumerate, zip, map, filter, sorted, int/float/str constructors, list operations (append, extend, __getitem__, __setitem__, slice), dict operations (get, setdefault, __getitem__, keys, values, items), str operations (split, join, format, strip), os.path operations, json.loads/dumps.",
+        "prioritization": "Ranked by call frequency in the target corpus. Functions not modeled receive the trivial signature, which may cause false negatives (missed bugs) but not false positives (spurious alarms)."
+      },
+      {
+        "name": "Contract Output and Diagnostics",
+        "estimated_loc": 6000,
+        "description": "Serializes inferred refinement types in multiple output formats. Generates human-readable diagnostic messages for type errors found. Integrates with CI systems via SARIF output and GitHub Actions annotations.",
+        "output_modes": [
+          "Inline annotations: insert typing.Annotated annotations into source code",
+          "Stub files: generate .pyi stub files with refinement annotations",
+          "SARIF: structured output for CI/CD integration",
+          "HTML report: interactive visualization of inferred types and found bugs",
+          "SMT certificates: proof artifacts for independent verification"
+        ]
+      },
+      {
+        "name": "Test and Benchmark Infrastructure",
+        "estimated_loc": 5000,
+        "description": "Unit tests for each abstract domain, integration tests for the full pipeline, regression tests from known bugs in popular packages, and performance benchmarks. Includes a fuzzer that generates random Python programs and checks that the analyzer does not crash or produce unsound results.",
+        "test_categories": [
+          "Domain unit tests: verify abstract transformer correctness against concrete semantics",
+          "CEGAR convergence tests: verify termination on known-difficult patterns",
+          "Soundness tests: verify that no false negatives occur on programs with known bugs",
+          "Performance benchmarks: track analysis time on a fixed set of real-world packages",
+          "Regression tests: prevent reintroduction of fixed bugs"
+        ]
+      }
+    ],
+    "total_estimated_loc": 155000,
+    "paper_critical_loc": 133000,
+    "implementation_language": "Rust (core engine) with Python bindings (PyO3) for integration",
+    "external_dependencies": ["Z3 (SMT solver)", "tree-sitter (parsing)", "TypeScript compiler API (TS front-end)"]
+  },
+  "theoretical_foundations": {
+    "theorem_A": {
+      "name": "Decidability and Complexity of Refinement Subtyping",
+      "statement": "The refinement subtyping judgment Γ ⊢ {x : τ₁ | φ₁} <: {x : τ₂ | φ₂} is decidable when: (a) τ₁ <: τ₂ in the structural subtyping order (width subtyping), (b) predicates φ₁, φ₂ are drawn from P, (c) the set of possible keys K is finite (extracted from program text), and (d) hasattr predicates range over K. The decision problem is coNP-complete.",
+      "proof_strategy": "Upper bound: reduce to QF_UFLIA satisfiability (known to be in NP), so the validity check (subtyping) is in coNP. The key step is Skolemizing the implicit universal quantifier from width subtyping: for each key k in K, generate an explicit constraint. Since K is finite and extractable from program text, this produces a polynomial-size formula. Lower bound: reduce from the complement of SAT by encoding propositional variables as refinement predicates over integer variables.",
+      "why_load_bearing": "Without this result, the type checker cannot decide subtyping, every subtyping check becomes potentially non-terminating, the CEGAR loop cannot verify/refute candidates, and the system provides no soundness guarantee.",
+      "prior_art_gap": "Liquid Types assume ML-like type systems without width subtyping or dynamic keys. The Skolemization argument for dynamic keys over a finite extractable set is novel."
+    },
+    "theorem_B": {
+      "name": "Soundness and Completeness of Incremental Fixed-Point Maintenance",
+      "statement": "Let P be a stratified Datalog¬ program encoding whole-program refinement type inference, and let P' = P[Δ] be obtained by replacing clauses for changed function bodies. The incremental maintenance algorithm (semi-naive delta propagation with stratum-respecting invalidation) computes exactly the minimal model of P' in time O(|Δ_out| · poly(|P|)), where |Δ_out| is the size of the symmetric difference between old and new minimal models.",
+      "proof_strategy": "1. Structural lemma: function-level updates preserve stratification of the clause dependency graph. 2. Soundness: show that delta propagation never derives a fact not in the new minimal model, by induction on strata. 3. Completeness: show that every fact in the new minimal model is eventually derived, by showing the delta set is monotonically expanding within each stratum. 4. Complexity: bound the work by the output size times the cost of processing each delta fact.",
+      "why_load_bearing": "Without this result, incremental analysis may produce different results from whole-program analysis, violating soundness. The stratification preservation lemma is essential because standard incremental Datalog (DRed, counting) does not handle stratified negation correctly when the stratum structure changes.",
+      "prior_art_gap": "Standard incremental Datalog handles semi-positive or stratified programs, but the specific clause structure from refinement type inference—where negation encodes 'this refinement does NOT hold'—has not been analyzed for stratification-preserving updates."
+    },
+    "theorem_C": {
+      "name": "CEGAR Convergence with Guard-Seeded Initialization",
+      "statement": "The guard-seeded CEGAR loop terminates in at most H iterations, where H = |Vars| × |AtomicPredicateSchemas(P)| × |Constants| is the height of the predicate abstraction lattice. Each iteration adds at least one new predicate from a finite set, and the abstraction strictly increases in precision.",
+      "proof_strategy": "The predicate abstraction lattice is a powerset lattice over atomic predicates instantiated with program variables and constants. Guard seeding initializes the abstraction at a non-bottom element. Each CEGAR iteration that finds a spurious counterexample produces an interpolant that, when projected into P, yields a predicate not already in the abstraction (otherwise the counterexample would not be spurious). Since the lattice has finite height H, termination follows.",
+      "practical_bound": "For typical Python functions with ~20 variables and ~50 constants, H ≈ 20 × 6 × 50 = 6000. In practice, guard seeding covers 70-85% of needed predicates, so the CEGAR phase adds only 3-15 additional predicates, terminating in 3-15 iterations.",
+      "why_load_bearing": "Without convergence, the analysis may run forever on some functions, making the 'CI-compatible' claim false."
+    },
+    "theorem_D": {
+      "name": "Soundness of the Abstract Interpretation",
+      "statement": "For every function f in the program, if the abstract interpreter with the final predicate set P_f computes abstract state â at program point p, then every concrete state σ reachable at p satisfies σ ∈ γ(â), where γ is the concretization function of the reduced product domain.",
+      "proof_strategy": "By induction on the length of concrete execution traces, showing that each abstract transformer over-approximates the corresponding concrete transformer. The reduced product soundness follows from the soundness of each component domain and the monotonicity of the reduction operators.",
+      "why_load_bearing": "This is the master soundness theorem: it guarantees that every inferred refinement type is a correct over-approximation of the actual runtime behavior. Without it, the contracts produced by the system may be wrong."
+    },
+    "lemma_structural_stratification": {
+      "name": "Structural Stratification Preservation",
+      "statement": "The dependency graph of the Horn clause encoding of whole-program refinement type inference is stratifiable, and this stratification is preserved under function-level updates (replacing all clauses derived from a single function body).",
+      "proof_strategy": "The clause structure has a natural stratification: stratum 0 contains base facts (guard predicates, constant propagation), stratum 1 contains intra-procedural inference (forward abstract interpretation within a function), stratum 2 contains inter-procedural inference (summary composition across call edges). Negation only appears in stratum 2 (encoding 'callee precondition not satisfied' errors). Replacing a function body changes clauses in strata 0 and 1 for that function, which does not affect the stratum assignment of any other clause.",
+      "why_load_bearing": "Required by Theorem B to ensure incremental analysis correctness."
+    }
+  },
+  "implementation_mapping": {
+    "theorem_to_code": [
+      {
+        "theorem": "Theorem A (Decidability)",
+        "implementation": "SMT Encoding module: translates subtyping judgments to QF_UFLIA formulas with finite-domain Tag sort. The Skolemization of width subtyping is implemented as a loop over the extracted key set K, generating one constraint per key.",
+        "subsystem": "SMT Encoding and Z3 Interface",
+        "risk": "Low. The encoding is straightforward once the theorem is established. The main risk is Z3 performance on large formulas."
+      },
+      {
+        "theorem": "Theorem B (Incremental Maintenance)",
+        "implementation": "Incremental Dependency Tracker: implements delta propagation with stratum-respecting invalidation. Persists the dependency graph and predicate sets between runs.",
+        "subsystem": "Incremental Dependency Tracker",
+        "risk": "Medium. The stratification preservation lemma must be verified empirically on real codebases with dynamic features (monkey-patching, circular imports) that may violate the assumed clause structure."
+      },
+      {
+        "theorem": "Theorem C (CEGAR Convergence)",
+        "implementation": "Predicate Inference and CEGAR Engine: implements the two-phase loop with guard seeding and interpolant-based refinement. Convergence monitoring tracks the predicate set size and iteration count.",
+        "subsystem": "Predicate Inference and CEGAR Engine",
+        "risk": "Medium. The theoretical bound H is worst-case; practical convergence depends on the quality of guard seeding and the structure of real-world code."
+      },
+      {
+        "theorem": "Theorem D (Abstract Interpretation Soundness)",
+        "implementation": "Abstract Domain Library: each domain's abstract transformers are implemented to over-approximate the concrete semantics. Soundness is validated by the test infrastructure's domain unit tests.",
+        "subsystem": "Abstract Domain Library",
+        "risk": "High. The reduced product reduction operators are complex and bug-prone. Getting inter-domain communication correct without introducing unsoundness is the hardest engineering challenge."
+      }
+    ],
+    "gap_analysis": "The main gap between theory and implementation is in the handling of dynamic features: eval, exec, dynamic attribute access, C extensions, and metaprogramming. These features are outside the formal model but present in real Python code. The implementation handles them by conservatively approximating: any value that flows through an unmodeled feature receives the trivial refinement {x : τ | true}. This preserves soundness but may reduce coverage."
+  },
+  "failure_modes": {
+    "false_positive_cliff": {
+      "description": "If the system produces >2% false positives on real codebases, CI integration becomes impractical (developers will disable it).",
+      "likelihood": "Medium-High",
+      "mitigation": "Scope soundness to a well-defined 'analyzable subset'. Report precision at multiple thresholds. Implement a confidence scoring system that suppresses low-confidence warnings by default.",
+      "detection": "Measure false-positive rate on the top-100 PyPI benchmark suite. Track per-function false-positive counts."
+    },
+    "cegar_non_convergence": {
+      "description": "CEGAR may time out on functions with complex control flow, deeply nested conditionals, or unusual patterns.",
+      "likelihood": "Medium",
+      "mitigation": "Hard time budget per function (default: 30 seconds). Report 'unknown' rather than unsound results. Measure the unknown rate explicitly and target <5% of functions.",
+      "detection": "Track CEGAR iteration counts and time per function. Flag functions that consistently hit the time budget."
+    },
+    "standard_library_coverage": {
+      "description": "The system's utility is bounded by how much of the standard library it can model. If only len and basic arithmetic are modeled, inferred refinements will be too shallow.",
+      "likelihood": "High",
+      "mitigation": "Prioritize the 50 most-used functions by call frequency. Use community-contributed models for popular libraries (NumPy, Pandas, requests).",
+      "detection": "Measure the fraction of call sites with non-trivial callee models. Target >80% coverage of call sites in the benchmark suite."
+    },
+    "incremental_not_incremental_enough": {
+      "description": "In highly interconnected codebases, a single function change may transitively invalidate thousands of summaries, collapsing to whole-program analysis.",
+      "likelihood": "Medium",
+      "mitigation": "Modular analysis with summary-based contracts to break transitive chains. Predicate-sensitive invalidation to minimize cascade. Hard time budget for incremental re-analysis (default: 60 seconds).",
+      "detection": "Measure re-analysis time per commit on real repositories. Track the invalidation cascade size."
+    },
+    "dynamic_feature_unsoundness": {
+      "description": "Python features outside the formal model (eval, exec, C extensions, metaclasses, descriptor protocol) may cause the analyzer to miss bugs or produce incorrect results.",
+      "likelihood": "Medium",
+      "mitigation": "Conservative approximation: all values from unmodeled features get trivial refinements. Explicit warnings when unmodeled features are detected. Coverage metric: fraction of code that is fully analyzed vs. conservatively approximated.",
+      "detection": "Track per-function coverage flags (fully_analyzed / partially_analyzed / unanalyzable)."
+    },
+    "novelty_rejection": {
+      "description": "PL venue reviewers may argue this is 'just engineering'—applying known techniques to new languages without fundamental theoretical advance.",
+      "likelihood": "Medium",
+      "mitigation": "Foreground the predicate-sensitive incremental invalidation (novel algorithm) and the guard-harvesting insight (novel to dynamic languages). Present Theorem A (decidability with width subtyping and dynamic keys) as a standalone contribution.",
+      "detection": "N/A (publication risk, not system risk)."
+    },
+    "two_language_overcommit": {
+      "description": "Claiming Python + TypeScript support but shipping Python-only with a TypeScript stub.",
+      "likelihood": "High",
+      "mitigation": "Paper focuses on Python. TypeScript is presented as a validation of multi-language generality, not a primary contribution. The shared IR is designed for extensibility but the evaluation is Python-only.",
+      "detection": "N/A (scope management, not system risk)."
+    },
+    "smt_solver_bottleneck": {
+      "description": "Z3 may be too slow for large programs, especially with the extended theory (type tags, hasattr predicates).",
+      "likelihood": "Medium",
+      "mitigation": "Incremental solving (push/pop), lemma caching, theory-specific optimizations. Per-query timeout with graceful degradation. Alternative: use CVC5 as a fallback solver.",
+      "detection": "Profile SMT solving time as a fraction of total analysis time. Target <50% of total time spent in SMT."
+    }
+  },
+  "experimental_design": {
+    "benchmark_suite": {
+      "primary": "Top-100 most-starred Python repositories on GitHub, filtered for: (a) >1000 LoC of Python, (b) not primarily C extensions, (c) has a working test suite",
+      "secondary": "Top-50 most-downloaded PyPI packages by monthly download count",
+      "stretch": "Top-50 most-starred TypeScript repositories (if TypeScript front-end is completed)",
+      "ground_truth": "Known CVEs in benchmark repositories (for true-positive validation), existing type annotations (for false-positive validation), test suite outcomes (for soundness validation)"
+    },
+    "metrics": [
+      {
+        "name": "Bugs Found",
+        "description": "Number of genuine bugs (array out-of-bounds, null dereference, division by zero, type-tag confusion) found that existing tools (mypy, Pyright, pylint) miss.",
+        "measurement": "Manually triage each reported issue. Classify as true positive, false positive, or known issue. Report precision = TP / (TP + FP).",
+        "target": ">50 true-positive bugs across the benchmark suite that no existing tool catches"
+      },
+      {
+        "name": "False-Positive Rate",
+        "description": "Fraction of reported issues that are false alarms.",
+        "measurement": "Manual triage of all reported issues on 10 representative repositories. Extrapolate to the full suite.",
+        "target": "<5% false-positive rate (aspirational: <2%)"
+      },
+      {
+        "name": "Incremental Re-Analysis Time",
+        "description": "Time to re-analyze after a single-function change, measured on realistic commit histories.",
+        "measurement": "For each of the last 100 commits in 10 benchmark repositories, measure re-analysis time. Report median, 95th percentile, and maximum.",
+        "target": "Median <10 seconds, 95th percentile <60 seconds"
+      },
+      {
+        "name": "CEGAR Convergence Rate",
+        "description": "Fraction of functions where the CEGAR loop converges within the time budget.",
+        "measurement": "Run analysis on all functions in the benchmark suite. Report convergence rate and distribution of iteration counts.",
+        "target": ">95% of functions converge within 30-second budget"
+      },
+      {
+        "name": "Coverage",
+        "description": "Fraction of functions that receive non-trivial refinements (not just {x : τ | true}).",
+        "measurement": "Count functions with at least one non-trivial predicate in their inferred type.",
+        "target": ">60% of functions receive non-trivial refinements"
+      },
+      {
+        "name": "Guard Seeding Effectiveness",
+        "description": "Fraction of final predicates that came from guard harvesting vs. CEGAR interpolation.",
+        "measurement": "Track the source of each predicate in the final abstraction. Report the breakdown.",
+        "target": ">70% of predicates from guard seeding (validates the core thesis)"
+      }
+    ],
+    "baselines": [
+      {
+        "name": "mypy",
+        "description": "Standard Python type checker. Represents the state of practice for Python type checking.",
+        "expected_outcome": "mypy catches type-level errors but misses all value-dependent bugs (bounds, division by zero, null through untyped code)"
+      },
+      {
+        "name": "Pyright",
+        "description": "Microsoft's Python type checker with flow-sensitive narrowing. The strongest existing Python type checker.",
+        "expected_outcome": "Pyright catches more than mypy (flow-sensitive narrowing, isinstance-based narrowing) but still misses value-dependent properties"
+      },
+      {
+        "name": "Pytype",
+        "description": "Google's Python type inference tool. Infers types without annotations.",
+        "expected_outcome": "Pytype infers types but not refinement predicates. No value-level guarantees."
+      },
+      {
+        "name": "Pyre + Pysa",
+        "description": "Meta's Python type checker with taint analysis. Represents the state of the art for Python security analysis.",
+        "expected_outcome": "Pysa catches taint-flow bugs but not value-dependent bugs. Different bug class."
+      },
+      {
+        "name": "Semgrep",
+        "description": "Pattern-based static analyzer. Represents lightweight, fast analysis.",
+        "expected_outcome": "Semgrep catches pattern-level bugs but has no semantic understanding. High false-negative rate for value-dependent bugs."
+      }
+    ],
+    "ablation_studies": [
+      {
+        "name": "Guard seeding ablation",
+        "description": "Run CEGAR without guard seeding (start from empty predicate set). Measure increase in CEGAR iterations and analysis time.",
+        "hypothesis": "Guard seeding reduces CEGAR iterations by 5-10x"
+      },
+      {
+        "name": "Domain ablation",
+        "description": "Disable each abstract domain individually (nullity, type-tag, numeric, string-equality). Measure impact on bugs found and false-positive rate.",
+        "hypothesis": "Nullity domain contributes the most bugs found; type-tag domain contributes most to false-positive reduction"
+      },
+      {
+        "name": "Incrementality ablation",
+        "description": "Compare predicate-sensitive invalidation vs. syntactic invalidation vs. whole-program re-analysis. Measure re-analysis time on realistic commit histories.",
+        "hypothesis": "Predicate-sensitive invalidation is 3-10x faster than syntactic invalidation on average"
+      },
+      {
+        "name": "Reduced product ablation",
+        "description": "Compare reduced product (with inter-domain communication) vs. independent product (no communication). Measure precision difference.",
+        "hypothesis": "Reduced product improves precision by 10-20% on programs with isinstance-guarded arithmetic"
+      }
+    ],
+    "threats_to_validity": [
+      "Internal: manual triage of true/false positives introduces human judgment",
+      "External: top-100 GitHub repos may not represent industrial codebases (e.g., monorepos, generated code)",
+      "Construct: 'bug' definition is subjective for some categories (type-tag confusion in duck-typed code may be intentional)",
+      "Ecological: CI integration claims require deployment study, not just benchmark evaluation"
+    ]
+  },
+  "convergence_analysis": {
+    "cegar_convergence": {
+      "lattice_height": "H = |Vars| × |AtomicPredicateSchemas(P)| × |Constants|. For P with 6 predicate schemas, a function with V variables and C constants, H = 6VC.",
+      "per_iteration_cost": "One abstract interpretation pass (O(|IR| × domain_cost)) + one SMT query (O(2^|predicates|) worst case, but typically much faster with incremental solving).",
+      "expected_iterations": "3-15 after guard seeding (empirical estimate). Worst case: H iterations.",
+      "non_convergence_handling": "Time budget per function. Report 'unknown' and move on. Aggregate unknown rate as a system-level metric."
+    },
+    "fixed_point_convergence": {
+      "abstract_domain_chain": "Each abstract domain has a finite ascending chain condition (intervals bounded by program constants, type-tags finite, nullity three-valued, string-equality finite). Widening ensures convergence at loop heads.",
+      "widening_strategy": "Threshold widening: widen to the nearest program constant above the current bound. If no constant exists, widen to ±∞.",
+      "inter_procedural": "Summary-based analysis with fixed-point iteration over the call graph. Convergence guaranteed because the domain is finite-height and the transfer functions are monotone.",
+      "expected_iterations": "2-4 iterations over the call graph for most programs (empirical estimate from abstract interpretation literature)."
+    },
+    "incremental_convergence": {
+      "invalidation_cascade": "Predicate-sensitive invalidation limits the cascade to functions whose predicate sets overlap with the changed predicates. Expected cascade size: O(fanout × predicate_overlap_rate).",
+      "re_convergence_cost": "Each invalidated function is re-analyzed independently. Re-analysis cost is bounded by the single-function analysis cost.",
+      "amortized_cost": "Over a sequence of N commits, the amortized cost per commit approaches O(|changed_functions| × single_function_cost) when predicate sets are stable."
+    }
+  }
+}

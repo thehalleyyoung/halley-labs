@@ -1,0 +1,39 @@
+name: LITMUS∞ Portability Check
+
+on:
+  pull_request:
+    paths:
+      - '**.c'
+      - '**.cpp'
+      - '**.cc'
+      - '**.h'
+      - '**.hpp'
+      - '**.cu'
+      - '**.cl'
+
+jobs:
+  litmus-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install LITMUS∞
+        run: pip install litmus-inf
+
+      - name: Check x86 → ARM portability
+        run: litmus-check --target arm --json src/ > litmus-results.json || true
+
+      - name: Report results
+        if: always()
+        run: litmus-check --target arm src/
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: litmus-results
+          path: litmus-results.json

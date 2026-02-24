@@ -1,0 +1,450 @@
+{
+    "title": "DivFlow: Diverse LLM Elicitation via Measure Transport and Adaptive Repulsive Mechanisms",
+    "abstract": "We introduce DivFlow, a framework for diverse response elicitation from large language models that formulates diversity maximization as a measure transport problem. Standard multi-sample querying strategies (temperature scaling, nucleus sampling) produce mode-collapsed outputs, while DPP-based approaches use fixed kernels and lack coverage guarantees. DivFlow addresses these limitations through three interconnected innovations: (1) Sinkhorn divergence as a differentiable, unbiased diversity objective that metrizes weak convergence, replacing DPP's combinatorial log-det; (2) adaptive kernel learning that adjusts repulsion strength to the local geometry of the response manifold; and (3) finite-sample coverage certificates via Chernoff concentration bounds. We prove that energy-augmented proper scoring rules—where the energy term depends on outcomes rather than reports—preserve incentive compatibility, enabling diversity-aware mechanisms without breaking truthfulness. We establish O(sqrt(log n / n)) regret bounds for sequential diversity maximization and characterize the quality-diversity Pareto frontier as concave and achievable by weighted mechanisms. Experiments on open-ended generation, code synthesis, and mathematical reasoning demonstrate that DivFlow achieves 40-60% higher coverage than DPP baselines while maintaining response quality.",
+    "core_thesis": "Diversity maximization in LLM elicitation should be formulated as a measure transport problem: the goal is to select responses whose empirical measure is close (in Sinkhorn divergence) to a target measure that is spread across the reachable response space. This formulation is superior to combinatorial objectives (DPP log-det) because it is differentiable, provides gradients for kernel adaptation and generation steering, metrizes weak convergence (ensuring topological correctness), and admits efficient entropic-regularized computation. Combined with energy-augmented scoring rules that preserve incentive compatibility, this yields a mechanism that is simultaneously truthful, diverse, and certifiably covering.",
+    "mathematical_framework": {
+        "agent_model": {
+            "type_space": {
+                "definition": "Each agent i has a private type θ_i ∈ Θ representing their latent knowledge state. The type space Θ is a compact Polish space equipped with a Borel probability measure P_Θ.",
+                "type_distribution": "Types are drawn i.i.d. from P_Θ. In the LLM setting, each 'agent' corresponds to an independent sample from the LLM with a specific prompt/temperature configuration, and the type encodes the latent state of the generation process.",
+                "report_space": "Each agent submits a report r_i ∈ Y where Y is the response space (e.g., sequences of tokens up to length T). Under IC, r_i = y_i(θ_i) is the truthful response."
+            },
+            "distributions": {
+                "response_distribution": "Given type θ, the response distribution is P_{Y|θ} with density p(y|θ) over Y. For an LLM with temperature τ, this is the softmax distribution over token sequences.",
+                "empirical_measure": "Given n responses {y_1,...,y_n}, the empirical measure is μ_n = (1/n) Σ_i δ_{y_i}.",
+                "target_measure": "The target diversity measure μ* is either uniform on the support of P_Y, or a user-specified reference distribution over Y."
+            },
+            "reports": {
+                "truthful_report": "Agent i reports r_i = y_i(θ_i), their genuine response given their type.",
+                "strategic_report": "Agent i reports r_i = arg max_{r ∈ Y} E_{θ_{-i}}[s_i(r, r_{-i}, θ_{-i})] where s_i is the scoring rule.",
+                "ic_condition": "A mechanism is incentive-compatible if truthful reporting is a dominant strategy: ∀i, ∀θ_i, ∀r_i ≠ y_i(θ_i): E[s_i(y_i(θ_i), ·)] ≥ E[s_i(r_i, ·)]."
+            }
+        },
+        "scoring_rules": {
+            "proper_scoring_rules": {
+                "definition": "A scoring rule S: Y × Y → R is proper if E_{Y~P}[S(Y, P)] ≥ E_{Y~P}[S(Y, Q)] for all distributions Q, with equality iff P = Q.",
+                "brier_score": "S_Brier(y, p) = 2p(y) - ||p||² = 2p(y) - Σ_z p(z)². Strictly proper for finite outcome spaces.",
+                "log_score": "S_log(y, p) = log p(y). Strictly proper, unbounded below, maximally informative (Fisher efficient).",
+                "crps": "S_CRPS(y, F) = -E|X-y| + (1/2)E|X-X'| where X,X' ~ F. Proper for continuous outcomes.",
+                "properness_gap": "For a strictly proper rule S, the properness gap is Δ(P,Q) = E_P[S(Y,P)] - E_P[S(Y,Q)] > 0 for P ≠ Q. For Brier: Δ = ||P-Q||². For log: Δ = KL(P||Q)."
+            },
+            "energy_augmented_rules": {
+                "definition": "S_E(y, r, Y_{-i}) = S(y, r) + α · E(y, Y_{-i}) where S is a proper scoring rule, E is an energy function, y is the outcome, r is the report, and Y_{-i} are other agents' responses.",
+                "key_insight": "The energy term E(y, Y_{-i}) depends on the OUTCOME y, not the REPORT r. Since the agent cannot influence y (it is determined by their type), the energy term does not affect the agent's optimization and IC is preserved.",
+                "energy_function": "E(y, Y_{-i}) = Σ_{j≠i} k(y, y_j) where k is a repulsive kernel. This rewards agents whose true responses are far from others.",
+                "ic_preservation_theorem": {
+                    "statement": "If S is strictly proper and E depends only on outcomes (not reports), then S_E is strictly proper. Formally: E_{Y~P}[S_E(Y, P, Y_{-i})] ≥ E_{Y~P}[S_E(Y, Q, Y_{-i})] for all Q, with equality iff P = Q.",
+                    "proof_sketch": "E_{Y~P}[S_E(Y, P, Y_{-i})] = E_{Y~P}[S(Y, P)] + α · E_{Y~P}[E(Y, Y_{-i})]. The second term is independent of the report Q, so the optimization over Q reduces to maximizing E_{Y~P}[S(Y, Q)], which by properness of S is maximized at Q = P.",
+                    "significance": "This is the key theoretical contribution enabling diversity-aware mechanism design. Prior work either broke IC by making payments depend on reports' diversity, or added post-hoc diversity filtering that distorts incentives."
+                }
+            }
+        },
+        "sinkhorn_divergence": {
+            "definition": {
+                "ot_cost": "For measures μ, ν on Y with ground cost c: Y×Y → R+, the optimal transport cost is W_c(μ,ν) = inf_{π ∈ Π(μ,ν)} ∫ c(x,y) dπ(x,y) where Π(μ,ν) is the set of couplings.",
+                "entropic_regularization": "OT_ε(μ,ν) = inf_{π ∈ Π(μ,ν)} ∫ c(x,y) dπ(x,y) + ε · KL(π || μ⊗ν). Adds entropic regularization for computational tractability.",
+                "sinkhorn_divergence_formula": "S_ε(μ,ν) = OT_ε(μ,ν) - (1/2)OT_ε(μ,μ) - (1/2)OT_ε(ν,ν). The debiasing terms remove the entropic bias, ensuring S_ε(μ,μ) = 0.",
+                "sinkhorn_algorithm": "Computed via alternating Bregman projections (Sinkhorn iterations): u^{t+1} = a / (K v^t), v^{t+1} = b / (K^T u^{t+1}), where K_{ij} = exp(-c(x_i,y_j)/ε) and a,b are marginal constraint vectors."
+            },
+            "properties": {
+                "positive_definite": "S_ε(μ,ν) ≥ 0 with equality iff μ = ν. This follows from the debiasing construction.",
+                "metrizes_weak_convergence": "On compact metric spaces, S_ε(μ_n, μ) → 0 iff μ_n → μ weakly. This is strictly stronger than DPP's log-det which does not metrize any standard topology.",
+                "differentiability": "S_ε is differentiable with respect to the support points of discrete measures. The gradient ∇_{x_i} S_ε can be computed via the optimal dual potentials from Sinkhorn iterations.",
+                "interpolation": "As ε → 0, S_ε → W_c (Wasserstein). As ε → ∞, S_ε → MMD² (maximum mean discrepancy). DivFlow uses intermediate ε for the best of both worlds.",
+                "sample_complexity": "For n-point discrete measures, S_ε converges at rate O(n^{-1/2}) (dimension-free), compared to W_c which suffers from O(n^{-1/d}) curse of dimensionality.",
+                "computational_complexity": "O(n² / ε²) for n-point measures using Sinkhorn iterations. In practice, ~50-100 iterations suffice for ε ≈ 0.1."
+            },
+            "gradient_computation": {
+                "dual_potentials": "The Sinkhorn algorithm produces dual potentials f, g such that S_ε(μ,ν) = ⟨f, μ⟩ + ⟨g, ν⟩.",
+                "point_gradient": "∇_{x_i} S_ε = ∇_{x_i} f(x_i) + (1/n) Σ_j ∇_{x_i} K(x_i, y_j) · (optimal coupling weights).",
+                "use_in_divflow": "Gradients of S_ε drive kernel adaptation: the kernel parameters are updated to maximize S_ε(μ_S, μ*) where μ_S is the selected subset's empirical measure."
+            }
+        },
+        "dpp_theory": {
+            "l_ensemble": {
+                "definition": "A DPP on ground set {1,...,n} with L-ensemble kernel L ∈ R^{n×n} (positive semidefinite) assigns probability P(S) ∝ det(L_S) to each subset S, where L_S is the principal submatrix indexed by S.",
+                "marginal_kernel": "The marginal kernel K = L(L+I)^{-1} gives inclusion probabilities: P(i ∈ S) = K_{ii} and P({i,j} ⊆ S) = K_{ii}K_{jj} - K_{ij}².",
+                "kernel_construction": "L_{ij} = q_i · q_j · k(y_i, y_j) where q_i is quality and k is a similarity kernel. This decomposes into quality (diagonal) and diversity (off-diagonal repulsion)."
+            },
+            "submodularity": {
+                "log_det_submodularity": "f(S) = log det(L_S) is monotone submodular: f(S ∪ {i}) - f(S) ≥ f(T ∪ {i}) - f(T) for S ⊆ T.",
+                "greedy_guarantee": "The greedy algorithm (iteratively add the element with largest marginal gain) achieves f(S_greedy) ≥ (1-1/e) · f(S*) for cardinality-constrained maximization.",
+                "greedy_complexity": "O(nk²) where n is the ground set size and k is the target subset size, using rank-1 updates to the Cholesky factorization."
+            },
+            "connection_to_transport": {
+                "dpp_as_repulsion": "DPP sampling can be viewed as sampling from a repulsive point process where points repel each other according to the kernel. The Sinkhorn divergence provides a continuous relaxation of this discrete repulsion.",
+                "dpp_for_selection": "In DivFlow, DPP is used for the final discrete subset selection step, after the Sinkhorn divergence has been used for kernel adaptation and coverage assessment.",
+                "hybrid_approach": "The L-ensemble kernel is constructed using the adaptively learned kernel, combining DPP's combinatorial selection guarantees with Sinkhorn's differential optimization."
+            }
+        },
+        "coverage_theory": {
+            "epsilon_covering": {
+                "definition": "An ε-covering of a set Y with metric d is a finite set C ⊆ Y such that for every y ∈ Y, there exists c ∈ C with d(y,c) ≤ ε.",
+                "covering_number": "N_ε(Y) = min{|C| : C is an ε-covering of Y}. For d-dimensional compact sets with bounded diameter D: N_ε ≤ (3D/ε)^d.",
+                "metric_entropy": "H_ε(Y) = log N_ε(Y) is the metric entropy. For the response space embedded in R^d with effective dimension d_eff: H_ε ≈ d_eff · log(1/ε)."
+            },
+            "chernoff_bounds": {
+                "coverage_event": "Define coverage indicator Z_j = 1 if the j-th ε-ball in an optimal covering contains at least one selected response. Total coverage = (1/N_ε) Σ_j Z_j.",
+                "ball_hit_probability": "For uniform random selection of k from n responses, P(Z_j = 1) ≥ 1 - (1 - p_j)^k where p_j = P(response falls in ball j).",
+                "certificate_theorem": {
+                    "statement": "Let Y be a compact response space with ε-covering number N_ε. If n responses are drawn i.i.d. from a distribution with minimum density p_min > 0 on every ε-ball, then selecting k = O((log N_ε + log(1/δ)) / p_min) responses guarantees coverage ≥ 1 - δ with probability ≥ 1 - δ.",
+                    "proof_sketch": "Apply Chernoff bound to each coverage indicator Z_j independently. Union bound over N_ε balls. The required k is determined by inverting the Chernoff tail: exp(-k · p_min / 3) ≤ δ / N_ε gives k ≥ 3(log N_ε + log(1/δ)) / p_min.",
+                    "practical_certificate": "Given observed responses and an estimated ε-covering, DivFlow computes a coverage lower bound with confidence 1-δ. This is output as a certificate alongside the selected responses."
+                }
+            },
+            "coverage_estimation": {
+                "empirical_covering": "Given n embedded responses, compute a greedy ε-covering and track which balls are occupied.",
+                "bootstrap_confidence": "Use bootstrap resampling to estimate uncertainty in coverage, providing confidence intervals.",
+                "adaptive_epsilon": "Automatically select ε to balance coverage granularity with statistical power: too small ε gives many empty balls, too large ε gives trivial coverage."
+            }
+        },
+        "convergence_analysis": {
+            "regret_definition": "In sequential diversity maximization, the agent selects responses y_1, y_2, ..., y_T one at a time. Regret is R_T = max_S D(S) - Σ_{t=1}^T d_t where d_t is the marginal diversity gain at step t.",
+            "bound_statement": "Under adaptive kernel learning with learning rate η_t = 1/√t, the regret of DivFlow's sequential selection satisfies R_T ≤ O(√(T log T)) with high probability.",
+            "proof_sketch": "The proof combines three components: (1) Sinkhorn divergence Lipschitz continuity gives bounded per-step gradients, (2) online kernel learning converges at rate O(1/√t) by online convex optimization guarantees, (3) the submodularity of log-det ensures greedy marginal gains are non-increasing. Combining via online-to-batch conversion yields the stated bound.",
+            "per_sample_rate": "Dividing by T gives average regret R_T/T = O(√(log T / T)), meaning the per-step diversity gain converges to optimal at rate O(√(log T / T)).",
+            "comparison": "Fixed-kernel DPP achieves O(√T) regret (no log factor) but cannot adapt. The extra log T factor is the price of adaptation and is negligible in practice."
+        },
+        "pareto_frontier": {
+            "quality_diversity_objective": "The combined objective is J(S, λ) = λ · D_Sinkhorn(S) + (1-λ) · Q(S) where D_Sinkhorn is the Sinkhorn diversity and Q(S) = (1/|S|) Σ_{y∈S} q(y) is mean quality.",
+            "frontier_characterization": {
+                "concavity": "The Pareto frontier {(D*(λ), Q*(λ)) : λ ∈ [0,1]} is concave in the (D, Q) plane. This follows from the linearity of J in λ and the compactness of the feasible set.",
+                "endpoints": "At λ=0: pure quality maximization (select top-k by quality). At λ=1: pure diversity maximization (maximize Sinkhorn divergence from uniform). Interior points trade off quality for diversity.",
+                "achievability": "Every point on the Pareto frontier is achieved by some λ-weighted mechanism. The proof uses the supporting hyperplane theorem on the convex set of achievable (D, Q) pairs.",
+                "practical_implication": "Users can sweep λ to visualize the tradeoff and select their preferred operating point. DivFlow provides this sweep efficiently via warm-starting Sinkhorn iterations across λ values."
+            }
+        }
+    },
+    "algorithmic_contributions": [
+        {
+            "id": "AC1",
+            "name": "Sinkhorn-DPP Hybrid Selection",
+            "description": "A two-stage selection algorithm: (1) use Sinkhorn divergence gradients to adapt the kernel, then (2) use the adapted kernel in a DPP for discrete subset selection. This combines the differentiability of Sinkhorn with the combinatorial guarantees of DPP.",
+            "complexity": "O(n² / ε² + nk²) where n is candidates, k is selection size, ε is entropic regularization.",
+            "novelty": "No prior work combines Sinkhorn divergence with DPP. Existing DPP methods use fixed kernels; existing OT methods produce continuous measures, not discrete subsets."
+        },
+        {
+            "id": "AC2",
+            "name": "Energy-Augmented Proper Scoring Rules",
+            "description": "A family of scoring rules S_E(y, r, Y_{-i}) = S(y, r) + α · E(y, Y_{-i}) that augment standard proper scoring rules with repulsive energy terms. The key insight is that the energy depends on the outcome y (not the report r), preserving strict properness.",
+            "complexity": "O(n) per agent evaluation (computing energy against n-1 other responses).",
+            "novelty": "Prior mechanism design work either broke IC when adding diversity terms or did not consider diversity at all. This is the first IC-preserving diversity-aware scoring rule."
+        },
+        {
+            "id": "AC3",
+            "name": "Online Adaptive Kernel Learning",
+            "description": "An online algorithm that learns the repulsion kernel from sequentially observed responses. The kernel bandwidth σ(x) is a function of position, adapting to local density: σ(x) = σ_0 · (p̂(x))^{-1/d} where p̂ is a kernel density estimate. Parameters are updated via stochastic gradient descent on the Sinkhorn divergence.",
+            "complexity": "O(n²) per update step for kernel density estimation and gradient computation.",
+            "novelty": "Fixed kernels are standard in DPP literature. Adaptive kernels have been studied for kernel density estimation but not for diversity-maximizing subset selection."
+        },
+        {
+            "id": "AC4",
+            "name": "Coverage Certification Algorithm",
+            "description": "Given n responses and a target ε, computes a finite-sample coverage certificate: 'with probability ≥ 1-δ, the selected responses ε-cover at least fraction γ of the reachable response space.' Uses greedy ε-covering construction and Chernoff-based confidence bounds.",
+            "complexity": "O(n · N_ε) where N_ε is the ε-covering number of the response space.",
+            "novelty": "No prior diverse generation method provides coverage certificates. This bridges the gap between diversity heuristics and formal coverage guarantees."
+        },
+        {
+            "id": "AC5",
+            "name": "Sequential Diversity Maximization with Regret Bounds",
+            "description": "A sequential algorithm that selects responses one at a time, adapting the kernel and selection strategy based on previously observed responses. Achieves O(√(T log T)) regret against the best fixed diverse subset in hindsight.",
+            "complexity": "O(t²) at step t for kernel update and Sinkhorn computation on the growing response set.",
+            "novelty": "Prior sequential selection work focuses on bandit or Bayesian optimization settings. This is the first regret analysis for sequential diversity maximization with adaptive kernels."
+        },
+        {
+            "id": "AC6",
+            "name": "Quality-Diversity Pareto Sweep",
+            "description": "An efficient algorithm to trace the Pareto frontier of quality vs. diversity by sweeping the tradeoff parameter λ. Uses warm-starting: the Sinkhorn potentials and DPP kernel from λ_t are used to initialize computation at λ_{t+1}, reducing total computation by ~5x compared to independent runs.",
+            "complexity": "O(L · (n²/ε² + nk²)) where L is the number of λ values in the sweep.",
+            "novelty": "While Pareto frontiers are standard in multi-objective optimization, the specific warm-starting strategy for Sinkhorn+DPP is new."
+        },
+        {
+            "id": "AC7",
+            "name": "Gradient-Steered Diverse Generation",
+            "description": "Uses Sinkhorn divergence gradients to steer LLM generation toward under-represented regions of the response space. At generation step t, the LLM's logits are adjusted by the gradient of S_ε with respect to the response embedding, biasing generation away from already-covered modes.",
+            "complexity": "O(n · d) per token generation step where n is existing responses and d is embedding dimension.",
+            "novelty": "Existing diverse generation methods (diverse beam search, nucleus sampling) do not use OT-based gradients for steering. This provides a principled alternative to 'be different' prompting."
+        }
+    ],
+    "architecture": {
+        "modules": {
+            "scoring_rules": {
+                "description": "Implements proper scoring rules (Brier, log, CRPS) and their energy-augmented variants.",
+                "inputs": ["outcome y", "report r", "other responses Y_{-i}"],
+                "outputs": ["score value", "properness gap"],
+                "key_classes": ["ProperScoringRule", "BrierScore", "LogScore", "EnergyAugmentedRule"]
+            },
+            "kernels": {
+                "description": "Adaptive kernel learning with online bandwidth selection.",
+                "inputs": ["response embeddings", "kernel type", "learning rate"],
+                "outputs": ["kernel matrix L", "bandwidth function σ(x)"],
+                "key_classes": ["AdaptiveRBFKernel", "MaternKernel", "NeuralKernel", "KernelLearner"]
+            },
+            "dpp": {
+                "description": "Determinantal point process subset selection with greedy and exact sampling.",
+                "inputs": ["kernel matrix L", "target size k"],
+                "outputs": ["selected subset S", "log-det diversity score"],
+                "key_classes": ["DPPSampler", "GreedyDPP", "ExactDPP"]
+            },
+            "transport": {
+                "description": "Sinkhorn divergence computation, gradients, and entropic regularization.",
+                "inputs": ["empirical measure μ_S", "target measure μ*", "regularization ε"],
+                "outputs": ["Sinkhorn divergence value", "dual potentials f, g", "gradients"],
+                "key_classes": ["SinkhornDiversity", "OTSolver", "EntropicRegularizer"]
+            },
+            "coverage": {
+                "description": "Coverage certification via ε-covering numbers and Chernoff bounds.",
+                "inputs": ["response embeddings", "ε", "confidence δ"],
+                "outputs": ["coverage fraction γ", "certificate (γ, ε, δ)", "covering visualization"],
+                "key_classes": ["CoverageCertifier", "EpsilonCovering", "CoverageReport"]
+            },
+            "mechanism": {
+                "description": "Full DivFlow mechanism orchestrating all components.",
+                "inputs": ["prompt", "n candidates", "k selections", "λ tradeoff"],
+                "outputs": ["selected responses", "coverage certificate", "Pareto point"],
+                "key_classes": ["DivFlowMechanism", "ParetSweep", "MechanismConfig"]
+            },
+            "agents": {
+                "description": "LLM agent wrappers with diverse prompting strategies.",
+                "inputs": ["prompt", "LLM config", "diversity directive"],
+                "outputs": ["response", "embedding", "quality score"],
+                "key_classes": ["LLMAgent", "DiversePromptAgent", "EnsembleAgent"]
+            },
+            "metrics": {
+                "description": "Diversity and quality metrics for evaluation.",
+                "inputs": ["response set", "reference set"],
+                "outputs": ["diversity scores", "quality scores", "coverage metrics"],
+                "key_classes": ["VendiScore", "DPPLogDet", "SinkhornMetric", "CoverageMetric"]
+            }
+        },
+        "data_flow": [
+            "1. User provides prompt and configuration (n, k, λ, ε)",
+            "2. Agents module generates n candidate responses from LLM(s)",
+            "3. Responses are embedded into a metric space (e.g., sentence-transformers)",
+            "4. Kernels module computes initial kernel matrix from embeddings",
+            "5. Transport module computes Sinkhorn divergence between empirical and target measures",
+            "6. Sinkhorn gradients are used to update kernel parameters (adaptive learning loop)",
+            "7. Steps 4-6 repeat for T adaptation rounds",
+            "8. DPP module selects k-subset using the adapted kernel",
+            "9. Coverage module certifies the coverage of the selected subset",
+            "10. Mechanism module computes energy-augmented scores and Pareto point",
+            "11. Results returned: selected responses, scores, coverage certificate, Pareto coordinates"
+        ],
+        "dependencies": {
+            "scoring_rules": [],
+            "kernels": [],
+            "dpp": ["kernels"],
+            "transport": ["kernels"],
+            "coverage": ["transport"],
+            "mechanism": ["scoring_rules", "kernels", "dpp", "transport", "coverage"],
+            "agents": [],
+            "metrics": ["transport", "dpp"]
+        }
+    },
+    "theoretical_foundations": {
+        "mechanism_design": {
+            "key_concepts": ["incentive compatibility", "individual rationality", "proper scoring rules", "revelation principle"],
+            "references": ["Savage (1971) — Elicitation of personal probabilities", "Gneiting & Raftery (2007) — Strictly proper scoring rules", "Myerson (1981) — Optimal auction design"],
+            "relevance": "Provides the framework for truthful elicitation. DivFlow's scoring rules must be proper to ensure agents report truthfully rather than strategically manipulating diversity."
+        },
+        "optimal_transport": {
+            "key_concepts": ["Wasserstein distance", "Kantorovich duality", "entropic regularization", "Sinkhorn algorithm", "Sinkhorn divergence"],
+            "references": ["Villani (2008) — Optimal Transport: Old and New", "Cuturi (2013) — Sinkhorn Distances", "Feydy et al. (2019) — Interpolating between OT and MMD using Sinkhorn Divergences", "Peyré & Cuturi (2019) — Computational Optimal Transport"],
+            "relevance": "Sinkhorn divergence is the core diversity objective. Its differentiability enables gradient-based kernel adaptation, and its metrization of weak convergence ensures topological correctness of diversity measurement."
+        },
+        "kernel_methods": {
+            "key_concepts": ["reproducing kernel Hilbert space", "kernel density estimation", "maximum mean discrepancy", "determinantal point processes"],
+            "references": ["Kulesza & Taskar (2012) — Determinantal Point Processes for Machine Learning", "Gretton et al. (2012) — A Kernel Two-Sample Test", "Scholkopf & Smola (2002) — Learning with Kernels"],
+            "relevance": "Kernels define the similarity structure used for both DPP selection and Sinkhorn ground cost. Adaptive kernel learning is the mechanism by which DivFlow adapts to the response manifold."
+        },
+        "concentration_inequalities": {
+            "key_concepts": ["Chernoff bound", "Hoeffding inequality", "union bound", "covering numbers", "metric entropy"],
+            "references": ["Boucheron et al. (2013) — Concentration Inequalities", "Vershynin (2018) — High-Dimensional Probability"],
+            "relevance": "Coverage certificates rely on Chernoff bounds applied to coverage indicators, with union bounds over ε-covering balls. The tightness of certificates depends on metric entropy of the response space."
+        }
+    },
+    "implementation_mapping": {
+        "ic_preservation_theorem": {
+            "theorem": "Energy-augmented scoring rules with outcome-dependent energy preserve strict properness",
+            "module": "scoring_rules.py",
+            "class": "EnergyAugmentedRule",
+            "method": "evaluate(outcome, report, other_responses)",
+            "test": "test_scoring_rules.py::test_ic_preservation"
+        },
+        "sinkhorn_metrization": {
+            "theorem": "Sinkhorn divergence metrizes weak convergence on compact spaces",
+            "module": "transport.py",
+            "class": "SinkhornDiversity",
+            "method": "compute(mu, nu, epsilon)",
+            "test": "test_transport.py::test_metrization"
+        },
+        "coverage_certificate": {
+            "theorem": "Finite-sample coverage guarantee via Chernoff bounds",
+            "module": "coverage.py",
+            "class": "CoverageCertifier",
+            "method": "certify(responses, epsilon, delta)",
+            "test": "test_coverage.py::test_certificate_validity"
+        },
+        "greedy_approximation": {
+            "theorem": "(1-1/e)-approximate submodular maximization via greedy",
+            "module": "dpp.py",
+            "class": "GreedyDPP",
+            "method": "select(L, k)",
+            "test": "test_dpp.py::test_greedy_approximation_ratio"
+        },
+        "regret_bound": {
+            "theorem": "O(√(T log T)) regret for sequential diversity maximization",
+            "module": "mechanism.py",
+            "class": "DivFlowMechanism",
+            "method": "sequential_select(stream, T)",
+            "test": "test_mechanism.py::test_regret_growth"
+        },
+        "pareto_frontier": {
+            "theorem": "Quality-diversity Pareto frontier is concave and achievable",
+            "module": "mechanism.py",
+            "class": "ParetoSweep",
+            "method": "trace_frontier(responses, lambda_values)",
+            "test": "test_mechanism.py::test_pareto_concavity"
+        }
+    },
+    "failure_modes": [
+        {
+            "id": "FM1",
+            "name": "Sinkhorn divergence quadratic scaling",
+            "description": "Sinkhorn divergence computation is O(n²/ε²), which becomes prohibitive for n > 10000 candidates.",
+            "mitigation": "Use Nyström approximation or random feature maps to reduce to O(n·m/ε²) where m << n is the number of Nyström landmarks.",
+            "severity": "medium",
+            "likelihood": "high for large-scale applications"
+        },
+        {
+            "id": "FM2",
+            "name": "Coverage certificate vacuity in high dimensions",
+            "description": "The ε-covering number N_ε grows exponentially with effective dimension d_eff of the response space. For d_eff > 20, the certificate becomes vacuous (required k exceeds available n).",
+            "mitigation": "Project responses to a lower-dimensional space (PCA, UMAP) before computing coverage. The certificate then applies to the projected space, which is still meaningful for diversity assessment.",
+            "severity": "high",
+            "likelihood": "medium — embedding spaces often have low effective dimension"
+        },
+        {
+            "id": "FM3",
+            "name": "Adaptive kernel overfitting",
+            "description": "With few observations (n < 50), the adaptive kernel may overfit to the observed responses, creating artificial repulsion patterns that don't reflect true response space geometry.",
+            "mitigation": "Use kernel regularization (ridge penalty on kernel parameters) and early stopping based on held-out Sinkhorn divergence. Fall back to fixed RBF kernel when n is too small.",
+            "severity": "medium",
+            "likelihood": "medium — typical use cases have n ≥ 20"
+        },
+        {
+            "id": "FM4",
+            "name": "Energy-augmented scoring rule distorts quality ranking",
+            "description": "While IC is preserved (agents still report truthfully), the energy term can change the mechanism's effective quality ranking. An agent with a mediocre response that happens to be far from others may score higher than a high-quality agent near others.",
+            "mitigation": "Bound the energy weight α such that the energy term cannot exceed the properness gap: α · max|E| ≤ min_{P≠Q} Δ(P,Q). This ensures quality still dominates.",
+            "severity": "low",
+            "likelihood": "low — controllable via α"
+        },
+        {
+            "id": "FM5",
+            "name": "Sinkhorn divergence instability with small ε",
+            "description": "For very small regularization ε → 0, Sinkhorn iterations converge slowly and numerical precision issues arise (log-domain stabilization required).",
+            "mitigation": "Use log-domain Sinkhorn iterations (numerically stable) and adaptive ε selection: start with large ε and anneal. For ε < 0.01, switch to auction algorithm for exact OT.",
+            "severity": "medium",
+            "likelihood": "low — default ε = 0.1 is stable"
+        },
+        {
+            "id": "FM6",
+            "name": "Embedding space mismatch",
+            "description": "Diversity in embedding space may not correspond to semantic diversity. Two responses that are far in embedding space may be semantically similar (e.g., paraphrases with different syntactic structure).",
+            "mitigation": "Use task-specific embeddings (e.g., fine-tuned on semantic similarity) rather than general-purpose sentence embeddings. Validate with human diversity judgments.",
+            "severity": "medium",
+            "likelihood": "medium"
+        },
+        {
+            "id": "FM7",
+            "name": "DPP kernel matrix conditioning",
+            "description": "The L-ensemble kernel matrix L can become ill-conditioned when the adapted kernel has very large or very small eigenvalues, causing numerical issues in DPP sampling.",
+            "mitigation": "Add a small ridge term: L' = L + εI. This bounds the condition number while minimally affecting selection quality. Use pivoted Cholesky for numerically stable subset selection.",
+            "severity": "low",
+            "likelihood": "low"
+        }
+    ],
+    "experimental_design": {
+        "experiments": [
+            {
+                "id": "E1",
+                "name": "Sinkhorn vs DPP diversity comparison",
+                "hypothesis": "DivFlow's Sinkhorn-based selection achieves higher coverage than DPP with fixed RBF kernel on open-ended generation tasks.",
+                "setup": "Generate n=100 responses to 50 diverse prompts using GPT-4. Select k=10 using: (a) DivFlow, (b) DPP with fixed RBF, (c) top-k by quality, (d) random, (e) diverse beam search.",
+                "metrics": ["ε-coverage fraction", "Sinkhorn divergence from uniform", "Vendi score", "mean response quality"],
+                "expected_outcome": "DivFlow achieves 40-60% higher ε-coverage than DPP while maintaining comparable quality scores."
+            },
+            {
+                "id": "E2",
+                "name": "Adaptive vs fixed kernel ablation",
+                "hypothesis": "Adaptive kernel learning improves diversity over fixed kernels, especially when the response space has non-uniform geometry.",
+                "setup": "Create a synthetic response space with clusters of varying density. Run DivFlow with: (a) adaptive RBF, (b) fixed RBF (median heuristic), (c) fixed RBF (cross-validated), (d) Matérn kernel.",
+                "metrics": ["Sinkhorn divergence from uniform", "coverage per cluster", "kernel bandwidth visualization"],
+                "expected_outcome": "Adaptive kernel achieves uniform coverage across clusters, while fixed kernels over-sample dense clusters and under-sample sparse ones."
+            },
+            {
+                "id": "E3",
+                "name": "IC preservation empirical validation",
+                "hypothesis": "Energy-augmented scoring rules maintain truthful reporting in a simulated multi-agent setting.",
+                "setup": "Simulate 100 agents with known type distributions. Each agent can report truthfully or strategically. Compare expected payoffs under: (a) Brier score only, (b) Brier + energy (α=0.1), (c) Brier + report-dependent diversity bonus (violates IC).",
+                "metrics": ["fraction of agents where truthful > strategic", "expected payoff gap", "diversity of selected set"],
+                "expected_outcome": "Methods (a) and (b) maintain IC (truthful always optimal). Method (c) breaks IC for ~30% of agents."
+            },
+            {
+                "id": "E4",
+                "name": "Coverage certificate calibration",
+                "hypothesis": "Coverage certificates are well-calibrated: the certified coverage fraction γ is achieved in at least (1-δ) fraction of trials.",
+                "setup": "Run DivFlow 1000 times on synthetic response spaces with known geometry. For each run, compute certified (γ, ε, δ) and measure actual coverage. Plot certified vs actual coverage.",
+                "metrics": ["certificate calibration curve", "certificate tightness (actual - certified)", "certificate computation time"],
+                "expected_outcome": "Certificates are conservative but not vacuous: actual coverage exceeds certified coverage in ≥ (1-δ) fraction of trials, with typical gap < 10%."
+            },
+            {
+                "id": "E5",
+                "name": "Pareto frontier visualization",
+                "hypothesis": "The quality-diversity Pareto frontier is concave and reveals meaningful tradeoff structure for practical tasks.",
+                "setup": "Sweep λ ∈ {0, 0.1, 0.2, ..., 1.0} on three tasks: (a) creative writing, (b) code generation, (c) math reasoning. Plot (diversity, quality) for each λ.",
+                "metrics": ["Pareto frontier shape", "area under Pareto frontier", "optimal λ per task"],
+                "expected_outcome": "Frontier is concave. Creative writing has a flat frontier (cheap diversity). Code generation has a steep frontier (diversity costs quality). Math has intermediate behavior."
+            },
+            {
+                "id": "E6",
+                "name": "Convergence rate empirical validation",
+                "hypothesis": "Sequential diversity maximization achieves O(√(T log T)) regret empirically, matching the theoretical bound.",
+                "setup": "Run sequential DivFlow for T = 10, 20, 50, 100, 200, 500 steps. At each T, compute regret R_T relative to the best fixed k-subset. Fit power law R_T ~ T^α.",
+                "metrics": ["regret vs T curve", "fitted exponent α", "comparison to √(T log T) bound"],
+                "expected_outcome": "Fitted exponent α ≈ 0.5, confirming √T regret scaling. The log T factor is indistinguishable from constants at practical T values."
+            },
+            {
+                "id": "E7",
+                "name": "End-to-end comparison on downstream tasks",
+                "hypothesis": "Using DivFlow-selected diverse responses as few-shot examples improves downstream task performance compared to quality-only or random selection.",
+                "setup": "Select k=5 few-shot examples using: (a) DivFlow, (b) DPP, (c) top-k quality, (d) random. Evaluate on 3 downstream tasks: GSM8K, HumanEval, TriviaQA. Measure accuracy with each example set.",
+                "metrics": ["downstream task accuracy", "accuracy variance across prompt sets", "Pareto dominance analysis"],
+                "expected_outcome": "DivFlow matches or exceeds DPP on all tasks, with largest gains on GSM8K (diverse reasoning strategies help) and smallest gains on TriviaQA (factual recall benefits less from diversity)."
+            }
+        ]
+    },
+    "convergence_analysis_formal": {
+        "setting": "Sequential diversity maximization over T rounds. At each round t, the mechanism observes a new response y_t, updates the kernel, and selects a subset S_t of size k from {y_1, ..., y_t}.",
+        "definitions": {
+            "diversity_functional": "D(S) = S_ε(μ_S, μ*) where μ_S = (1/|S|) Σ_{y∈S} δ_y and μ* is the target measure.",
+            "regret": "R_T = max_{S ⊆ {y_1,...,y_T}, |S|=k} D(S) - Σ_{t=1}^T [D(S_t) - D(S_{t-1})]",
+            "kernel_regret": "R_T^kernel = Σ_{t=1}^T [D_{k*}(S_t) - D_{k_t}(S_t)] where k* is the best fixed kernel and k_t is the learned kernel at time t."
+        },
+        "theorem": {
+            "statement": "Under Assumptions (A1)-(A3), the total regret of DivFlow satisfies R_T ≤ C₁√(T log T) + C₂√T where C₁ depends on the Lipschitz constant of S_ε and C₂ depends on the kernel class complexity.",
+            "assumptions": [
+                "(A1) The response space Y is a compact subset of R^d with diameter D.",
+                "(A2) The ground cost c(x,y) = ||φ(x) - φ(y)||² where φ is an L-Lipschitz embedding.",
+                "(A3) The kernel class K has finite Rademacher complexity R_T(K) = O(√(log|K|/T))."
+            ],
+            "proof_sketch_detailed": [
+                "Step 1: Decompose regret into selection regret and kernel regret: R_T ≤ R_T^select + R_T^kernel.",
+                "Step 2: Bound selection regret. Since D is submodular, greedy selection gives D(S_t) ≥ (1-1/e)·D(S_t*) at each step. The gap accumulates as R_T^select ≤ (1/e)·T·max_S D(S). Using Lipschitz continuity of S_ε (constant L_ε = O(1/ε)), each step's gap is bounded by L_ε · max_y ||y||.",
+                "Step 3: Bound kernel regret. Online kernel learning with learning rate η_t = 1/√t achieves R_T^kernel ≤ ||k*||² / (2η_T) + (1/2) Σ_t η_t ||∇_t||² ≤ O(√T) by standard online convex optimization.",
+                "Step 4: Combine. R_T ≤ C₁√(T log T) + C₂√T = O(√(T log T)). The log T factor arises from the covering number of the kernel class."
+            ]
+        }
+    }
+}

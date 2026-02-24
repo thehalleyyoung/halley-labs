@@ -1,0 +1,724 @@
+#!/usr/bin/env python3
+"""
+ci_integration.py — CI/CD integration for LITMUS∞ concurrency checking.
+
+Generates pre-commit hooks, GitHub Actions workflows, architecture matrix
+testing, and regression tracking for concurrent code changes.
+
+Usage:
+    from ci_integration import generate_precommit_hook, generate_github_actions
+    hook = generate_precommit_hook(archs=["x86", "arm", "riscv"])
+    workflow = generate_github_actions(patterns="all", archs=["x86", "arm", "riscv"])
+"""
+
+import json
+import os
+import sys
+import hashlib
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Set
+from datetime import datetime
+
+sys.path.insert(0, os.path.dirname(__file__))
+
+
+# ── Constants ───────────────────────────────────────────────────────
+
+DEFAULT_ARCHS = ["x86", "arm", "riscv"]
+ALL_ARCHS = ["x86", "sparc", "arm", "riscv", "opencl_wg", "opencl_dev",
+             "vulkan_wg", "vulkan_dev", "ptx_cta", "ptx_gpu"]
+
+CONCURRENCY_FILE_PATTERNS = [
+    "*.rs", "*.c", "*.cpp", "*.cu", "*.cl",  # source files
+    "*.h", "*.hpp", "*.cuh",                   # headers
+]
+
+CONCURRENCY_KEYWORDS = [
+    "atomic", "Atomic", "ATOMIC",
+    "mutex", "Mutex", "lock", "Lock",
+    "fence", "barrier", "membar",
+    "__sync", "syncthreads", "syncwarp",
+    "Relaxed", "Acquire", "Release", "SeqCst", "AcqRel",
+    "memory_order", "volatile",
+    "thread", "Thread", "spawn",
+    "Arc<", "Rc<",
+    "std::sync", "std::atomic",
+    "__shared__", "__global__",
+    "cooperative_groups",
+]
+
+
+# ── Data Classes ────────────────────────────────────────────────────
+
+@dataclass
+class PrecommitHook:
+    """Generated pre-commit hook for concurrent code analysis."""
+    script: str
+    config_entry: str  # .pre-commit-config.yaml entry
+    archs: List[str]
+    patterns: List[str]
+
+    def write(self, path: str = ".git/hooks/pre-commit"):
+        """Write the hook script to a file."""
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'w') as f:
+            f.write(self.script)
+        os.chmod(path, 0o755)
+
+    def __repr__(self):
+        return f"PrecommitHook(archs={self.archs}, patterns={len(self.patterns)} keywords)"
+
+
+@dataclass
+class GithubActionsWorkflow:
+    """Generated GitHub Actions workflow for architecture matrix testing."""
+    yaml_content: str
+    filename: str
+    archs: List[str]
+    patterns: str  # "all" or comma-separated pattern list
+
+    def write(self, directory: str = ".github/workflows"):
+        """Write the workflow file."""
+        os.makedirs(directory, exist_ok=True)
+        path = os.path.join(directory, self.filename)
+        with open(path, 'w') as f:
+            f.write(self.yaml_content)
+        return path
+
+    def __repr__(self):
+        return f"GithubActionsWorkflow({self.filename}, archs={self.archs})"
+
+
+@dataclass
+class RegressionEntry:
+    """A single regression tracking entry."""
+    pattern: str
+    arch: str
+    safe: bool
+    fence_fix: Optional[str]
+    timestamp: str
+    commit: str
+
+
+@dataclass
+class RegressionTracker:
+    """Regression tracker for concurrency bug history."""
+    script: str
+    baseline_schema: Dict
+    comparison_script: str
+
+    def write_baseline(self, path: str = "litmus_baseline.json"):
+        """Generate and write the baseline file."""
+        with open(path, 'w') as f:
+            json.dump(self.baseline_schema, f, indent=2)
+        return path
+
+    def __repr__(self):
+        return f"RegressionTracker(patterns={len(self.baseline_schema.get('results', {}))})"
+
+
+@dataclass
+class ArchMatrixResult:
+    """Result of running architecture matrix tests."""
+    pattern: str
+    results: Dict[str, bool]  # arch -> safe
+    all_safe: bool
+    failures: List[str]
+    fence_fixes: Dict[str, str]
+
+
+# ── Pre-commit Hook ────────────────────────────────────────────────
+
+def generate_precommit_hook(
+    archs: List[str] = None,
+    patterns: List[str] = None,
+    fail_on_warning: bool = False,
+) -> PrecommitHook:
+    """
+    Generate a pre-commit hook that runs LITMUS∞ on concurrent code changes.
+
+    The hook detects files containing concurrency primitives (atomics, mutexes,
+    barriers, fences) and runs portability analysis on relevant patterns.
+
+    Args:
+        archs: Architectures to check (default: x86, arm, riscv).
+        patterns: Concurrency keyword patterns to detect (default: built-in list).
+        fail_on_warning: If True, warnings also fail the commit.
+
+    Returns:
+        PrecommitHook with shell script and config.
+    """
+    archs = archs or DEFAULT_ARCHS
+    patterns = patterns or CONCURRENCY_KEYWORDS
+
+    arch_args = " ".join(archs)
+    keyword_grep = "|".join(patterns[:20])  # limit for grep pattern length
+    file_globs = " ".join(f"'*.{ext.lstrip('*.')}'" for ext in CONCURRENCY_FILE_PATTERNS)
+    fail_flag = "--fail-on-warning" if fail_on_warning else ""
+
+    script = f'''#!/bin/bash
+# LITMUS∞ Pre-commit Hook — Concurrent Code Portability Check
+# Auto-generated by ci_integration.py
+set -e
+
+LITMUS_DIR="$(dirname "$(readlink -f "$0")")/../.."
+PORTCHECK="${{LITMUS_DIR}}/portcheck.py"
+API="${{LITMUS_DIR}}/api.py"
+
+# Colors
+RED='\\033[0;31m'
+GREEN='\\033[0;32m'
+YELLOW='\\033[1;33m'
+NC='\\033[0m'
+
+# Architectures to check
+ARCHS=({arch_args})
+
+# Check if portcheck exists
+if [ ! -f "$PORTCHECK" ]; then
+    echo "${{YELLOW}}[litmus∞] portcheck.py not found, skipping concurrency check${{NC}}"
+    exit 0
+fi
+
+# Get staged files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+# Filter for files that might contain concurrent code
+CONCURRENT_FILES=""
+for file in $STAGED_FILES; do
+    case "$file" in
+        *.rs|*.c|*.cpp|*.cu|*.cl|*.h|*.hpp|*.cuh)
+            if grep -lqE '{keyword_grep}' "$file" 2>/dev/null; then
+                CONCURRENT_FILES="$CONCURRENT_FILES $file"
+            fi
+            ;;
+    esac
+done
+
+if [ -z "$CONCURRENT_FILES" ]; then
+    echo "${{GREEN}}[litmus∞] No concurrent code changes detected${{NC}}"
+    exit 0
+fi
+
+echo "[litmus∞] Checking concurrent code portability..."
+echo "[litmus∞] Files:$CONCURRENT_FILES"
+echo "[litmus∞] Architectures: ${{ARCHS[*]}}"
+echo ""
+
+ERRORS=0
+WARNINGS=0
+
+# Run portability analysis
+OUTPUT=$(python3 "$PORTCHECK" --analyze-all --json 2>/dev/null || true)
+
+if [ -n "$OUTPUT" ]; then
+    # Parse JSON results for failures
+    FAILURES=$(echo "$OUTPUT" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    for entry in data:
+        if not entry.get('safe', True):
+            arch = entry.get('target_arch', '?')
+            pat = entry.get('pattern', '?')
+            fix = entry.get('fence_recommendation', 'N/A')
+            print(f'  FAIL: {{pat}} on {{arch}} — Fix: {{fix}}')
+except:
+    pass
+" 2>/dev/null || true)
+
+    if [ -n "$FAILURES" ]; then
+        echo "${{RED}}[litmus∞] Portability issues detected:${{NC}}"
+        echo "$FAILURES"
+        ERRORS=$((ERRORS + 1))
+    fi
+fi
+
+if [ $ERRORS -gt 0 ]; then
+    echo ""
+    echo "${{RED}}[litmus∞] ✗ $ERRORS portability error(s) found${{NC}}"
+    echo "[litmus∞] Run 'python3 portcheck.py --analyze-all' for details"
+    exit 1
+fi
+
+echo "${{GREEN}}[litmus∞] ✓ All concurrency checks passed${{NC}}"
+exit 0
+'''
+
+    config_entry = f'''# .pre-commit-config.yaml entry for LITMUS∞
+repos:
+  - repo: local
+    hooks:
+      - id: litmus-inf
+        name: LITMUS∞ Concurrency Check
+        entry: .git/hooks/litmus-check.sh
+        language: script
+        types_or: [rust, c, c++, cuda]
+        pass_filenames: false
+'''
+
+    return PrecommitHook(
+        script=script,
+        config_entry=config_entry,
+        archs=archs,
+        patterns=patterns,
+    )
+
+
+# ── GitHub Actions ──────────────────────────────────────────────────
+
+def generate_github_actions(
+    patterns: str = "all",
+    archs: List[str] = None,
+    python_version: str = "3.11",
+    fail_fast: bool = False,
+    on_push: bool = True,
+    on_pr: bool = True,
+) -> GithubActionsWorkflow:
+    """
+    Generate a GitHub Actions workflow for architecture matrix testing.
+
+    Creates a workflow that runs LITMUS∞ portability analysis across multiple
+    architectures as a matrix build, with clear pass/fail reporting.
+
+    Args:
+        patterns: "all" or comma-separated pattern names.
+        archs: Architectures to test (default: x86, arm, riscv).
+        python_version: Python version for the runner.
+        fail_fast: If True, cancel other matrix jobs on first failure.
+        on_push: Trigger on push events.
+        on_pr: Trigger on pull request events.
+
+    Returns:
+        GithubActionsWorkflow with YAML content.
+    """
+    archs = archs or DEFAULT_ARCHS
+
+    triggers = []
+    if on_push:
+        triggers.append("  push:\n    branches: [main, master, develop]")
+    if on_pr:
+        triggers.append("  pull_request:\n    branches: [main, master]")
+    trigger_yaml = "\n".join(triggers)
+
+    arch_matrix = json.dumps(archs)
+
+    if patterns == "all":
+        pattern_cmd = "python3 portcheck.py --analyze-all --json"
+    else:
+        pattern_list = [p.strip() for p in patterns.split(",")]
+        pattern_cmd = " && ".join(
+            f"python3 portcheck.py --pattern {p} --all-targets --json"
+            for p in pattern_list
+        )
+
+    yaml_content = f'''# LITMUS∞ Concurrency Portability CI
+# Auto-generated by ci_integration.py
+name: LITMUS∞ Portability Check
+
+on:
+{trigger_yaml}
+
+jobs:
+  portability-check:
+    name: "Portability: ${{{{ matrix.arch }}}}"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: {str(fail_fast).lower()}
+      matrix:
+        arch: {arch_matrix}
+        python-version: ["{python_version}"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{{{ matrix.python-version }}}}
+
+      - name: Run LITMUS∞ portability check
+        id: portcheck
+        run: |
+          cd litmus_inf
+          echo "## LITMUS∞ Results for ${{{{ matrix.arch }}}}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          RESULT=$(python3 portcheck.py --pattern mp --target ${{{{ matrix.arch }}}} --json 2>&1 || true)
+          echo "$RESULT"
+
+          # Check for failures
+          FAILURES=$(echo "$RESULT" | python3 -c "
+          import sys, json
+          try:
+              data = json.load(sys.stdin)
+              fails = [e for e in data if not e.get('safe', True)]
+              print(len(fails))
+          except:
+              print(0)
+          " 2>/dev/null || echo "0")
+
+          echo "failures=$FAILURES" >> $GITHUB_OUTPUT
+
+          if [ "$FAILURES" -gt 0 ]; then
+            echo "::warning::$FAILURES portability issue(s) on ${{{{ matrix.arch }}}}"
+          fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: litmus-results-${{{{ matrix.arch }}}}
+          path: litmus_inf/benchmark_results_new/
+
+  full-matrix:
+    name: "Full Architecture Matrix"
+    runs-on: ubuntu-latest
+    needs: portability-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "{python_version}"
+
+      - name: Run full analysis
+        run: |
+          cd litmus_inf
+          {pattern_cmd} > full_results.json 2>&1 || true
+          echo "## Full LITMUS∞ Analysis" >> $GITHUB_STEP_SUMMARY
+
+          python3 -c "
+          import json
+          with open('full_results.json') as f:
+              data = json.load(f)
+          safe = sum(1 for e in data if e.get('safe', True))
+          fail = len(data) - safe
+          print(f'Safe: {{safe}}, Fail: {{fail}}, Total: {{len(data)}}')
+          " >> $GITHUB_STEP_SUMMARY || true
+
+      - name: Check for regressions
+        run: |
+          cd litmus_inf
+          if [ -f litmus_baseline.json ]; then
+            python3 -c "
+          import json
+          with open('litmus_baseline.json') as f:
+              baseline = json.load(f)
+          with open('full_results.json') as f:
+              current = json.load(f)
+
+          baseline_map = {{(r['pattern'], r['target_arch']): r['safe'] for r in baseline.get('results', [])}}
+          regressions = []
+          for r in current:
+              key = (r.get('pattern'), r.get('target_arch'))
+              if key in baseline_map and baseline_map[key] and not r.get('safe', True):
+                  regressions.append(key)
+
+          if regressions:
+              print(f'::error::{{len(regressions)}} regression(s) detected!')
+              for pat, arch in regressions:
+                  print(f'  REGRESSION: {{pat}} on {{arch}} was safe, now fails')
+              exit(1)
+          else:
+              print('No regressions detected.')
+          " || exit 1
+          else
+            echo "No baseline file found — skipping regression check."
+          fi
+
+      - name: Upload full results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: litmus-full-results
+          path: litmus_inf/full_results.json
+'''
+
+    return GithubActionsWorkflow(
+        yaml_content=yaml_content,
+        filename="litmus-portability.yml",
+        archs=archs,
+        patterns=patterns,
+    )
+
+
+# ── Regression Tracking ────────────────────────────────────────────
+
+def generate_regression_tracker(
+    baseline_file: str = "litmus_baseline.json",
+    archs: List[str] = None,
+) -> RegressionTracker:
+    """
+    Generate regression tracking infrastructure for concurrency analysis.
+
+    Creates a baseline schema, comparison script, and tracking utilities.
+
+    Args:
+        baseline_file: Path for the baseline JSON file.
+        archs: Architectures to track.
+
+    Returns:
+        RegressionTracker with scripts and schema.
+    """
+    archs = archs or DEFAULT_ARCHS
+
+    baseline_schema = {
+        "version": "1.0",
+        "tool": "litmus-inf",
+        "created": datetime.now().isoformat(),
+        "architectures": archs,
+        "results": [],
+        "metadata": {
+            "total_patterns": 0,
+            "total_safe": 0,
+            "total_fail": 0,
+        },
+    }
+
+    generate_script = f'''#!/usr/bin/env python3
+"""Generate LITMUS∞ regression baseline."""
+import json
+import sys
+import os
+sys.path.insert(0, os.path.dirname(__file__))
+from portcheck import PATTERNS, ARCHITECTURES, check_portability
+from datetime import datetime
+
+def generate_baseline(archs=None, output="{baseline_file}"):
+    archs = archs or {json.dumps(archs)}
+    results = []
+    for pat_name in sorted(PATTERNS.keys()):
+        for arch in archs:
+            port_results = check_portability(pat_name, target_arch=arch)
+            for r in port_results:
+                results.append({{
+                    "pattern": r.pattern,
+                    "target_arch": r.target_arch,
+                    "safe": r.safe,
+                    "fence_recommendation": r.fence_recommendation,
+                    "compression_ratio": r.compression_ratio,
+                }})
+
+    baseline = {{
+        "version": "1.0",
+        "tool": "litmus-inf",
+        "created": datetime.now().isoformat(),
+        "architectures": archs,
+        "results": results,
+        "metadata": {{
+            "total_patterns": len(PATTERNS),
+            "total_safe": sum(1 for r in results if r["safe"]),
+            "total_fail": sum(1 for r in results if not r["safe"]),
+        }},
+    }}
+
+    with open(output, 'w') as f:
+        json.dump(baseline, f, indent=2)
+    print(f"Baseline written to {{output}}: {{len(results)}} entries")
+    return baseline
+
+if __name__ == "__main__":
+    generate_baseline()
+'''
+
+    comparison_script = f'''#!/usr/bin/env python3
+"""Compare current LITMUS∞ results against baseline for regressions."""
+import json
+import sys
+
+def compare_results(baseline_path="{baseline_file}", current_path="full_results.json"):
+    with open(baseline_path) as f:
+        baseline = json.load(f)
+    with open(current_path) as f:
+        current = json.load(f)
+
+    base_map = {{}}
+    for r in baseline.get("results", []):
+        key = (r["pattern"], r["target_arch"])
+        base_map[key] = r["safe"]
+
+    regressions = []
+    improvements = []
+    new_entries = []
+
+    for r in current:
+        key = (r.get("pattern"), r.get("target_arch"))
+        if key in base_map:
+            if base_map[key] and not r.get("safe", True):
+                regressions.append({{
+                    "pattern": key[0],
+                    "arch": key[1],
+                    "was": "safe",
+                    "now": "fail",
+                    "fix": r.get("fence_recommendation"),
+                }})
+            elif not base_map[key] and r.get("safe", True):
+                improvements.append({{
+                    "pattern": key[0],
+                    "arch": key[1],
+                    "was": "fail",
+                    "now": "safe",
+                }})
+        else:
+            new_entries.append(key)
+
+    print(f"Regressions: {{len(regressions)}}")
+    for reg in regressions:
+        print(f"  ✗ {{reg['pattern']}} on {{reg['arch']}}: was safe, now FAILS")
+        if reg.get("fix"):
+            print(f"    Fix: {{reg['fix']}}")
+
+    print(f"\\nImprovements: {{len(improvements)}}")
+    for imp in improvements:
+        print(f"  ✓ {{imp['pattern']}} on {{imp['arch']}}: was fail, now SAFE")
+
+    if new_entries:
+        print(f"\\nNew entries: {{len(new_entries)}}")
+
+    return len(regressions) == 0
+
+if __name__ == "__main__":
+    ok = compare_results()
+    sys.exit(0 if ok else 1)
+'''
+
+    return RegressionTracker(
+        script=generate_script,
+        baseline_schema=baseline_schema,
+        comparison_script=comparison_script,
+    )
+
+
+# ── Architecture Matrix Testing ────────────────────────────────────
+
+def run_arch_matrix(
+    patterns: List[str] = None,
+    archs: List[str] = None,
+    json_output: bool = False,
+) -> List[ArchMatrixResult]:
+    """
+    Run architecture matrix tests for specified patterns.
+
+    Args:
+        patterns: Pattern names to test (default: all).
+        archs: Architectures to test (default: x86, arm, riscv).
+        json_output: If True, also print JSON output.
+
+    Returns:
+        List of ArchMatrixResult.
+    """
+    from portcheck import PATTERNS as ALL_PATTERNS, ARCHITECTURES, check_portability
+
+    archs = archs or DEFAULT_ARCHS
+    pattern_names = patterns or sorted(ALL_PATTERNS.keys())
+    results = []
+
+    for pat_name in pattern_names:
+        if pat_name not in ALL_PATTERNS:
+            continue
+        arch_results = {}
+        fence_fixes = {}
+        failures = []
+
+        for arch in archs:
+            port_results = check_portability(pat_name, target_arch=arch)
+            for r in port_results:
+                arch_results[arch] = r.safe
+                if not r.safe:
+                    failures.append(arch)
+                    if r.fence_recommendation:
+                        fence_fixes[arch] = r.fence_recommendation
+
+        results.append(ArchMatrixResult(
+            pattern=pat_name,
+            results=arch_results,
+            all_safe=len(failures) == 0,
+            failures=failures,
+            fence_fixes=fence_fixes,
+        ))
+
+    if json_output:
+        out = []
+        for r in results:
+            out.append({
+                "pattern": r.pattern,
+                "results": r.results,
+                "all_safe": r.all_safe,
+                "failures": r.failures,
+                "fence_fixes": r.fence_fixes,
+            })
+        print(json.dumps(out, indent=2))
+
+    return results
+
+
+# ── CLI ─────────────────────────────────────────────────────────────
+
+def _main():
+    import argparse
+    parser = argparse.ArgumentParser(description="LITMUS∞ CI Integration")
+    sub = parser.add_subparsers(dest="cmd")
+
+    p_hook = sub.add_parser("precommit", help="Generate pre-commit hook")
+    p_hook.add_argument("--archs", nargs="*", default=DEFAULT_ARCHS)
+    p_hook.add_argument("--install", action="store_true", help="Install to .git/hooks/")
+
+    p_gha = sub.add_parser("github-actions", help="Generate GitHub Actions workflow")
+    p_gha.add_argument("--archs", nargs="*", default=DEFAULT_ARCHS)
+    p_gha.add_argument("--patterns", default="all")
+    p_gha.add_argument("--install", action="store_true", help="Write to .github/workflows/")
+
+    p_reg = sub.add_parser("regression", help="Generate regression tracker")
+    p_reg.add_argument("--baseline", default="litmus_baseline.json")
+    p_reg.add_argument("--archs", nargs="*", default=DEFAULT_ARCHS)
+    p_reg.add_argument("--generate-baseline", action="store_true")
+
+    p_matrix = sub.add_parser("matrix", help="Run architecture matrix tests")
+    p_matrix.add_argument("--patterns", nargs="*")
+    p_matrix.add_argument("--archs", nargs="*", default=DEFAULT_ARCHS)
+    p_matrix.add_argument("--json", action="store_true")
+
+    args = parser.parse_args()
+
+    if args.cmd == "precommit":
+        hook = generate_precommit_hook(archs=args.archs)
+        if args.install:
+            hook.write()
+            print("Pre-commit hook installed to .git/hooks/pre-commit")
+        else:
+            print(hook.script)
+    elif args.cmd == "github-actions":
+        wf = generate_github_actions(patterns=args.patterns, archs=args.archs)
+        if args.install:
+            path = wf.write()
+            print(f"Workflow written to {path}")
+        else:
+            print(wf.yaml_content)
+    elif args.cmd == "regression":
+        tracker = generate_regression_tracker(baseline_file=args.baseline, archs=args.archs)
+        if args.generate_baseline:
+            tracker.write_baseline(args.baseline)
+            print(f"Baseline written to {args.baseline}")
+        else:
+            print("Baseline generation script:")
+            print(tracker.script)
+    elif args.cmd == "matrix":
+        results = run_arch_matrix(patterns=args.patterns, archs=args.archs, json_output=args.json)
+        if not args.json:
+            for r in results:
+                status = "✓" if r.all_safe else "✗"
+                arch_str = " ".join(
+                    f"{a}:{'✓' if r.results.get(a, True) else '✗'}"
+                    for a in args.archs
+                )
+                print(f"  {status} {r.pattern:<35} {arch_str}")
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    _main()

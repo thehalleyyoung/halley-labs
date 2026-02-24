@@ -1,0 +1,20 @@
+{
+  "chosen_pivot": "Bounded Model Checking for Neural Network Computation Graphs with Product Theory T_shape × T_device × T_phase",
+  "personas_activated": ["A (Systems Architect)", "B (PL Theorist)", "D (DevTools Expert)", "E (Algebraic Unifier)"],
+  "rationale": "The fundamental novelty gap is that TensorGuard operates at the same architectural layer as PyTea/Pyright — per-statement AST analysis. The pivot creates a qualitatively different capability: extracting nn.Module computation graphs as finite-state transition systems and verifying safety properties (shape ∧ device ∧ phase consistency) via Z3-backed k-induction. No existing tool does bounded model checking for tensor computation graphs. This creates genuine distance from PyTea (which checks individual operations, not architectures) and is structurally impossible in Pyright (which has no numeric reasoning). The product theory T_shape × T_device × T_phase is a genuine contribution to automated reasoning — a new decidable theory with characterizable complexity.",
+  "feasibility": "High. The existing codebase has: (1) Z3 encoding for shapes — extend to device/phase sorts, (2) nn.Module __init__/forward parsing — extend to full graph extraction, (3) Shape propagation — extend to multi-property state machine, (4) CEGAR infrastructure — make it actually work for shape discovery.",
+  "distance_from_existing_tools": "Maximum. PyTea: checks per-operation shapes, no graph-level reasoning, no device/phase tracking, no bounded certificates. Pyright: no numeric reasoning at all. TorchScript: dynamic tracing, not static verification. No tool produces bounded safety certificates for nn.Module architectures.",
+  "demonstrable_experiment": "Given a ResNet/Transformer nn.Module definition, produce either a bounded safety certificate ('shapes, devices, and gradient flow are consistent for all batch_size > 0') or a concrete counterexample trace ('at layer 3, shape becomes (B, 768) but layer 4 expects (B, 512)'). Compare against PyTea on the same architectures.",
+  "implementation_plan": [
+    "1. Implement computation graph extraction from nn.Module (__init__ + forward → directed graph of layers)",
+    "2. Implement state machine: State = (ShapeEnv, DeviceMap, PhaseTag), Transition = layer application",
+    "3. Implement k-induction verifier: base case (initial state safe) + inductive step (safe state → safe successor)",
+    "4. Implement Device sort as Z3 theory (CPU, CUDA:0, CUDA:1, ... with transfer rules)",
+    "5. Implement Phase sort (train/eval with operation semantics: dropout, batchnorm behavior)",
+    "6. Implement CEGAR for shapes: counterexample → trace → synthesize shape predicate → re-verify",
+    "7. Implement symbolic shape support with Z3 (batch_size, seq_len as symbolic integers with constraints)",
+    "8. Build PyTea comparison benchmark suite",
+    "9. Evaluate on real nn.Module architectures (ResNet, Transformer, U-Net)",
+    "10. Produce safety certificates and counterexample traces"
+  ]
+}

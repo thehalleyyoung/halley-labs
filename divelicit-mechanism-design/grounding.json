@@ -1,0 +1,87 @@
+{
+  "paper_title": "DivFlow: Diverse LLM Response Selection via Sinkhorn-Guided Mechanism Design",
+  "paper_file": "theory/paper.tex",
+  "contributions": [
+    "Algebraic proof that Sinkhorn-based welfare is exactly quasi-linear (error 2.57e-16, machine precision) -- verified through full welfare pipeline, not tautological",
+    "Corrected composition theorem: eps-IC bound accounts for approximate submodularity (eps_IC <= (1-alpha)*W(S*) + k*delta_sub), validated empirically",
+    "IC violation analysis on 1,200 tests: 26.5% rate, 100% Type A (selection boundary)",
+    "Z3 SMT verification: 2/8 agents grid-certified, 0/8 soundness-certified (Lipschitz gap = 0.94)",
+    "LLM evaluation: 20 prompts x 50 responses with gpt-4.1-nano + text-embedding-3-small",
+    "DivFlow achieves Pareto-optimal quality-diversity tradeoff: 68.1% coverage / 0.698 quality on LLM data",
+    "Genuine DPP baseline using diversity-only L-kernel (no quality weighting)",
+    "Synthetic evaluation: 20 prompts x 200 responses x 15 topics with proper statistical tests"
+  ],
+  "paper_claims": {
+    "algebraic_proof": {
+      "claim": "Sinkhorn-based welfare is EXACTLY quasi-linear: W(S) = h_i(S, q_{-i}) + lambda*q_i*1[i in S]. Max decomposition error: 2.57e-16 (machine precision). Quality perturbations are traced through the full welfare pipeline W(S) = (1-lambda)*div(S) + lambda*sum(q_i) and the change equals exactly lambda*delta_q_i.",
+      "grounding": "Algebraic proof in algebraic_proof.py -- Tests 1-3 now exercise the welfare pipeline non-tautologically: Test 1 extracts the diversity component and verifies it doesn't change; Test 3 verifies W changes by exactly lambda*delta_q.",
+      "artifact": [
+        "implementation/src/algebraic_proof.py (verify_algebraic_proof, _diversity_component, _welfare)",
+        "implementation/tests/test_algebraic_proof.py (17 passing tests)",
+        "implementation/experiments/scaled_results.json (composition_formal.part_a_quasi_linearity)"
+      ]
+    },
+    "ic_violation_analysis": {
+      "claim": "IC violations arise from selection boundary effects (Type A). Violation rate: 26.5% (318/1200 tests). Type A: 100%. Max utility gain: 0.56. Corrected eps-IC bound: 7.92 (validated).",
+      "grounding": "analyze_ic_violations with 200 random + 1000 adversarial trials. C1 error: 3.33e-16. The corrected bound (1-alpha)*W(S*) + k*delta_sub properly contains the empirical max gain.",
+      "artifact": [
+        "implementation/src/ic_analysis.py",
+        "implementation/src/composition_theorem.py (verify_composition_formal)",
+        "implementation/experiments/scaled_results.json (scaled_ic_analysis, composition_formal)"
+      ]
+    },
+    "z3_verification": {
+      "claim": "Z3 SMT verification at grid resolution 15: 2/8 agents (25%) grid-certified IC-free, 0/8 soundness-certified. Lipschitz constant L=13.19, soundness gap L*h=0.94. Grid-certified means no violations at grid points; soundness-certified additionally requires L*h < epsilon.",
+      "grounding": "verify_ic_z3_refined with grid_resolution=15 and per-agent Lipschitz analysis. soundness_certified is boolean (not string).",
+      "artifact": [
+        "implementation/src/z3_verification.py (verify_ic_z3_refined)",
+        "implementation/experiments/scaled_results.json (refined_z3)"
+      ]
+    },
+    "dpp_baseline": {
+      "claim": "DPP baseline uses a diversity-only L-ensemble kernel L = K (RBF with median heuristic bandwidth), not quality-weighted. DPP achieves 66.7% synthetic coverage vs TopQuality 46.3% -- genuinely different results.",
+      "grounding": "run_dpp_selection in run_scaled_evaluation.py uses pure RBF kernel without np.outer(quals,quals) weighting. DPP and TopQuality select different items with different coverage/quality profiles.",
+      "artifact": [
+        "implementation/experiments/run_scaled_evaluation.py (run_dpp_selection)",
+        "implementation/src/dpp.py (greedy_map)",
+        "implementation/experiments/scaled_results.json (scaled_baselines.methods)"
+      ]
+    },
+    "llm_evaluation": {
+      "claim": "Evaluated on real LLM responses: 20 prompts x 50 responses using gpt-4.1-nano (generation) and text-embedding-3-small (embeddings). DivFlow: 68.1% coverage, 0.698 quality. DPP: 86.2% coverage, 0.546 quality. TopQuality: 43.8% coverage, 0.872 quality.",
+      "grounding": "run_llm_evaluation.py with OpenAI API. Quality scored by cosine similarity to prompt embedding. Topics assigned by k-means clustering.",
+      "artifact": [
+        "implementation/experiments/run_llm_evaluation.py",
+        "implementation/experiments/llm_evaluation_results.json"
+      ]
+    },
+    "composition_theorem": {
+      "claim": "Full composition theorem with corrected bounds: (a) quasi-linearity max error 2.57e-16, (b) exact VCG DSIC by Groves 1973, (c) epsilon-submodularity slack 1.49, (d) corrected eps-IC bound 7.92 (validated: empirical max gain 0.56 < 7.92), (e) violation probability bound.",
+      "grounding": "verify_composition_formal in composition_theorem.py. The NWF (1/e)*W(S*) bound does NOT apply because Sinkhorn divergence is only approximately submodular. Corrected bound: (1-alpha)*W(S*) + k*delta_sub.",
+      "artifact": [
+        "implementation/src/composition_theorem.py",
+        "implementation/experiments/scaled_results.json (composition_formal)"
+      ]
+    }
+  },
+  "experiment_index": {
+    "scaled_evaluation": {
+      "source": "implementation/experiments/scaled_results.json",
+      "runner": "implementation/experiments/run_scaled_evaluation.py",
+      "experiments": {
+        "scaled_baselines": "20 prompts x 200 responses x 15 topics with genuine DPP baseline",
+        "scaled_ic_analysis": "1,200 IC deviation tests with VCG condition analysis",
+        "refined_z3": "Z3 grid verification at resolution 15 with grid vs soundness certification",
+        "composition_formal": "5-part composition theorem with corrected eps-IC bounds",
+        "sensitivity": "Hyperparameter sensitivity across Sinkhorn eps, lambda, k"
+      }
+    },
+    "llm_evaluation": {
+      "source": "implementation/experiments/llm_evaluation_results.json",
+      "runner": "implementation/experiments/run_llm_evaluation.py",
+      "experiments": {
+        "llm_baselines": "20 prompts x 50 LLM responses with gpt-4.1-nano + text-embedding-3-small"
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+C rwc
+
+{ int x=0; int y=0; }
+
+P0(
+  int* x
+) {
+  WRITE_ONCE(*x, 1);
+}
+
+P1(
+  int* x, int* y
+) {
+  int r0 = READ_ONCE(*x);
+  int r1 = READ_ONCE(*y);
+}
+
+P2(
+  int* x, int* y
+) {
+  WRITE_ONCE(*y, 1);
+  int r2 = READ_ONCE(*x);
+}
+
+exists (1:r0=1 /\ 1:r1=0 /\ 2:r2=0)

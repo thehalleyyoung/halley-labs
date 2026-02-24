@@ -1,0 +1,2778 @@
+{
+  "meta": {
+    "z3_available": true,
+    "num_pytea_benchmarks": 27,
+    "num_arch_benchmarks": 20,
+    "num_cegar_benchmarks": 8
+  },
+  "pytea_comparison": {
+    "total": 27,
+    "correct": 24,
+    "accuracy": 88.88888888888889,
+    "pytea_can_handle": 17,
+    "pytea_cannot_handle": 10,
+    "total_time_ms": 2509.79162400472,
+    "results": [
+      {
+        "name": "pt01_linear_correct",
+        "category": "pytea_comparison",
+        "description": "Correct nn.Linear with matching input dim",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 27.866958000231534,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 2,
+        "num_layers": 1,
+        "certificate_k": 2,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": true,
+          "reason": "Basic Linear shape check",
+          "pytea_category": "basic_shape"
+        },
+        "tags": []
+      },
+      {
+        "name": "pt02_linear_mismatch",
+        "category": "pytea_comparison",
+        "description": "nn.Linear dimension mismatch: in_features=10 but input has dim 8",
+        "expect_safe": false,
+        "actual_safe": false,
+        "correct": true,
+        "verification_time_ms": 29.571084000053816,
+        "num_violations": 2,
+        "violation_kinds": [
+          "shape_incompatible"
+        ],
+        "num_steps": 2,
+        "num_layers": 1,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": true,
+          "reason": "Basic Linear shape check",
+          "pytea_category": "basic_shape"
+        },
+        "tags": []
+      },
+      {
+        "name": "pt03_two_linears_correct",
+        "category": "pytea_comparison",
+        "description": "Two-layer MLP with correct chain",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 37.439874999108724,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 3,
+        "num_layers": 2,
+        "certificate_k": 3,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": true,
+          "reason": "Linear chain shape propagation",
+          "pytea_category": "basic_shape"
+        },
+        "tags": []
+      },
+      {
+        "name": "pt04_two_linears_mismatch",
+        "category": "pytea_comparison",
+        "description": "Linear chain mismatch: fc1 outputs 128 but fc2 expects 64",
+        "expect_safe": false,
+        "actual_safe": false,
+        "correct": true,
+        "verification_time_ms": 68.52516600338276,
+        "num_violations": 2,
+        "violation_kinds": [
+          "shape_incompatible"
+        ],
+        "num_steps": 3,
+        "num_layers": 2,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": true,
+          "reason": "Linear chain shape propagation",
+          "pytea_category": "basic_shape"
+        },
+        "tags": []
+      },
+      {
+        "name": "pt05_reshape_correct",
+        "category": "pytea_comparison",
+        "description": "Flatten via view(-1) then Linear(784,10)",
+        "expect_safe": true,
+        "actual_safe": false,
+        "correct": false,
+        "verification_time_ms": 90.46079199470114,
+        "num_violations": 2,
+        "violation_kinds": [
+          "shape_incompatible"
+        ],
+        "num_steps": 3,
+        "num_layers": 1,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": true,
+          "reason": "Reshape with -1 inference",
+          "pytea_category": "reshape"
+        },
+        "tags": []
+      },
+      {
+        "name": "pt06_reshape_wrong_total",
+        "category": "pytea_comparison",
+        "description": "Flatten produces 784 but Linear expects 500",
+        "expect_safe": false,
+        "actual_safe": false,
+        "correct": true,
+        "verification_time_ms": 130.0006250021397,
+        "num_violations": 2,
+        "violation_kinds": [
+          "shape_incompatible"
+        ],
+        "num_steps": 3,
+        "num_layers": 1,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": true,
+          "reason": "Reshape + Linear mismatch",
+          "pytea_category": "reshape"
+        },
+        "tags": []
+      },
+      {
+        "name": "pt07_matmul_correct",
+        "category": "pytea_comparison",
+        "description": "Simple matmul through Linear: (batch,64) @ (64,32)",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 30.014707997906953,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 2,
+        "num_layers": 1,
+        "certificate_k": 2,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": true,
+          "reason": "Matmul inner dim check",
+          "pytea_category": "matmul"
+        },
+        "tags": []
+      },
+      {
+        "name": "pt08_matmul_inner_mismatch",
+        "category": "pytea_comparison",
+        "description": "Matmul inner dim mismatch: input last dim 48 != 64",
+        "expect_safe": false,
+        "actual_safe": false,
+        "correct": true,
+        "verification_time_ms": 17.008041999361012,
+        "num_violations": 2,
+        "violation_kinds": [
+          "shape_incompatible"
+        ],
+        "num_steps": 2,
+        "num_layers": 1,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": true,
+          "reason": "Matmul inner dim check",
+          "pytea_category": "matmul"
+        },
+        "tags": []
+      },
+      {
+        "name": "pt09_conv2d_correct",
+        "category": "pytea_comparison",
+        "description": "Conv2d with correct input channels=3",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 21.74629100045422,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 2,
+        "num_layers": 1,
+        "certificate_k": 2,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": true,
+          "reason": "Conv2d channel check",
+          "pytea_category": "basic_shape"
+        },
+        "tags": []
+      },
+      {
+        "name": "pt10_conv2d_channel_mismatch",
+        "category": "pytea_comparison",
+        "description": "Conv2d channel mismatch: expects 3 channels but input has 1",
+        "expect_safe": false,
+        "actual_safe": false,
+        "correct": true,
+        "verification_time_ms": 68.21483399835415,
+        "num_violations": 2,
+        "violation_kinds": [
+          "shape_incompatible"
+        ],
+        "num_steps": 2,
+        "num_layers": 1,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": true,
+          "reason": "Conv2d channel check",
+          "pytea_category": "basic_shape"
+        },
+        "tags": []
+      },
+      {
+        "name": "pt11_broadcast_correct",
+        "category": "pytea_comparison",
+        "description": "Residual addition: (batch,10) + (batch,10) broadcasts correctly",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 59.063458000309765,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 3,
+        "num_layers": 1,
+        "certificate_k": 3,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": true,
+          "reason": "Broadcast check",
+          "pytea_category": "basic_shape"
+        },
+        "tags": []
+      },
+      {
+        "name": "pt12_device_mismatch_add",
+        "category": "pytea_comparison",
+        "description": "Device mismatch: h on CPU, y moved to CUDA, then added",
+        "expect_safe": false,
+        "actual_safe": false,
+        "correct": true,
+        "verification_time_ms": 195.19804200535873,
+        "num_violations": 2,
+        "violation_kinds": [
+          "device_mismatch"
+        ],
+        "num_steps": 4,
+        "num_layers": 1,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": false,
+          "reason": "PyTea does not track device placement",
+          "pytea_category": "unsupported"
+        },
+        "tags": [
+          "device"
+        ]
+      },
+      {
+        "name": "pt13_device_mismatch_matmul",
+        "category": "pytea_comparison",
+        "description": "Device mismatch: h moved to CUDA but fc2 weights are on CPU",
+        "expect_safe": false,
+        "actual_safe": false,
+        "correct": true,
+        "verification_time_ms": 109.17583300033584,
+        "num_violations": 2,
+        "violation_kinds": [
+          "device_mismatch",
+          "cross_domain_violation"
+        ],
+        "num_steps": 4,
+        "num_layers": 2,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": false,
+          "reason": "No device tracking",
+          "pytea_category": "unsupported"
+        },
+        "tags": [
+          "device"
+        ]
+      },
+      {
+        "name": "pt14_device_correct_both_cuda",
+        "category": "pytea_comparison",
+        "description": "Both input and model on same device (CPU)",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 49.65704200003529,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 2,
+        "num_layers": 1,
+        "certificate_k": 2,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": false,
+          "reason": "No device tracking (but would not report error)",
+          "pytea_category": "unsupported"
+        },
+        "tags": [
+          "device"
+        ]
+      },
+      {
+        "name": "pt15_dropout_train_eval",
+        "category": "pytea_comparison",
+        "description": "Dropout is shape-preserving in both train and eval phases",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 29.630124998220708,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 3,
+        "num_layers": 2,
+        "certificate_k": 3,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": false,
+          "reason": "No phase-dependent analysis",
+          "pytea_category": "unsupported"
+        },
+        "tags": [
+          "phase"
+        ]
+      },
+      {
+        "name": "pt16_batchnorm_train_eval",
+        "category": "pytea_comparison",
+        "description": "BatchNorm1d tracks running stats differently in train vs eval",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 45.543790998635814,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 3,
+        "num_layers": 2,
+        "certificate_k": 3,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": false,
+          "reason": "No phase-dependent analysis",
+          "pytea_category": "unsupported"
+        },
+        "tags": [
+          "phase"
+        ]
+      },
+      {
+        "name": "pt17_resnet_block",
+        "category": "pytea_comparison",
+        "description": "Full ResNet residual block with skip connection",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 143.4638749997248,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 8,
+        "num_layers": 5,
+        "certificate_k": 8,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": false,
+          "reason": "PyTea cannot verify full architectures with BMC",
+          "pytea_category": "unsupported"
+        },
+        "tags": [
+          "architecture"
+        ]
+      },
+      {
+        "name": "pt18_transformer_attention",
+        "category": "pytea_comparison",
+        "description": "Attention: qkv outputs 1536 but proj expects 512 \u2014 dimension error",
+        "expect_safe": false,
+        "actual_safe": false,
+        "correct": true,
+        "verification_time_ms": 150.31104200170375,
+        "num_violations": 2,
+        "violation_kinds": [
+          "shape_incompatible"
+        ],
+        "num_steps": 3,
+        "num_layers": 2,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": false,
+          "reason": "No bounded model checking of attention mechanisms",
+          "pytea_category": "unsupported"
+        },
+        "tags": [
+          "architecture"
+        ]
+      },
+      {
+        "name": "pt19_symbolic_constraint_linear",
+        "category": "pytea_comparison",
+        "description": "Symbolic input dim 'features' \u2014 CEGAR discovers features==768",
+        "expect_safe": true,
+        "actual_safe": false,
+        "correct": false,
+        "verification_time_ms": 55.43299999408191,
+        "num_violations": 1,
+        "violation_kinds": [
+          "shape_incompatible"
+        ],
+        "num_steps": 2,
+        "num_layers": 1,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": false,
+          "reason": "No symbolic shape verification with arbitrary constraints",
+          "pytea_category": "unsupported"
+        },
+        "tags": [
+          "symbolic",
+          "cegar"
+        ]
+      },
+      {
+        "name": "pt20_symbolic_constraint_chain",
+        "category": "pytea_comparison",
+        "description": "3-layer chain with symbolic input \u2014 CEGAR discovers d_in==256",
+        "expect_safe": true,
+        "actual_safe": false,
+        "correct": false,
+        "verification_time_ms": 199.95449999987613,
+        "num_violations": 1,
+        "violation_kinds": [
+          "shape_incompatible"
+        ],
+        "num_steps": 4,
+        "num_layers": 3,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": false,
+          "reason": "No symbolic constraint discovery",
+          "pytea_category": "unsupported"
+        },
+        "tags": [
+          "symbolic",
+          "cegar"
+        ]
+      },
+      {
+        "name": "pt21_conv_chain_correct",
+        "category": "pytea_comparison",
+        "description": "3-layer Conv2d chain with correct channel progression",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 272.3681250063237,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 4,
+        "num_layers": 3,
+        "certificate_k": 4,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": true,
+          "reason": "Conv2d chain check",
+          "pytea_category": "basic_shape"
+        },
+        "tags": []
+      },
+      {
+        "name": "pt22_conv_chain_mismatch",
+        "category": "pytea_comparison",
+        "description": "Conv chain mismatch: conv1 outputs 32 channels but conv2 expects 16",
+        "expect_safe": false,
+        "actual_safe": false,
+        "correct": true,
+        "verification_time_ms": 25.338749997899868,
+        "num_violations": 2,
+        "violation_kinds": [
+          "shape_incompatible"
+        ],
+        "num_steps": 3,
+        "num_layers": 2,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": true,
+          "reason": "Conv2d chain check",
+          "pytea_category": "basic_shape"
+        },
+        "tags": []
+      },
+      {
+        "name": "pt23_embedding_correct",
+        "category": "pytea_comparison",
+        "description": "Embedding(1000,128) -> Linear(128,10)",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 155.0525420025224,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 3,
+        "num_layers": 2,
+        "certificate_k": 3,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": true,
+          "reason": "Embedding shape propagation",
+          "pytea_category": "basic_shape"
+        },
+        "tags": []
+      },
+      {
+        "name": "pt24_embedding_linear_mismatch",
+        "category": "pytea_comparison",
+        "description": "Embedding outputs 128 but Linear expects 64",
+        "expect_safe": false,
+        "actual_safe": false,
+        "correct": true,
+        "verification_time_ms": 129.86787500267383,
+        "num_violations": 2,
+        "violation_kinds": [
+          "shape_incompatible"
+        ],
+        "num_steps": 3,
+        "num_layers": 2,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": true,
+          "reason": "Embedding + Linear mismatch",
+          "pytea_category": "basic_shape"
+        },
+        "tags": []
+      },
+      {
+        "name": "pt25_layernorm_correct",
+        "category": "pytea_comparison",
+        "description": "LayerNorm(256) after Linear(256,256)",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 71.21020799968392,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 3,
+        "num_layers": 2,
+        "certificate_k": 3,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": true,
+          "reason": "LayerNorm shape check",
+          "pytea_category": "basic_shape"
+        },
+        "tags": []
+      },
+      {
+        "name": "pt26_multi_device_transfer",
+        "category": "pytea_comparison",
+        "description": "Device round-trip: CPU -> CUDA -> CPU, then fc2 on CPU",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 198.78691600024467,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 5,
+        "num_layers": 2,
+        "certificate_k": 5,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": false,
+          "reason": "No device tracking",
+          "pytea_category": "unsupported"
+        },
+        "tags": [
+          "device"
+        ]
+      },
+      {
+        "name": "pt27_sequential_correct",
+        "category": "pytea_comparison",
+        "description": "Linear -> ReLU -> Linear, all correct",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 98.88812500139466,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 4,
+        "num_layers": 3,
+        "certificate_k": 4,
+        "errors": [],
+        "pytea_info": {
+          "can_handle": true,
+          "reason": "Basic sequential check",
+          "pytea_category": "basic_shape"
+        },
+        "tags": []
+      }
+    ]
+  },
+  "architecture": {
+    "total": 20,
+    "correct": 20,
+    "accuracy": 100.0,
+    "total_time_ms": 5185.548751011083,
+    "results": [
+      {
+        "name": "arch01_mlp_correct",
+        "category": "real_world_architecture",
+        "description": "3-layer MLP with dropout, all dimensions correct",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 321.83100000111153,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 8,
+        "num_layers": 5,
+        "certificate_k": 8,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "mlp"
+        ]
+      },
+      {
+        "name": "arch02_mlp_bug_wrong_dim",
+        "category": "real_world_architecture",
+        "description": "MLP bug: fc1 outputs 512 but fc2 expects 256",
+        "expect_safe": false,
+        "actual_safe": false,
+        "correct": true,
+        "verification_time_ms": 135.86499999655643,
+        "num_violations": 3,
+        "violation_kinds": [
+          "shape_incompatible"
+        ],
+        "num_steps": 4,
+        "num_layers": 3,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "mlp",
+          "bug"
+        ]
+      },
+      {
+        "name": "arch03_cnn_resblock_correct",
+        "category": "real_world_architecture",
+        "description": "Mini-ResNet: stem + one residual block, correct",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 438.7946670030942,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 11,
+        "num_layers": 7,
+        "certificate_k": 11,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "cnn",
+          "resnet"
+        ]
+      },
+      {
+        "name": "arch04_cnn_channel_bug",
+        "category": "real_world_architecture",
+        "description": "CNN bug: conv1 outputs 64 channels but conv2 expects 32",
+        "expect_safe": false,
+        "actual_safe": false,
+        "correct": true,
+        "verification_time_ms": 196.50333300523926,
+        "num_violations": 2,
+        "violation_kinds": [
+          "shape_incompatible"
+        ],
+        "num_steps": 3,
+        "num_layers": 2,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "cnn",
+          "bug"
+        ]
+      },
+      {
+        "name": "arch05_transformer_encoder_correct",
+        "category": "real_world_architecture",
+        "description": "Transformer encoder block: self-attention + FFN with residuals",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 393.76187499874504,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 11,
+        "num_layers": 7,
+        "certificate_k": 11,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "transformer"
+        ]
+      },
+      {
+        "name": "arch06_transformer_ffn_bug",
+        "category": "real_world_architecture",
+        "description": "Transformer bug: ffn1 outputs 2048 but ffn2 expects 1024",
+        "expect_safe": false,
+        "actual_safe": false,
+        "correct": true,
+        "verification_time_ms": 159.4249999980093,
+        "num_violations": 3,
+        "violation_kinds": [
+          "shape_incompatible"
+        ],
+        "num_steps": 5,
+        "num_layers": 3,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "transformer",
+          "bug"
+        ]
+      },
+      {
+        "name": "arch07_unet_encoder_correct",
+        "category": "real_world_architecture",
+        "description": "Simplified U-Net encoder-decoder, correct channel flow",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 693.163125004503,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 8,
+        "num_layers": 5,
+        "certificate_k": 8,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "unet"
+        ]
+      },
+      {
+        "name": "arch08_unet_decoder_bug",
+        "category": "real_world_architecture",
+        "description": "U-Net bug: dec2 expects 128 channels but enc2 only outputs 64",
+        "expect_safe": false,
+        "actual_safe": false,
+        "correct": true,
+        "verification_time_ms": 324.2080419950071,
+        "num_violations": 2,
+        "violation_kinds": [
+          "shape_incompatible"
+        ],
+        "num_steps": 5,
+        "num_layers": 4,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "unet",
+          "bug"
+        ]
+      },
+      {
+        "name": "arch09_gan_generator_correct",
+        "category": "real_world_architecture",
+        "description": "GAN generator: latent(100) -> 256 -> 512 -> 784",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 210.68899999954738,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 6,
+        "num_layers": 4,
+        "certificate_k": 6,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "gan"
+        ]
+      },
+      {
+        "name": "arch10_gan_discriminator_correct",
+        "category": "real_world_architecture",
+        "description": "GAN discriminator: 784 -> 512 -> 256 -> 1",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 426.8798749981215,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 6,
+        "num_layers": 4,
+        "certificate_k": 6,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "gan"
+        ]
+      },
+      {
+        "name": "arch11_gan_shape_mismatch",
+        "category": "real_world_architecture",
+        "description": "GAN generator outputs 500 (intentional\u2014mismatch with discriminator shows at integration level, not within this module alone)",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 228.58375000214437,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 6,
+        "num_layers": 4,
+        "certificate_k": 6,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "gan"
+        ]
+      },
+      {
+        "name": "arch12_missing_reshape",
+        "category": "real_world_architecture",
+        "description": "Bug: missing flatten between Conv2d output (4D) and Linear (2D)",
+        "expect_safe": false,
+        "actual_safe": false,
+        "correct": true,
+        "verification_time_ms": 44.5606669964036,
+        "num_violations": 2,
+        "violation_kinds": [
+          "shape_incompatible"
+        ],
+        "num_steps": 3,
+        "num_layers": 2,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "bug",
+          "missing_reshape"
+        ]
+      },
+      {
+        "name": "arch13_wrong_linear_dim",
+        "category": "real_world_architecture",
+        "description": "Bug: fc1 outputs 200 but fc2 expects 100",
+        "expect_safe": false,
+        "actual_safe": false,
+        "correct": true,
+        "verification_time_ms": 43.308250002155546,
+        "num_violations": 2,
+        "violation_kinds": [
+          "shape_incompatible"
+        ],
+        "num_steps": 3,
+        "num_layers": 2,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "bug",
+          "wrong_dim"
+        ]
+      },
+      {
+        "name": "arch14_device_mismatch_model",
+        "category": "real_world_architecture",
+        "description": "Device bug: fc1 output moved to CUDA but fc2 weights on CPU",
+        "expect_safe": false,
+        "actual_safe": false,
+        "correct": true,
+        "verification_time_ms": 167.63400000490947,
+        "num_violations": 2,
+        "violation_kinds": [
+          "device_mismatch",
+          "cross_domain_violation"
+        ],
+        "num_steps": 4,
+        "num_layers": 2,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "device",
+          "bug"
+        ]
+      },
+      {
+        "name": "arch15_device_correct_cpu",
+        "category": "real_world_architecture",
+        "description": "All on CPU \u2014 no device issues",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 211.48066699970514,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 4,
+        "num_layers": 3,
+        "certificate_k": 4,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "device"
+        ]
+      },
+      {
+        "name": "arch16_phase_dropout_batchnorm",
+        "category": "real_world_architecture",
+        "description": "Phase-dependent: BN + Dropout behave differently in train/eval",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 261.1411250036326,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 5,
+        "num_layers": 4,
+        "certificate_k": 5,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "phase"
+        ]
+      },
+      {
+        "name": "arch17_phase_eval_mode",
+        "category": "real_world_architecture",
+        "description": "Same model verified in EVAL phase",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 138.41875000071013,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 4,
+        "num_layers": 3,
+        "certificate_k": 4,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "phase"
+        ]
+      },
+      {
+        "name": "arch18_autoencoder_correct",
+        "category": "real_world_architecture",
+        "description": "Autoencoder: 784->256->64->256->784",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 183.92299999686657,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 8,
+        "num_layers": 5,
+        "certificate_k": 8,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "autoencoder"
+        ]
+      },
+      {
+        "name": "arch19_autoencoder_bottleneck_bug",
+        "category": "real_world_architecture",
+        "description": "Autoencoder bug: enc2 outputs 64 but dec1 expects 32",
+        "expect_safe": false,
+        "actual_safe": false,
+        "correct": true,
+        "verification_time_ms": 284.7762910023448,
+        "num_violations": 2,
+        "violation_kinds": [
+          "shape_incompatible"
+        ],
+        "num_steps": 5,
+        "num_layers": 4,
+        "certificate_k": 0,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "autoencoder",
+          "bug"
+        ]
+      },
+      {
+        "name": "arch20_deep_mlp_correct",
+        "category": "real_world_architecture",
+        "description": "5-layer MLP, all dimensions correct",
+        "expect_safe": true,
+        "actual_safe": true,
+        "correct": true,
+        "verification_time_ms": 320.6013340022764,
+        "num_violations": 0,
+        "violation_kinds": [],
+        "num_steps": 10,
+        "num_layers": 6,
+        "certificate_k": 10,
+        "errors": [],
+        "pytea_info": null,
+        "tags": [
+          "mlp",
+          "deep"
+        ]
+      }
+    ]
+  },
+  "cegar_evaluation": {
+    "total": 8,
+    "total_predicates": 7,
+    "total_contracts": 7,
+    "avg_iterations": 1.875,
+    "total_time_ms": 1050.9832510069828,
+    "results": [
+      {
+        "name": "cegar01_discover_single_dim",
+        "description": "CEGAR should discover features==768",
+        "is_safe": true,
+        "num_predicates_discovered": 1,
+        "predicates": [
+          "x.shape[-1] == 768"
+        ],
+        "iterations": 2,
+        "final_status": "SAFE",
+        "contracts_inferred": [
+          "Net.forward(x): requires [x.shape[-1] == 768]"
+        ],
+        "total_time_ms": 53.9100000023609,
+        "iteration_details": [
+          {
+            "iteration": 0,
+            "num_violations": 1,
+            "num_spurious": 1,
+            "num_real": 0,
+            "predicates_added": [
+              "x.shape[-1] == 768"
+            ],
+            "time_ms": 39.41983300319407
+          },
+          {
+            "iteration": 1,
+            "num_violations": 0,
+            "num_spurious": 0,
+            "num_real": 0,
+            "predicates_added": [],
+            "time_ms": 12.43212499684887
+          }
+        ],
+        "real_bugs": []
+      },
+      {
+        "name": "cegar02_discover_chain_dims",
+        "description": "CEGAR discovers d==256 from fc1's in_features",
+        "is_safe": true,
+        "num_predicates_discovered": 1,
+        "predicates": [
+          "x.shape[-1] == 256"
+        ],
+        "iterations": 2,
+        "final_status": "SAFE",
+        "contracts_inferred": [
+          "Net.forward(x): requires [x.shape[-1] == 256]"
+        ],
+        "total_time_ms": 78.20812499994645,
+        "iteration_details": [
+          {
+            "iteration": 0,
+            "num_violations": 1,
+            "num_spurious": 1,
+            "num_real": 0,
+            "predicates_added": [
+              "x.shape[-1] == 256"
+            ],
+            "time_ms": 47.86995900212787
+          },
+          {
+            "iteration": 1,
+            "num_violations": 0,
+            "num_spurious": 0,
+            "num_real": 0,
+            "predicates_added": [],
+            "time_ms": 28.357416995277163
+          }
+        ],
+        "real_bugs": []
+      },
+      {
+        "name": "cegar03_discover_with_relu",
+        "description": "CEGAR discovers dim==100 through relu (shape-preserving)",
+        "is_safe": true,
+        "num_predicates_discovered": 1,
+        "predicates": [
+          "x.shape[-1] == 100"
+        ],
+        "iterations": 2,
+        "final_status": "SAFE",
+        "contracts_inferred": [
+          "Net.forward(x): requires [x.shape[-1] == 100]"
+        ],
+        "total_time_ms": 96.02404200268211,
+        "iteration_details": [
+          {
+            "iteration": 0,
+            "num_violations": 1,
+            "num_spurious": 1,
+            "num_real": 0,
+            "predicates_added": [
+              "x.shape[-1] == 100"
+            ],
+            "time_ms": 45.76854199694935
+          },
+          {
+            "iteration": 1,
+            "num_violations": 0,
+            "num_spurious": 0,
+            "num_real": 0,
+            "predicates_added": [],
+            "time_ms": 47.80029199901037
+          }
+        ],
+        "real_bugs": []
+      },
+      {
+        "name": "cegar04_real_bug_not_spurious",
+        "description": "CEGAR should identify real bug: fc1 outputs 50, fc2 expects 30",
+        "is_safe": false,
+        "num_predicates_discovered": 1,
+        "predicates": [
+          "x.shape[-1] == 30"
+        ],
+        "iterations": 2,
+        "final_status": "REAL_BUG_FOUND",
+        "contracts_inferred": [
+          "Net.forward(x): requires [x.shape[-1] == 30]"
+        ],
+        "total_time_ms": 72.88262499787379,
+        "iteration_details": [
+          {
+            "iteration": 0,
+            "num_violations": 2,
+            "num_spurious": 2,
+            "num_real": 0,
+            "predicates_added": [
+              "x.shape[-1] == 30",
+              "x.shape[-1] == 30"
+            ],
+            "time_ms": 45.09012500056997
+          },
+          {
+            "iteration": 1,
+            "num_violations": 2,
+            "num_spurious": 0,
+            "num_real": 2,
+            "predicates_added": [],
+            "time_ms": 24.53691700065974
+          }
+        ],
+        "real_bugs": [
+          "Linear expects last dim=100, got 30",
+          "Z3 violation (shape_incompatible) at step 0:\n  phase_s0 = TRAIN_55\n  batch = 1\n  dev_x_s0 = CPU_55\n  grad_x_s0 = False"
+        ]
+      },
+      {
+        "name": "cegar05_multiple_symbolic",
+        "description": "CEGAR discovers d_model==512",
+        "is_safe": true,
+        "num_predicates_discovered": 1,
+        "predicates": [
+          "x.shape[-1] == 512"
+        ],
+        "iterations": 2,
+        "final_status": "SAFE",
+        "contracts_inferred": [
+          "Net.forward(x): requires [x.shape[-1] == 512]"
+        ],
+        "total_time_ms": 93.9057919968036,
+        "iteration_details": [
+          {
+            "iteration": 0,
+            "num_violations": 1,
+            "num_spurious": 1,
+            "num_real": 0,
+            "predicates_added": [
+              "x.shape[-1] == 512"
+            ],
+            "time_ms": 53.31879100413062
+          },
+          {
+            "iteration": 1,
+            "num_violations": 0,
+            "num_spurious": 0,
+            "num_real": 0,
+            "predicates_added": [],
+            "time_ms": 38.59825000108685
+          }
+        ],
+        "real_bugs": []
+      },
+      {
+        "name": "cegar06_conv_symbolic_channels",
+        "description": "Conv2d with symbolic spatial dims, concrete channels",
+        "is_safe": false,
+        "num_predicates_discovered": 0,
+        "predicates": [],
+        "iterations": 1,
+        "final_status": "REAL_BUG_FOUND",
+        "contracts_inferred": [],
+        "total_time_ms": 88.28133300266927,
+        "iteration_details": [
+          {
+            "iteration": 0,
+            "num_violations": 1,
+            "num_spurious": 0,
+            "num_real": 1,
+            "predicates_added": [],
+            "time_ms": 88.08179199695587
+          }
+        ],
+        "real_bugs": [
+          "Z3 violation (shape_incompatible) at step 1:\n  phase_s1 = TRAIN_58\n  phase_s0 = TRAIN_58\n  batch = 1\n  H_out = 0\n  h = 1\n  grad___ret_1_s1 = True\n  dev_x_s0 = CPU_58\n  grad_x_s0 = False\n  w = 1\n  dev___ret_1_s1 = CPU_58\n  grad_x_s1 = False\n  dev_x_s1 = CPU_58"
+        ]
+      },
+      {
+        "name": "cegar07_deep_chain_discovery",
+        "description": "CEGAR discovers input_dim==1024 across 4-layer chain",
+        "is_safe": true,
+        "num_predicates_discovered": 1,
+        "predicates": [
+          "x.shape[-1] == 1024"
+        ],
+        "iterations": 2,
+        "final_status": "SAFE",
+        "contracts_inferred": [
+          "Net.forward(x): requires [x.shape[-1] == 1024]"
+        ],
+        "total_time_ms": 381.3797920010984,
+        "iteration_details": [
+          {
+            "iteration": 0,
+            "num_violations": 1,
+            "num_spurious": 1,
+            "num_real": 0,
+            "predicates_added": [
+              "x.shape[-1] == 1024"
+            ],
+            "time_ms": 267.58895899547497
+          },
+          {
+            "iteration": 1,
+            "num_violations": 0,
+            "num_spurious": 0,
+            "num_real": 0,
+            "predicates_added": [],
+            "time_ms": 110.39808300120058
+          }
+        ],
+        "real_bugs": []
+      },
+      {
+        "name": "cegar08_dropout_chain",
+        "description": "CEGAR discovers n_feat==200 through dropout",
+        "is_safe": true,
+        "num_predicates_discovered": 1,
+        "predicates": [
+          "x.shape[-1] == 200"
+        ],
+        "iterations": 2,
+        "final_status": "SAFE",
+        "contracts_inferred": [
+          "Net.forward(x): requires [x.shape[-1] == 200]"
+        ],
+        "total_time_ms": 186.39154200354824,
+        "iteration_details": [
+          {
+            "iteration": 0,
+            "num_violations": 1,
+            "num_spurious": 1,
+            "num_real": 0,
+            "predicates_added": [
+              "x.shape[-1] == 200"
+            ],
+            "time_ms": 51.69204199773958
+          },
+          {
+            "iteration": 1,
+            "num_violations": 0,
+            "num_spurious": 0,
+            "num_real": 0,
+            "predicates_added": [],
+            "time_ms": 130.2626250035246
+          }
+        ],
+        "real_bugs": []
+      }
+    ]
+  },
+  "z3_statistics": {
+    "total_benchmarks": 55,
+    "total_queries": 216,
+    "total_solve_time_ms": 581.1739239507006,
+    "per_query_times_ms": [
+      1.2634579979931004,
+      7.70399999601068,
+      10.544374999881256,
+      8.7533749974682,
+      3.5735839992412366,
+      0.4530419973889366,
+      5.860291996214073,
+      12.156958997366019,
+      10.138375000678934,
+      11.252625001361594,
+      0.5724590009776875,
+      11.056167000788264,
+      0.6778329989174381,
+      0.23741699988022447,
+      1.4351660065585747,
+      0.6708750006509945,
+      2.3485839992645197,
+      4.773541993927211,
+      3.9352500025415793,
+      3.8356669974746183,
+      0.3623329976107925,
+      0.9719579975353554,
+      1.8730419978965074,
+      1.018292001390364,
+      10.085583002364729,
+      11.021250000339933,
+      8.923834000597708,
+      3.409457996895071,
+      0.08920799882616848,
+      3.3284160017501563,
+      5.0542079989099875,
+      10.72845800081268,
+      10.212249995674938,
+      1.38899999728892,
+      10.732833005022258,
+      8.503625002049375,
+      1.3003339990973473,
+      0.8901669934857637,
+      4.548417004116345,
+      2.4055410030996427,
+      0.9900000004563481,
+      1.7408749990863726,
+      0.2900000035879202,
+      0.28504100191639736,
+      1.0997920035151765,
+      0.7227499954751693,
+      1.199334001285024,
+      0.6717080032103695,
+      0.27112500538351014,
+      0.675584000418894,
+      1.2757079966831952,
+      1.2970829993719235,
+      0.0641250007902272,
+      0.494249994517304,
+      0.3955830034101382,
+      0.702165998518467,
+      0.04170800093561411,
+      0.8818749993224628,
+      1.3117909984430298,
+      1.5602909988956526,
+      0.6415000025299378,
+      0.9652919979998842,
+      0.6592909994651563,
+      2.028959002927877,
+      1.4929579992895015,
+      0.5369589998736046,
+      0.04933300078846514,
+      0.6242500021471642,
+      0.04333299875725061,
+      0.039375001506414264,
+      0.4270409990567714,
+      0.16041700291680172,
+      0.9997919987654313,
+      0.3811249989666976,
+      0.607791000220459,
+      0.04549999721348286,
+      10.556291999819223,
+      0.1125839989981614,
+      0.1038330010487698,
+      0.6654579992755316,
+      0.23054199846228585,
+      0.4480419956962578,
+      1.181458996143192,
+      0.44224999874131754,
+      1.8002500000875443,
+      2.6877920026890934,
+      1.9629579983302392,
+      0.9260840015485883,
+      1.0033750004367903,
+      0.050417002057656646,
+      1.0378340011811815,
+      0.9941249954863451,
+      0.6695000047329813,
+      0.5626249985652976,
+      0.9810420015128329,
+      0.4472090004128404,
+      0.5261659971438348,
+      0.4459999981918372,
+      1.0082079970743507,
+      1.557667004817631,
+      2.3124999934225343,
+      1.184416003525257,
+      0.6930420058779418,
+      1.1824999965028837,
+      0.5204169938224368,
+      0.42058399412781,
+      3.5043750031036325,
+      3.671291000500787,
+      11.908291999134235,
+      5.035000001953449,
+      6.736333001754247,
+      9.860334001132287,
+      4.808792000403628,
+      13.111374995787628,
+      8.092957999906503,
+      5.823040999530349,
+      9.736291998706292,
+      3.623666998464614,
+      4.1386660013813525,
+      8.851667000271846,
+      2.6557919991319068,
+      11.293083000055049,
+      10.372040997026488,
+      13.2304579965421,
+      3.369624995684717,
+      1.1026669963030145,
+      0.930374997551553,
+      0.5760420026490465,
+      0.06912499520694837,
+      0.5542500002775341,
+      0.0673749964335002,
+      0.9246250046999194,
+      0.07675000233575702,
+      0.9795000005397014,
+      0.22941600036574528,
+      2.031416996032931,
+      0.09983299969462678,
+      9.532749994832557,
+      1.9430419997661375,
+      0.5734579972340725,
+      0.03829100023722276,
+      10.55116700445069,
+      4.987208994862158,
+      1.8609170001582243,
+      10.490957996807992,
+      1.1972080028499477,
+      2.005624999583233,
+      1.5655840034014545,
+      6.11712499812711,
+      4.531792001216672,
+      0.11029199959011748,
+      6.527624995214865,
+      0.8029169985093176,
+      5.225082997640129,
+      4.306416994950268,
+      1.030750005156733,
+      0.07645800360478461,
+      0.6519579983432777,
+      0.6371669951477088,
+      0.0457499991171062,
+      4.456875001778826,
+      0.08991699723992497,
+      1.5729579972685315,
+      0.6121250044088811,
+      0.6450000000768341,
+      0.051667004299815744,
+      0.923166997381486,
+      0.2969999986817129,
+      0.8271670012618415,
+      0.10466700041433796,
+      1.1415839981054887,
+      0.12858300033258274,
+      0.9589580004103482,
+      0.2948750043287873,
+      10.843582997040357,
+      0.8108339970931411,
+      1.1339999982737936,
+      0.4982919999747537,
+      0.14704199566040188,
+      0.6058340004528873,
+      0.090667002950795,
+      0.890832998265978,
+      0.15070900553837419,
+      0.8215829948312603,
+      0.5036250004195608,
+      0.6227499980013818,
+      0.4357920042821206,
+      0.5378339992603287,
+      0.0821249996079132,
+      0.7924159945105202,
+      0.053333002142608166,
+      0.9615000017220154,
+      0.49745800060918555,
+      0.0832920050015673,
+      0.7682090072194114,
+      0.0711250031599775,
+      0.8278750028694049,
+      0.5090409977128729,
+      2.583790999779012,
+      3.5317090005264618,
+      1.6979580032057129,
+      0.29150000045774505,
+      4.777667003509123,
+      2.170959000068251,
+      5.678417001035996,
+      10.131374998309184,
+      10.963332999381237,
+      0.5857920041307807,
+      5.994375002046581,
+      0.28816700069000944,
+      1.3572499956353568,
+      4.802125004061963,
+      5.667290999554098,
+      0.11595799878705293,
+      2.870292002626229,
+      0.06754199421266094
+    ],
+    "results": [
+      {
+        "name": "pt01_linear_correct",
+        "num_z3_queries": 2,
+        "total_solve_time_ms": 8.96745799400378,
+        "per_query_times_ms": [
+          1.2634579979931004,
+          7.70399999601068
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 6,
+        "result_safe": true
+      },
+      {
+        "name": "pt02_linear_mismatch",
+        "num_z3_queries": 1,
+        "total_solve_time_ms": 10.544374999881256,
+        "per_query_times_ms": [
+          10.544374999881256
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 4,
+        "result_safe": false
+      },
+      {
+        "name": "pt03_two_linears_correct",
+        "num_z3_queries": 3,
+        "total_solve_time_ms": 12.780000994098373,
+        "per_query_times_ms": [
+          8.7533749974682,
+          3.5735839992412366,
+          0.4530419973889366
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 10,
+        "result_safe": true
+      },
+      {
+        "name": "pt04_two_linears_mismatch",
+        "num_z3_queries": 2,
+        "total_solve_time_ms": 18.01725099358009,
+        "per_query_times_ms": [
+          5.860291996214073,
+          12.156958997366019
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 8,
+        "result_safe": false
+      },
+      {
+        "name": "pt05_reshape_correct",
+        "num_z3_queries": 2,
+        "total_solve_time_ms": 21.391000002040528,
+        "per_query_times_ms": [
+          10.138375000678934,
+          11.252625001361594
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 10,
+        "result_safe": false
+      },
+      {
+        "name": "pt06_reshape_wrong_total",
+        "num_z3_queries": 2,
+        "total_solve_time_ms": 11.628626001765952,
+        "per_query_times_ms": [
+          0.5724590009776875,
+          11.056167000788264
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 10,
+        "result_safe": false
+      },
+      {
+        "name": "pt07_matmul_correct",
+        "num_z3_queries": 2,
+        "total_solve_time_ms": 0.9152499987976626,
+        "per_query_times_ms": [
+          0.6778329989174381,
+          0.23741699988022447
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 6,
+        "result_safe": true
+      },
+      {
+        "name": "pt08_matmul_inner_mismatch",
+        "num_z3_queries": 1,
+        "total_solve_time_ms": 1.4351660065585747,
+        "per_query_times_ms": [
+          1.4351660065585747
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 4,
+        "result_safe": false
+      },
+      {
+        "name": "pt09_conv2d_correct",
+        "num_z3_queries": 2,
+        "total_solve_time_ms": 3.019458999915514,
+        "per_query_times_ms": [
+          0.6708750006509945,
+          2.3485839992645197
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 10,
+        "result_safe": true
+      },
+      {
+        "name": "pt10_conv2d_channel_mismatch",
+        "num_z3_queries": 1,
+        "total_solve_time_ms": 4.773541993927211,
+        "per_query_times_ms": [
+          4.773541993927211
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 6,
+        "result_safe": false
+      },
+      {
+        "name": "pt11_broadcast_correct",
+        "num_z3_queries": 3,
+        "total_solve_time_ms": 8.13324999762699,
+        "per_query_times_ms": [
+          3.9352500025415793,
+          3.8356669974746183,
+          0.3623329976107925
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 12,
+        "result_safe": true
+      },
+      {
+        "name": "pt12_device_mismatch_add",
+        "num_z3_queries": 4,
+        "total_solve_time_ms": 13.948874999186955,
+        "per_query_times_ms": [
+          0.9719579975353554,
+          1.8730419978965074,
+          1.018292001390364,
+          10.085583002364729
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 14,
+        "result_safe": false
+      },
+      {
+        "name": "pt13_device_mismatch_matmul",
+        "num_z3_queries": 4,
+        "total_solve_time_ms": 23.44374999665888,
+        "per_query_times_ms": [
+          11.021250000339933,
+          8.923834000597708,
+          3.409457996895071,
+          0.08920799882616848
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 12,
+        "result_safe": true
+      },
+      {
+        "name": "pt14_device_correct_both_cuda",
+        "num_z3_queries": 2,
+        "total_solve_time_ms": 8.382624000660144,
+        "per_query_times_ms": [
+          3.3284160017501563,
+          5.0542079989099875
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 6,
+        "result_safe": true
+      },
+      {
+        "name": "pt15_dropout_train_eval",
+        "num_z3_queries": 3,
+        "total_solve_time_ms": 22.329707993776537,
+        "per_query_times_ms": [
+          10.72845800081268,
+          10.212249995674938,
+          1.38899999728892
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 8,
+        "result_safe": true
+      },
+      {
+        "name": "pt16_batchnorm_train_eval",
+        "num_z3_queries": 3,
+        "total_solve_time_ms": 20.53679200616898,
+        "per_query_times_ms": [
+          10.732833005022258,
+          8.503625002049375,
+          1.3003339990973473
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 10,
+        "result_safe": true
+      },
+      {
+        "name": "pt17_resnet_block",
+        "num_z3_queries": 8,
+        "total_solve_time_ms": 12.249833009263966,
+        "per_query_times_ms": [
+          0.8901669934857637,
+          4.548417004116345,
+          2.4055410030996427,
+          0.9900000004563481,
+          1.7408749990863726,
+          0.2900000035879202,
+          0.28504100191639736,
+          1.0997920035151765
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 40,
+        "result_safe": true
+      },
+      {
+        "name": "pt18_transformer_attention",
+        "num_z3_queries": 2,
+        "total_solve_time_ms": 1.9220839967601933,
+        "per_query_times_ms": [
+          0.7227499954751693,
+          1.199334001285024
+        ],
+        "num_symbolic_dims": 2,
+        "num_constraints": 10,
+        "result_safe": false
+      },
+      {
+        "name": "pt19_symbolic_constraint_linear",
+        "num_z3_queries": 2,
+        "total_solve_time_ms": 0.9428330085938796,
+        "per_query_times_ms": [
+          0.6717080032103695,
+          0.27112500538351014
+        ],
+        "num_symbolic_dims": 2,
+        "num_constraints": 6,
+        "result_safe": true
+      },
+      {
+        "name": "pt20_symbolic_constraint_chain",
+        "num_z3_queries": 4,
+        "total_solve_time_ms": 3.31249999726424,
+        "per_query_times_ms": [
+          0.675584000418894,
+          1.2757079966831952,
+          1.2970829993719235,
+          0.0641250007902272
+        ],
+        "num_symbolic_dims": 2,
+        "num_constraints": 14,
+        "result_safe": true
+      },
+      {
+        "name": "pt21_conv_chain_correct",
+        "num_z3_queries": 4,
+        "total_solve_time_ms": 1.6337069973815233,
+        "per_query_times_ms": [
+          0.494249994517304,
+          0.3955830034101382,
+          0.702165998518467,
+          0.04170800093561411
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 22,
+        "result_safe": true
+      },
+      {
+        "name": "pt22_conv_chain_mismatch",
+        "num_z3_queries": 2,
+        "total_solve_time_ms": 2.1936659977654926,
+        "per_query_times_ms": [
+          0.8818749993224628,
+          1.3117909984430298
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 12,
+        "result_safe": false
+      },
+      {
+        "name": "pt23_embedding_correct",
+        "num_z3_queries": 3,
+        "total_solve_time_ms": 3.1670829994254746,
+        "per_query_times_ms": [
+          1.5602909988956526,
+          0.6415000025299378,
+          0.9652919979998842
+        ],
+        "num_symbolic_dims": 2,
+        "num_constraints": 11,
+        "result_safe": true
+      },
+      {
+        "name": "pt24_embedding_linear_mismatch",
+        "num_z3_queries": 2,
+        "total_solve_time_ms": 2.6882500023930334,
+        "per_query_times_ms": [
+          0.6592909994651563,
+          2.028959002927877
+        ],
+        "num_symbolic_dims": 2,
+        "num_constraints": 8,
+        "result_safe": false
+      },
+      {
+        "name": "pt25_layernorm_correct",
+        "num_z3_queries": 3,
+        "total_solve_time_ms": 2.0792499999515712,
+        "per_query_times_ms": [
+          1.4929579992895015,
+          0.5369589998736046,
+          0.04933300078846514
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 9,
+        "result_safe": true
+      },
+      {
+        "name": "pt26_multi_device_transfer",
+        "num_z3_queries": 5,
+        "total_solve_time_ms": 1.2944160043844022,
+        "per_query_times_ms": [
+          0.6242500021471642,
+          0.04333299875725061,
+          0.039375001506414264,
+          0.4270409990567714,
+          0.16041700291680172
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 14,
+        "result_safe": true
+      },
+      {
+        "name": "pt27_sequential_correct",
+        "num_z3_queries": 4,
+        "total_solve_time_ms": 2.0342079951660708,
+        "per_query_times_ms": [
+          0.9997919987654313,
+          0.3811249989666976,
+          0.607791000220459,
+          0.04549999721348286
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 12,
+        "result_safe": true
+      },
+      {
+        "name": "arch01_mlp_correct",
+        "num_z3_queries": 8,
+        "total_solve_time_ms": 13.740459988184739,
+        "per_query_times_ms": [
+          10.556291999819223,
+          0.1125839989981614,
+          0.1038330010487698,
+          0.6654579992755316,
+          0.23054199846228585,
+          0.4480419956962578,
+          1.181458996143192,
+          0.44224999874131754
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 22,
+        "result_safe": true
+      },
+      {
+        "name": "arch02_mlp_bug_wrong_dim",
+        "num_z3_queries": 3,
+        "total_solve_time_ms": 6.451000001106877,
+        "per_query_times_ms": [
+          1.8002500000875443,
+          2.6877920026890934,
+          1.9629579983302392
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 12,
+        "result_safe": false
+      },
+      {
+        "name": "arch03_cnn_resblock_correct",
+        "num_z3_queries": 11,
+        "total_solve_time_ms": 7.644377001270186,
+        "per_query_times_ms": [
+          0.9260840015485883,
+          1.0033750004367903,
+          0.050417002057656646,
+          1.0378340011811815,
+          0.9941249954863451,
+          0.6695000047329813,
+          0.5626249985652976,
+          0.9810420015128329,
+          0.4472090004128404,
+          0.5261659971438348,
+          0.4459999981918372
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 56,
+        "result_safe": true
+      },
+      {
+        "name": "arch04_cnn_channel_bug",
+        "num_z3_queries": 2,
+        "total_solve_time_ms": 2.565875001891982,
+        "per_query_times_ms": [
+          1.0082079970743507,
+          1.557667004817631
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 12,
+        "result_safe": false
+      },
+      {
+        "name": "arch05_transformer_encoder_correct",
+        "num_z3_queries": 11,
+        "total_solve_time_ms": 37.168749993725214,
+        "per_query_times_ms": [
+          2.3124999934225343,
+          1.184416003525257,
+          0.6930420058779418,
+          1.1824999965028837,
+          0.5204169938224368,
+          0.42058399412781,
+          3.5043750031036325,
+          3.671291000500787,
+          11.908291999134235,
+          5.035000001953449,
+          6.736333001754247
+        ],
+        "num_symbolic_dims": 2,
+        "num_constraints": 53,
+        "result_safe": true
+      },
+      {
+        "name": "arch06_transformer_ffn_bug",
+        "num_z3_queries": 4,
+        "total_solve_time_ms": 35.873458997230045,
+        "per_query_times_ms": [
+          9.860334001132287,
+          4.808792000403628,
+          13.111374995787628,
+          8.092957999906503
+        ],
+        "num_symbolic_dims": 2,
+        "num_constraints": 22,
+        "result_safe": false
+      },
+      {
+        "name": "arch07_unet_encoder_correct",
+        "num_z3_queries": 8,
+        "total_solve_time_ms": 56.4942489945679,
+        "per_query_times_ms": [
+          5.823040999530349,
+          9.736291998706292,
+          3.623666998464614,
+          4.1386660013813525,
+          8.851667000271846,
+          2.6557919991319068,
+          11.293083000055049,
+          10.372040997026488
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 40,
+        "result_safe": true
+      },
+      {
+        "name": "arch08_unet_decoder_bug",
+        "num_z3_queries": 4,
+        "total_solve_time_ms": 18.633124986081384,
+        "per_query_times_ms": [
+          13.2304579965421,
+          3.369624995684717,
+          1.1026669963030145,
+          0.930374997551553
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 19,
+        "result_safe": false
+      },
+      {
+        "name": "arch09_gan_generator_correct",
+        "num_z3_queries": 6,
+        "total_solve_time_ms": 2.2681670016027056,
+        "per_query_times_ms": [
+          0.5760420026490465,
+          0.06912499520694837,
+          0.5542500002775341,
+          0.0673749964335002,
+          0.9246250046999194,
+          0.07675000233575702
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 18,
+        "result_safe": true
+      },
+      {
+        "name": "arch10_gan_discriminator_correct",
+        "num_z3_queries": 6,
+        "total_solve_time_ms": 14.815957991231699,
+        "per_query_times_ms": [
+          0.9795000005397014,
+          0.22941600036574528,
+          2.031416996032931,
+          0.09983299969462678,
+          9.532749994832557,
+          1.9430419997661375
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 18,
+        "result_safe": true
+      },
+      {
+        "name": "arch11_gan_shape_mismatch",
+        "num_z3_queries": 6,
+        "total_solve_time_ms": 28.50199999375036,
+        "per_query_times_ms": [
+          0.5734579972340725,
+          0.03829100023722276,
+          10.55116700445069,
+          4.987208994862158,
+          1.8609170001582243,
+          10.490957996807992
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 18,
+        "result_safe": true
+      },
+      {
+        "name": "arch12_missing_reshape",
+        "num_z3_queries": 2,
+        "total_solve_time_ms": 3.202833002433181,
+        "per_query_times_ms": [
+          1.1972080028499477,
+          2.005624999583233
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 12,
+        "result_safe": false
+      },
+      {
+        "name": "arch13_wrong_linear_dim",
+        "num_z3_queries": 2,
+        "total_solve_time_ms": 7.682709001528565,
+        "per_query_times_ms": [
+          1.5655840034014545,
+          6.11712499812711
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 8,
+        "result_safe": false
+      },
+      {
+        "name": "arch14_device_mismatch_model",
+        "num_z3_queries": 4,
+        "total_solve_time_ms": 11.972625994530972,
+        "per_query_times_ms": [
+          4.531792001216672,
+          0.11029199959011748,
+          6.527624995214865,
+          0.8029169985093176
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 12,
+        "result_safe": true
+      },
+      {
+        "name": "arch15_device_correct_cpu",
+        "num_z3_queries": 4,
+        "total_solve_time_ms": 10.638708001351915,
+        "per_query_times_ms": [
+          5.225082997640129,
+          4.306416994950268,
+          1.030750005156733,
+          0.07645800360478461
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 12,
+        "result_safe": true
+      },
+      {
+        "name": "arch16_phase_dropout_batchnorm",
+        "num_z3_queries": 5,
+        "total_solve_time_ms": 5.881666991626844,
+        "per_query_times_ms": [
+          0.6519579983432777,
+          0.6371669951477088,
+          0.0457499991171062,
+          4.456875001778826,
+          0.08991699723992497
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 16,
+        "result_safe": true
+      },
+      {
+        "name": "arch17_phase_eval_mode",
+        "num_z3_queries": 4,
+        "total_solve_time_ms": 2.8817500060540624,
+        "per_query_times_ms": [
+          1.5729579972685315,
+          0.6121250044088811,
+          0.6450000000768341,
+          0.051667004299815744
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 14,
+        "result_safe": true
+      },
+      {
+        "name": "arch18_autoencoder_correct",
+        "num_z3_queries": 8,
+        "total_solve_time_ms": 4.676001000916585,
+        "per_query_times_ms": [
+          0.923166997381486,
+          0.2969999986817129,
+          0.8271670012618415,
+          0.10466700041433796,
+          1.1415839981054887,
+          0.12858300033258274,
+          0.9589580004103482,
+          0.2948750043287873
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 24,
+        "result_safe": true
+      },
+      {
+        "name": "arch19_autoencoder_bottleneck_bug",
+        "num_z3_queries": 5,
+        "total_solve_time_ms": 13.433750988042448,
+        "per_query_times_ms": [
+          10.843582997040357,
+          0.8108339970931411,
+          1.1339999982737936,
+          0.4982919999747537,
+          0.14704199566040188
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 18,
+        "result_safe": false
+      },
+      {
+        "name": "arch20_deep_mlp_correct",
+        "num_z3_queries": 10,
+        "total_solve_time_ms": 4.7417520036106,
+        "per_query_times_ms": [
+          0.6058340004528873,
+          0.090667002950795,
+          0.890832998265978,
+          0.15070900553837419,
+          0.8215829948312603,
+          0.5036250004195608,
+          0.6227499980013818,
+          0.4357920042821206,
+          0.5378339992603287,
+          0.0821249996079132
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 30,
+        "result_safe": true
+      },
+      {
+        "name": "cegar01_discover_single_dim",
+        "num_z3_queries": 2,
+        "total_solve_time_ms": 0.8457489966531284,
+        "per_query_times_ms": [
+          0.7924159945105202,
+          0.053333002142608166
+        ],
+        "num_symbolic_dims": 2,
+        "num_constraints": 6,
+        "result_safe": true
+      },
+      {
+        "name": "cegar02_discover_chain_dims",
+        "num_z3_queries": 3,
+        "total_solve_time_ms": 1.5422500073327683,
+        "per_query_times_ms": [
+          0.9615000017220154,
+          0.49745800060918555,
+          0.0832920050015673
+        ],
+        "num_symbolic_dims": 2,
+        "num_constraints": 10,
+        "result_safe": true
+      },
+      {
+        "name": "cegar03_discover_with_relu",
+        "num_z3_queries": 4,
+        "total_solve_time_ms": 2.1762500109616667,
+        "per_query_times_ms": [
+          0.7682090072194114,
+          0.0711250031599775,
+          0.8278750028694049,
+          0.5090409977128729
+        ],
+        "num_symbolic_dims": 2,
+        "num_constraints": 12,
+        "result_safe": true
+      },
+      {
+        "name": "cegar04_real_bug_not_spurious",
+        "num_z3_queries": 2,
+        "total_solve_time_ms": 6.115500000305474,
+        "per_query_times_ms": [
+          2.583790999779012,
+          3.5317090005264618
+        ],
+        "num_symbolic_dims": 1,
+        "num_constraints": 8,
+        "result_safe": false
+      },
+      {
+        "name": "cegar05_multiple_symbolic",
+        "num_z3_queries": 2,
+        "total_solve_time_ms": 1.989458003663458,
+        "per_query_times_ms": [
+          1.6979580032057129,
+          0.29150000045774505
+        ],
+        "num_symbolic_dims": 2,
+        "num_constraints": 6,
+        "result_safe": true
+      },
+      {
+        "name": "cegar06_conv_symbolic_channels",
+        "num_z3_queries": 2,
+        "total_solve_time_ms": 6.948626003577374,
+        "per_query_times_ms": [
+          4.777667003509123,
+          2.170959000068251
+        ],
+        "num_symbolic_dims": 5,
+        "num_constraints": 10,
+        "result_safe": true
+      },
+      {
+        "name": "cegar07_deep_chain_discovery",
+        "num_z3_queries": 8,
+        "total_solve_time_ms": 39.80083400529111,
+        "per_query_times_ms": [
+          5.678417001035996,
+          10.131374998309184,
+          10.963332999381237,
+          0.5857920041307807,
+          5.994375002046581,
+          0.28816700069000944,
+          1.3572499956353568,
+          4.802125004061963
+        ],
+        "num_symbolic_dims": 2,
+        "num_constraints": 24,
+        "result_safe": true
+      },
+      {
+        "name": "cegar08_dropout_chain",
+        "num_z3_queries": 4,
+        "total_solve_time_ms": 8.72108299518004,
+        "per_query_times_ms": [
+          5.667290999554098,
+          0.11595799878705293,
+          2.870292002626229,
+          0.06754199421266094
+        ],
+        "num_symbolic_dims": 2,
+        "num_constraints": 12,
+        "result_safe": true
+      }
+    ]
+  },
+  "ablation_study": {
+    "total": 23,
+    "results": [
+      {
+        "name": "pt01_linear_correct",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.46420899889199063,
+        "shape_only_errors": 0,
+        "model_checker_safe": true,
+        "model_checker_time_ms": 116.95599999802653,
+        "model_checker_errors": 0,
+        "full_pipeline_safe": true,
+        "full_pipeline_time_ms": 65.31312500010245,
+        "full_pipeline_predicates": 0,
+        "full_pipeline_iterations": 1,
+        "device_on_safe": true,
+        "device_on_time_ms": 140.78212500317022,
+        "device_on_violations": 0,
+        "device_off_safe": true,
+        "device_off_time_ms": 23.907791000965517,
+        "device_off_violations": 0
+      },
+      {
+        "name": "pt02_linear_mismatch",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.9442079972359352,
+        "shape_only_errors": 0,
+        "model_checker_safe": false,
+        "model_checker_time_ms": 51.680874996236525,
+        "model_checker_errors": 2,
+        "full_pipeline_safe": false,
+        "full_pipeline_time_ms": 76.95683299971279,
+        "full_pipeline_predicates": 0,
+        "full_pipeline_iterations": 1,
+        "device_on_safe": false,
+        "device_on_time_ms": 39.1005839992431,
+        "device_on_violations": 2,
+        "device_off_safe": false,
+        "device_off_time_ms": 99.20420900016325,
+        "device_off_violations": 2
+      },
+      {
+        "name": "pt03_two_linears_correct",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.17470800230512396,
+        "shape_only_errors": 0,
+        "model_checker_safe": true,
+        "model_checker_time_ms": 222.2592089965474,
+        "model_checker_errors": 0,
+        "full_pipeline_safe": true,
+        "full_pipeline_time_ms": 142.0136669985368,
+        "full_pipeline_predicates": 0,
+        "full_pipeline_iterations": 1,
+        "device_on_safe": true,
+        "device_on_time_ms": 198.67212499957532,
+        "device_on_violations": 0,
+        "device_off_safe": true,
+        "device_off_time_ms": 136.9364579950343,
+        "device_off_violations": 0
+      },
+      {
+        "name": "pt04_two_linears_mismatch",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.17558299441589043,
+        "shape_only_errors": 0,
+        "model_checker_safe": false,
+        "model_checker_time_ms": 31.637833002605475,
+        "model_checker_errors": 2,
+        "full_pipeline_safe": false,
+        "full_pipeline_time_ms": 81.59462500043446,
+        "full_pipeline_predicates": 1,
+        "full_pipeline_iterations": 2,
+        "device_on_safe": false,
+        "device_on_time_ms": 51.9686669940711,
+        "device_on_violations": 2,
+        "device_off_safe": false,
+        "device_off_time_ms": 96.27433299465338,
+        "device_off_violations": 2
+      },
+      {
+        "name": "pt05_reshape_correct",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.1657920001889579,
+        "shape_only_errors": 0,
+        "model_checker_safe": false,
+        "model_checker_time_ms": 144.41270799579797,
+        "model_checker_errors": 2,
+        "full_pipeline_safe": false,
+        "full_pipeline_time_ms": 79.62041599967051,
+        "full_pipeline_predicates": 0,
+        "full_pipeline_iterations": 1,
+        "device_on_safe": false,
+        "device_on_time_ms": 215.9082079961081,
+        "device_on_violations": 2,
+        "device_off_safe": false,
+        "device_off_time_ms": 138.58945799438516,
+        "device_off_violations": 2
+      },
+      {
+        "name": "pt06_reshape_wrong_total",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.1728329953039065,
+        "shape_only_errors": 0,
+        "model_checker_safe": false,
+        "model_checker_time_ms": 40.17087499960326,
+        "model_checker_errors": 2,
+        "full_pipeline_safe": false,
+        "full_pipeline_time_ms": 28.494124999269843,
+        "full_pipeline_predicates": 0,
+        "full_pipeline_iterations": 1,
+        "device_on_safe": false,
+        "device_on_time_ms": 48.259208000672515,
+        "device_on_violations": 2,
+        "device_off_safe": false,
+        "device_off_time_ms": 32.975500005704816,
+        "device_off_violations": 2
+      },
+      {
+        "name": "pt12_device_mismatch_add",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.16408299416070804,
+        "shape_only_errors": 0,
+        "model_checker_safe": false,
+        "model_checker_time_ms": 53.03137499868171,
+        "model_checker_errors": 2,
+        "full_pipeline_safe": false,
+        "full_pipeline_time_ms": 225.71270800108323,
+        "full_pipeline_predicates": 0,
+        "full_pipeline_iterations": 1,
+        "device_on_safe": false,
+        "device_on_time_ms": 161.92516699811677,
+        "device_on_violations": 2,
+        "device_off_safe": true,
+        "device_off_time_ms": 236.92441699677147,
+        "device_off_violations": 0
+      },
+      {
+        "name": "pt13_device_mismatch_matmul",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.3640409995568916,
+        "shape_only_errors": 0,
+        "model_checker_safe": false,
+        "model_checker_time_ms": 94.87983399594668,
+        "model_checker_errors": 2,
+        "full_pipeline_safe": true,
+        "full_pipeline_time_ms": 305.6216660042992,
+        "full_pipeline_predicates": 1,
+        "full_pipeline_iterations": 2,
+        "device_on_safe": false,
+        "device_on_time_ms": 66.83370799873956,
+        "device_on_violations": 2,
+        "device_off_safe": true,
+        "device_off_time_ms": 44.44225000042934,
+        "device_off_violations": 0
+      },
+      {
+        "name": "pt14_device_correct_both_cuda",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.17225000192411244,
+        "shape_only_errors": 0,
+        "model_checker_safe": true,
+        "model_checker_time_ms": 36.088624998228624,
+        "model_checker_errors": 0,
+        "full_pipeline_safe": true,
+        "full_pipeline_time_ms": 66.8956250010524,
+        "full_pipeline_predicates": 0,
+        "full_pipeline_iterations": 1,
+        "device_on_safe": true,
+        "device_on_time_ms": 151.24262499739416,
+        "device_on_violations": 0,
+        "device_off_safe": true,
+        "device_off_time_ms": 29.41970800020499,
+        "device_off_violations": 0
+      },
+      {
+        "name": "pt15_dropout_train_eval",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.18295799964107573,
+        "shape_only_errors": 0,
+        "model_checker_safe": true,
+        "model_checker_time_ms": 94.26612500101328,
+        "model_checker_errors": 0,
+        "full_pipeline_safe": true,
+        "full_pipeline_time_ms": 75.86312499915948,
+        "full_pipeline_predicates": 0,
+        "full_pipeline_iterations": 1,
+        "device_on_safe": true,
+        "device_on_time_ms": 41.826332999335136,
+        "device_on_violations": 0,
+        "device_off_safe": true,
+        "device_off_time_ms": 234.0586659993278,
+        "device_off_violations": 0
+      },
+      {
+        "name": "pt16_batchnorm_train_eval",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.3499999947962351,
+        "shape_only_errors": 0,
+        "model_checker_safe": true,
+        "model_checker_time_ms": 100.44383300555637,
+        "model_checker_errors": 0,
+        "full_pipeline_safe": true,
+        "full_pipeline_time_ms": 52.48258399660699,
+        "full_pipeline_predicates": 0,
+        "full_pipeline_iterations": 1,
+        "device_on_safe": true,
+        "device_on_time_ms": 17.626249995373655,
+        "device_on_violations": 0,
+        "device_off_safe": true,
+        "device_off_time_ms": 132.98129200120457,
+        "device_off_violations": 0
+      },
+      {
+        "name": "arch01_mlp_correct",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 1.2957500002812594,
+        "shape_only_errors": 0,
+        "model_checker_safe": true,
+        "model_checker_time_ms": 401.6285830002744,
+        "model_checker_errors": 0,
+        "full_pipeline_safe": true,
+        "full_pipeline_time_ms": 273.74595800210955,
+        "full_pipeline_predicates": 0,
+        "full_pipeline_iterations": 1,
+        "device_on_safe": true,
+        "device_on_time_ms": 127.89433299622033,
+        "device_on_violations": 0,
+        "device_off_safe": true,
+        "device_off_time_ms": 326.9648749992484,
+        "device_off_violations": 0
+      },
+      {
+        "name": "arch02_mlp_bug_wrong_dim",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.1638329995330423,
+        "shape_only_errors": 0,
+        "model_checker_safe": false,
+        "model_checker_time_ms": 101.17820899904473,
+        "model_checker_errors": 3,
+        "full_pipeline_safe": true,
+        "full_pipeline_time_ms": 38.129833999846596,
+        "full_pipeline_predicates": 2,
+        "full_pipeline_iterations": 1,
+        "device_on_safe": false,
+        "device_on_time_ms": 43.04558299918426,
+        "device_on_violations": 3,
+        "device_off_safe": false,
+        "device_off_time_ms": 94.85508299985668,
+        "device_off_violations": 3
+      },
+      {
+        "name": "arch03_cnn_resblock_correct",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.3766670051845722,
+        "shape_only_errors": 0,
+        "model_checker_safe": true,
+        "model_checker_time_ms": 466.8351660002372,
+        "model_checker_errors": 0,
+        "full_pipeline_safe": true,
+        "full_pipeline_time_ms": 400.47570900060236,
+        "full_pipeline_predicates": 0,
+        "full_pipeline_iterations": 1,
+        "device_on_safe": true,
+        "device_on_time_ms": 426.42687499755993,
+        "device_on_violations": 0,
+        "device_off_safe": true,
+        "device_off_time_ms": 441.557375001139,
+        "device_off_violations": 0
+      },
+      {
+        "name": "arch04_cnn_channel_bug",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.16274999507004395,
+        "shape_only_errors": 0,
+        "model_checker_safe": false,
+        "model_checker_time_ms": 160.86337500019,
+        "model_checker_errors": 2,
+        "full_pipeline_safe": true,
+        "full_pipeline_time_ms": 147.3820000028354,
+        "full_pipeline_predicates": 1,
+        "full_pipeline_iterations": 2,
+        "device_on_safe": false,
+        "device_on_time_ms": 139.0694580040872,
+        "device_on_violations": 2,
+        "device_off_safe": false,
+        "device_off_time_ms": 118.36941599904094,
+        "device_off_violations": 2
+      },
+      {
+        "name": "arch05_transformer_encoder_correct",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.29041599918855354,
+        "shape_only_errors": 0,
+        "model_checker_safe": true,
+        "model_checker_time_ms": 424.2027079963009,
+        "model_checker_errors": 0,
+        "full_pipeline_safe": true,
+        "full_pipeline_time_ms": 320.6429580022814,
+        "full_pipeline_predicates": 0,
+        "full_pipeline_iterations": 1,
+        "device_on_safe": true,
+        "device_on_time_ms": 616.7381670020404,
+        "device_on_violations": 0,
+        "device_off_safe": true,
+        "device_off_time_ms": 529.5932090011775,
+        "device_off_violations": 0
+      },
+      {
+        "name": "arch06_transformer_ffn_bug",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.31308300094679,
+        "shape_only_errors": 0,
+        "model_checker_safe": false,
+        "model_checker_time_ms": 81.10566600225866,
+        "model_checker_errors": 3,
+        "full_pipeline_safe": false,
+        "full_pipeline_time_ms": 191.97391699708533,
+        "full_pipeline_predicates": 1,
+        "full_pipeline_iterations": 1,
+        "device_on_safe": false,
+        "device_on_time_ms": 124.7030420054216,
+        "device_on_violations": 3,
+        "device_off_safe": false,
+        "device_off_time_ms": 154.77054200164275,
+        "device_off_violations": 3
+      },
+      {
+        "name": "arch14_device_mismatch_model",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.1534160037408583,
+        "shape_only_errors": 0,
+        "model_checker_safe": false,
+        "model_checker_time_ms": 174.20720800146228,
+        "model_checker_errors": 2,
+        "full_pipeline_safe": true,
+        "full_pipeline_time_ms": 199.3843750024098,
+        "full_pipeline_predicates": 1,
+        "full_pipeline_iterations": 2,
+        "device_on_safe": false,
+        "device_on_time_ms": 98.74512499663979,
+        "device_on_violations": 2,
+        "device_off_safe": true,
+        "device_off_time_ms": 67.00008400366642,
+        "device_off_violations": 0
+      },
+      {
+        "name": "arch15_device_correct_cpu",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.1519170036772266,
+        "shape_only_errors": 0,
+        "model_checker_safe": true,
+        "model_checker_time_ms": 38.17108400107827,
+        "model_checker_errors": 0,
+        "full_pipeline_safe": true,
+        "full_pipeline_time_ms": 56.091834005201235,
+        "full_pipeline_predicates": 0,
+        "full_pipeline_iterations": 1,
+        "device_on_safe": true,
+        "device_on_time_ms": 34.29804200277431,
+        "device_on_violations": 0,
+        "device_off_safe": true,
+        "device_off_time_ms": 46.29020800348371,
+        "device_off_violations": 0
+      },
+      {
+        "name": "cegar01_discover_single_dim",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.12395800149533898,
+        "shape_only_errors": 0,
+        "model_checker_safe": false,
+        "model_checker_time_ms": 62.81383300665766,
+        "model_checker_errors": 1,
+        "full_pipeline_safe": true,
+        "full_pipeline_time_ms": 175.58120900503127,
+        "full_pipeline_predicates": 1,
+        "full_pipeline_iterations": 2,
+        "device_on_safe": false,
+        "device_on_time_ms": 63.596375002816785,
+        "device_on_violations": 1,
+        "device_off_safe": false,
+        "device_off_time_ms": 97.5498339976184,
+        "device_off_violations": 1
+      },
+      {
+        "name": "cegar02_discover_chain_dims",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.15229100245051086,
+        "shape_only_errors": 0,
+        "model_checker_safe": false,
+        "model_checker_time_ms": 58.54916699900059,
+        "model_checker_errors": 1,
+        "full_pipeline_safe": true,
+        "full_pipeline_time_ms": 151.87908399821026,
+        "full_pipeline_predicates": 1,
+        "full_pipeline_iterations": 2,
+        "device_on_safe": false,
+        "device_on_time_ms": 34.00191599939717,
+        "device_on_violations": 1,
+        "device_off_safe": false,
+        "device_off_time_ms": 81.31304099515546,
+        "device_off_violations": 1
+      },
+      {
+        "name": "cegar03_discover_with_relu",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.16437500016763806,
+        "shape_only_errors": 0,
+        "model_checker_safe": false,
+        "model_checker_time_ms": 75.03733400517376,
+        "model_checker_errors": 1,
+        "full_pipeline_safe": true,
+        "full_pipeline_time_ms": 188.09808299556607,
+        "full_pipeline_predicates": 1,
+        "full_pipeline_iterations": 2,
+        "device_on_safe": false,
+        "device_on_time_ms": 144.5360419966164,
+        "device_on_violations": 1,
+        "device_off_safe": false,
+        "device_off_time_ms": 52.928459001122974,
+        "device_off_violations": 1
+      },
+      {
+        "name": "cegar04_real_bug_not_spurious",
+        "shape_only_safe": true,
+        "shape_only_time_ms": 0.1589579987921752,
+        "shape_only_errors": 0,
+        "model_checker_safe": false,
+        "model_checker_time_ms": 102.69520799920429,
+        "model_checker_errors": 2,
+        "full_pipeline_safe": false,
+        "full_pipeline_time_ms": 180.44370799907483,
+        "full_pipeline_predicates": 1,
+        "full_pipeline_iterations": 2,
+        "device_on_safe": false,
+        "device_on_time_ms": 161.78054100601003,
+        "device_on_violations": 2,
+        "device_off_safe": false,
+        "device_off_time_ms": 197.83058400207665,
+        "device_off_violations": 2
+      }
+    ],
+    "aggregate": {
+      "shape_only_avg_time_ms": 0.2973077821282103,
+      "model_checker_avg_time_ms": 136.2223840434403,
+      "full_pipeline_avg_time_ms": 153.23465947870358,
+      "cegar_avg_predicates": 0.4782608695652174,
+      "device_tracking_differs": 3
+    }
+  }
+}

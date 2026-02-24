@@ -1,0 +1,97 @@
+{
+  "project": "LITMUS∞",
+  "triage_category": "B",
+  "triage_reason": "Not Deep/Rigorous/Complete Enough",
+  "key_critique": "10/39 DSL cross-validation mismatches (25.6% failure rate) acknowledged but not statistically analyzed — since resolved to 39/39. Remaining gaps: litmus test generation is enumerative not deductive, 96-snippet benchmark lacks power analysis, theorems are paper proofs.",
+  "improvements": [
+    {
+      "id": "smt-synthesis",
+      "title": "SMT-Based Litmus Test Synthesis from Scratch",
+      "description": "Extend generate_discriminating_litmus_test() to actually SYNTHESIZE new litmus tests via Z3 constraint solving, not just filter existing patterns.",
+      "impact": "Addresses critique #3 (enumerative not deductive).",
+      "files_modified": ["litmus_inf/smt_validation.py", "litmus_inf/paper.tex"],
+      "status": "completed"
+    },
+    {
+      "id": "statistical-power",
+      "title": "Statistical Power Analysis and Sample Size Justification",
+      "description": "Add formal statistical power analysis with Clopper-Pearson exact CIs.",
+      "impact": "Addresses critique #4 (96 snippets too small).",
+      "files_modified": ["litmus_inf/statistical_analysis.py", "litmus_inf/paper.tex"],
+      "status": "completed"
+    },
+    {
+      "id": "mechanization-status",
+      "title": "Honest Mechanization Status and Theorem Strengthening",
+      "description": "Remark documenting paper proofs status; 228/228 as soundness witness.",
+      "impact": "Addresses critique #7 (paper proofs not mechanized) honestly.",
+      "files_modified": ["litmus_inf/paper.tex"],
+      "status": "completed"
+    },
+    {
+      "id": "cpp-atomics-fix",
+      "title": "Fix C++ Atomics Accuracy (9% → 100%)",
+      "description": "Fixed AST parser double-emission bug: expression_statement and call_expression/assignment_expression both emitted ops for `r0 = x.load(...)`. Added semantic analysis for C11 atomics, GCC builtins, and kernel macros (smp_store_release, READ_ONCE, WRITE_ONCE, __sync_synchronize).",
+      "impact": "C++ atomics exact-match went from 1/11 (9%) to 11/11 (100%). Overall exact-match improved from 81.2% to 92.7%.",
+      "files_modified": ["litmus_inf/ast_analyzer.py"],
+      "status": "completed"
+    },
+    {
+      "id": "build-integration",
+      "title": "Build System Integration (pip + CLI + GitHub Action)",
+      "description": "Created litmus-check CLI with `litmus-check --target arm src/` workflow. Updated setup.py with entry point. Created .github/workflows/litmus-check.yml GitHub Action.",
+      "impact": "Provides pip-installable package with single-command workflow and CI integration.",
+      "files_modified": ["litmus_inf/litmus_check.py", "litmus_inf/setup.py", "litmus_inf/.github/workflows/litmus-check.yml"],
+      "status": "completed"
+    },
+    {
+      "id": "theorem-fixes",
+      "title": "Fix Theorems 1 and 3",
+      "description": "Added RF×CO decomposition lemma (Lemma 1) completing Theorem 1's proof. Weakened Theorem 3 from biconditional (iff) to sufficient condition (if), with explicit note about converse failure outside 2-scope model.",
+      "impact": "Makes all three paper theorems logically sound.",
+      "files_modified": ["litmus_inf/paper.tex"],
+      "status": "completed"
+    },
+    {
+      "id": "gpu-smt-scoping",
+      "title": "Scope Formal Claims to CPU-Only",
+      "description": "Added Remark 5 (GPU formal validation scope) explicitly noting GPU models have zero SMT backing. Updated 228/228 framing throughout as 'internal consistency (CPU-only)'. Reframed all formal claims to CPU-only.",
+      "impact": "Honestly addresses the GPU SMT validation gap.",
+      "files_modified": ["litmus_inf/paper.tex", "grounding.json"],
+      "status": "completed"
+    },
+    {
+      "id": "real-code-eval",
+      "title": "Evaluate on Real Code (3 Projects)",
+      "description": "Added 15 benchmark snippets with documented provenance from Linux kernel (5), Facebook Folly (5), and LLVM/libc++ (5). Achieves 93.3% exact-match on real-code category. Added kernel macro recognition (smp_store_release, READ_ONCE, __sync_synchronize, etc.).",
+      "impact": "Demonstrates tool works on real code from major open-source projects, not just curated fragments.",
+      "files_modified": ["litmus_inf/benchmark_suite.py", "litmus_inf/ast_analyzer.py"],
+      "status": "completed"
+    },
+    {
+      "id": "differential-fix",
+      "title": "Fix Inflated Differential Test Count",
+      "description": "Separated 498 meaningful semantic checks (monotonicity, fence soundness, custom model, round-trip) from 2,280 trivial determinism checks in paper and documentation.",
+      "impact": "Honest reporting of meaningful validation depth.",
+      "files_modified": ["litmus_inf/paper.tex", "grounding.json", "litmus_inf/API.md"],
+      "status": "completed"
+    },
+    {
+      "id": "fence-cost-grounding",
+      "title": "Ground Fence Costs Honestly",
+      "description": "Reframed fence costs as 'analytical weight reductions' not 'performance improvements'. Added explicit disclaimer in paper that these are static cost-model estimates, not empirical speedups.",
+      "impact": "Removes ungrounded performance improvement claims.",
+      "files_modified": ["litmus_inf/paper.tex", "grounding.json"],
+      "status": "completed"
+    },
+    {
+      "id": "228-reframing",
+      "title": "Reframe 228/228 as Internal Consistency",
+      "description": "Changed all references from '228/228 SMT cross-validation' to '228/228 SMT internal consistency' with note that both encodings are by same authors against same specification.",
+      "impact": "Honest framing of validation methodology.",
+      "files_modified": ["litmus_inf/paper.tex", "grounding.json", "litmus_inf/README.md"],
+      "status": "completed"
+    }
+  ],
+  "expected_outcome": "All improvements address the updated critiques: C++ atomics fixed (100%), build integration added, theorems corrected, GPU scoped to CPU-only, real-code evaluation on 3 projects, differential tests reported honestly, fence costs grounded, 228/228 reframed."
+}

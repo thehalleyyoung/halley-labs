@@ -1,0 +1,184 @@
+{
+  "description": "Grounding map: every quantitative claim is traced to its data source.",
+  "paper_version": "v7 (expanded FW validation, 20 seeds, ResNet MF, calibration, soundness theorem)",
+  "paper_file": "theory/tool_paper.tex",
+  "claims": [
+    {
+      "id": "variance-correction-v4-expanded",
+      "claim": "O(1/N)+O(1/N^2) corrections validated across 358 configurations: 4 activations x 3 depths x 8 sigma_w x 5 widths. 1.1-6.4x improvement in ordered/critical regime.",
+      "data_source": "experiments/data/exp_v4_variance.json",
+      "code": "experiments/run_v4_experiments.py",
+      "verification": "80 Monte Carlo trials per config. Covers relu, tanh, gelu, silu; depths 5,10,20; widths 32-2048."
+    },
+    {
+      "id": "variance-correction-v3",
+      "claim": "O(1/N)+O(1/N^2) corrections reduce variance error: 3.7%->1.1% at W=32, 3.0%->1.5% at W=64, 1.0%->0.7% at W=128",
+      "data_source": "experiments/data/exp_v3_variance.json",
+      "code": "experiments/run_v3_experiments.py",
+      "verification": "80 Monte Carlo trials per width, depth=5, sigma_w=1.35, ReLU"
+    },
+    {
+      "id": "classification-v4-20seeds",
+      "claim": "Phase classification with >=20 seeds per sigma_w across 4 activations. ReLU: 0 dangerous errors. tanh/gelu: 0 dangerous errors. SiLU: 1 boundary-adjacent dangerous error at sw=1.943 (sw*=1.993). All non-SiLU errors are boundary type.",
+      "data_source": "experiments/data/exp_v4_classification.json",
+      "code": "experiments/run_v4_experiments.py",
+      "verification": "20 seeds per sigma_w value, failure taxonomy (conservative/boundary/dangerous), adaptive sampling."
+    },
+    {
+      "id": "classification-3class-83pct",
+      "claim": "Three-class phase classification achieves 83.3% at D=10 W=512 (up from 56% baseline)",
+      "data_source": "experiments/data/exp_v3_classification.json",
+      "code": "experiments/run_v3_experiments.py",
+      "verification": "18 sigma_w values x 5 seeds per point. Superseded by v4 with 20 seeds."
+    },
+    {
+      "id": "perturbative-convergence-radius",
+      "claim": "Perturbative expansion converges when L*|chi_1-1|*D/N << 1. Diverges in deep chaotic regime (chi_1 >> 1) as expected.",
+      "data_source": "experiments/data/exp_v4_variance.json",
+      "code": "implementation/tests/test_path_b.py::TestPerturbativeConvergence",
+      "verification": "Correction ratio < 0.5 enforced by clamping. Soundness Theorem 4 in paper."
+    },
+    {
+      "id": "resnet-mean-field",
+      "claim": "ResNet variance recursion: q^{l+1} = q^l + 2a*sw^2*C(q^l) + a^2*(sw^2*V(q^l) + sb^2) where C(q) = E[z*phi(z)]. ResNet chi_1 > 1 for all alpha > 0.",
+      "data_source": "implementation/src/resnet_mean_field.py",
+      "code": "implementation/tests/test_path_b.py::TestResNetMeanField",
+      "verification": "11 unit tests covering cross-covariance, chi_1, phase comparison, depth improvement, small alpha convergence."
+    },
+    {
+      "id": "calibration-diagnostics",
+      "claim": "Calibration diagnostics: ECE, MCE, ACE, Brier score decomposition, reliability diagrams for Bayesian phase posteriors.",
+      "data_source": "implementation/src/calibration_diagnostics.py",
+      "code": "implementation/tests/test_path_b.py::TestCalibrationDiagnostics",
+      "verification": "8 unit tests covering perfect/random calibration, ECE bounds, multiclass report, Brier decomposition."
+    },
+    {
+      "id": "soundness-theorem",
+      "claim": "Formal soundness theorem (Theorem 4): mean-field convergence, finite-width correction order, phase classification well-definedness, convergence radius condition.",
+      "data_source": "theory/tool_paper.tex",
+      "code": "implementation/tests/test_path_b.py::TestSoundnessComponents",
+      "verification": "3 unit tests for convergence, correction scaling, and chi_1 continuity. Assumptions A1-A4 explicitly listed."
+    },
+    {
+      "id": "relu-closed-form",
+      "claim": "ReLU closed-form verification: kappa=0.5, sw*=sqrt(2), chi_2=0, E[relu^4]=3q^2/8, E[relu^6]=15q^3/48, E[phi_prime^2]=1/2.",
+      "data_source": "implementation/tests/test_path_b.py::TestReLUClosedForm",
+      "code": "experiments/run_v4_experiments.py::run_math_rigor_v4",
+      "verification": "8 unit tests, all exact to 6+ decimal places."
+    },
+    {
+      "id": "chi2-relu-degenerate",
+      "claim": "ReLU chi_2=0 (degenerate bifurcation, relu double-prime = 0 a.e.)",
+      "data_source": "experiments/data/exp_v3_chi2_lyapunov.json",
+      "verification": "Analytical: ReLU is piecewise linear, second derivative is zero"
+    },
+    {
+      "id": "chi2-tanh-supercritical",
+      "claim": "tanh chi_2=0.0385 (supercritical bifurcation)",
+      "data_source": "experiments/data/exp_v3_chi2_lyapunov.json",
+      "verification": "Numerical integration E[tanh_double_prime(z)^2] via scipy.integrate.quad"
+    },
+    {
+      "id": "chi2-gelu-supercritical",
+      "claim": "GELU chi_2=9.622 (supercritical bifurcation)",
+      "data_source": "experiments/data/exp_v3_chi2_lyapunov.json"
+    },
+    {
+      "id": "chi2-silu-supercritical",
+      "claim": "SiLU chi_2=3.902 (supercritical bifurcation)",
+      "data_source": "experiments/data/exp_v3_chi2_lyapunov.json"
+    },
+    {
+      "id": "init-comparison-critical-vs-xavier",
+      "claim": "Critical/He init outperforms Xavier by 1.4-2.1x on regression tasks",
+      "data_source": "experiments/data/exp_v3_init_comparison.json",
+      "code": "experiments/run_v3_experiments.py",
+      "verification": "5 seeds x 2 widths x 2 depths, 300 SGD steps"
+    },
+    {
+      "id": "phase-boundary-ci-relu",
+      "claim": "ReLU sw*=1.414 with CI narrowing from [1.17, 1.63] at W=128 to [1.35, 1.47] at W=2048",
+      "data_source": "experiments/data/exp_v3_phase_boundary.json",
+      "code": "experiments/run_v3_experiments.py",
+      "verification": "Bootstrap over O(1/sqrt(N)) chi_1 fluctuations, 100 samples per width"
+    },
+    {
+      "id": "phase-boundary-ci-tanh",
+      "claim": "tanh sw*=1.010 with CI narrowing from [0.83, 1.93] at W=128 to [0.96, 1.31] at W=2048",
+      "data_source": "experiments/data/exp_v3_phase_boundary.json"
+    },
+    {
+      "id": "edge-of-chaos-relu",
+      "claim": "ReLU edge-of-chaos: sw* = sqrt(2) ~ 1.414",
+      "verification": "Closed-form: chi_1 = sw^2/2, set to 1 gives sw = sqrt(2)"
+    },
+    {
+      "id": "edge-of-chaos-tanh",
+      "claim": "tanh edge-of-chaos: sw* = 1.010",
+      "verification": "Brent method + scipy.integrate.quad, tolerance 1e-8"
+    },
+    {
+      "id": "edge-of-chaos-gelu",
+      "claim": "GELU edge-of-chaos: sw* = 1.982",
+      "verification": "Brent method + scipy.integrate.quad, tolerance 1e-8"
+    },
+    {
+      "id": "edge-of-chaos-silu",
+      "claim": "SiLU edge-of-chaos: sw* = 1.993",
+      "verification": "Brent method + scipy.integrate.quad, tolerance 1e-8"
+    },
+    {
+      "id": "kurtosis-relu",
+      "claim": "ReLU kurtosis excess kappa = 0.5",
+      "verification": "Analytical: E[ReLU^4] = 3q^2/8, E[ReLU^2] = q/2, kappa = 3/2 - 1 = 0.5"
+    },
+    {
+      "id": "binary-trainability",
+      "claim": "Binary trainability prediction achieves 100% accuracy",
+      "data_source": "experiments/data/exp_real_phase_validation.json",
+      "verification": "27 runs: 5-layer ReLU MLPs at 9 sw values, 3 seeds"
+    },
+    {
+      "id": "test-suite",
+      "claim": "55 unit tests passing, covering ResNet MF, calibration, expanded MF, ReLU closed-form, perturbative convergence, soundness, chi_2 bifurcation.",
+      "data_source": "implementation/tests/test_path_b.py",
+      "verification": "pytest run: 55 passed in 773.67s"
+    },
+    {
+      "id": "chi3-bifurcation",
+      "claim": "Third-order susceptibility chi_3 computed for all activations: ReLU chi_3=0.0000 (degenerate), tanh chi_3=0.0039, GELU chi_3<0.001, SiLU chi_3<0.001. Confirms chi_2 suffices for normal form classification.",
+      "code": "implementation/src/mean_field_theory.py::ActivationVarianceMaps.get_chi_3",
+      "verification": "Numerical integration via scipy.integrate.quad at edge-of-chaos q*. For smooth activations, chi_3 << chi_2, confirming supercritical classification."
+    },
+    {
+      "id": "truncation-bounds",
+      "claim": "Formal O(1/N^3) truncation error bounds: |R_3| <= sigma_w^8 * M_8(q) / N^3. ReLU@W=64: |R_3|<=5.1e-2, tanh@W=64: |R_3|<=3.7e-4.",
+      "code": "implementation/src/mean_field_theory.py::ActivationVarianceMaps.truncation_bound",
+      "verification": "Bound computed from eighth moment E[phi^8] via analytical (ReLU) or numerical (others) integration."
+    },
+    {
+      "id": "conv2d-mean-field",
+      "claim": "Conv2d mean-field recursion identical to MLP (Xiao et al. 2018). Finite-width corrections scale as O(1/C_out). Phase diagram generation for CNN architectures.",
+      "code": "implementation/src/conv_mean_field.py",
+      "verification": "5-layer Conv(64,3x3,ReLU) at sigma_w=sqrt(2) gives chi_1=1.000 (critical). Phase diagram matches MLP predictions."
+    },
+    {
+      "id": "resnet-formula-consistency",
+      "claim": "ResNet variance recursion q^{l+1} = q^l + 2α·σ_w²·C(q^l) + α²(σ_w²·V(q^l) + σ_b²) is consistent between abstract, Section 1 contribution (v), Section 7, and implementation.",
+      "code": "implementation/src/resnet_mean_field.py::ResNetMeanField.resnet_variance_map",
+      "verification": "All four locations use the same formula after fix. Cross-checked with Yang & Schoenholz 2017."
+    },
+    {
+      "id": "z3-scope-clarification",
+      "claim": "Z3 SMT proofs cover ReLU algebraic identities (P1-P7) only. Theorem 4 (soundness) is not mechanically verified. P5 is a tautology noted for completeness.",
+      "data_source": "theory/tool_paper.tex Section 9",
+      "verification": "Paper now explicitly states scope: 'Z3 proofs cover ReLU-specific algebraic identities, not the full soundness theorem.'"
+    },
+    {
+      "id": "bayesian-epsilon-justification",
+      "claim": "Critical window epsilon(N,phi) = c_phi * ln(D)/D with activation-specific scaling (c_relu=1.0, c_tanh=1.2, c_gelu=c_silu=1.8). Justification: chi_1^L requires |chi_1 - 1| ~ ln(L)/L for bounded gradient accumulation.",
+      "code": "implementation/src/mean_field_theory.py::MeanFieldAnalyzer._classify_phase_calibrated",
+      "verification": "Activation-specific constants calibrated against empirical phase boundaries in v4 experiments."
+    }
+  ]
+}

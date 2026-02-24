@@ -1,0 +1,233 @@
+{
+  "experiment": "contract_discovery",
+  "date": "2026-02-24 03:46:03",
+  "num_test_cases": 8,
+  "predicate_quality_threshold": 0.25,
+  "summary": {
+    "models_tested": 8,
+    "correct_verdicts": 8,
+    "proven_safe": 7,
+    "bugs_found": 1,
+    "total_predicates_discovered": 8,
+    "total_contracts_inferred": 8,
+    "total_cegar_iterations": 16,
+    "total_time_ms": 2499.76
+  },
+  "per_model": [
+    {
+      "name": "mlp_symbolic_features",
+      "description": "nn.Linear(768, 256): input has symbolic 'features' dim. CEGAR should discover features==768.",
+      "has_bug": false,
+      "status": "SAFE",
+      "iterations": 2,
+      "predicates_discovered": [
+        "x.shape[-1] == 768"
+      ],
+      "num_predicates": 1,
+      "contracts_inferred": [
+        "SimpleMLP.forward(x): requires [x.shape[-1] == 768]"
+      ],
+      "num_contracts": 1,
+      "real_bugs_found": 0,
+      "expected_predicates": [
+        "x.shape[-1] == 768"
+      ],
+      "time_ms": 150.99,
+      "predicate_quality_report": {
+        "accepted": 1,
+        "rejected": 0,
+        "avg_quality": 0.6081512651675857,
+        "rejected_details": []
+      }
+    },
+    {
+      "name": "cnn_symbolic_channels",
+      "description": "nn.Conv2d(3, 64, 3): input has symbolic 'channels' dim. CEGAR should discover channels==3.",
+      "has_bug": false,
+      "status": "SAFE",
+      "iterations": 2,
+      "predicates_discovered": [
+        "x.shape[1] == 3"
+      ],
+      "num_predicates": 1,
+      "contracts_inferred": [
+        "SimpleCNN.forward(x): requires [x.shape[1] == 3]"
+      ],
+      "num_contracts": 1,
+      "real_bugs_found": 0,
+      "expected_predicates": [
+        "x.shape[1] == 3"
+      ],
+      "time_ms": 142.14,
+      "predicate_quality_report": {
+        "accepted": 1,
+        "rejected": 0,
+        "avg_quality": 0.6081512651675857,
+        "rejected_details": []
+      }
+    },
+    {
+      "name": "transformer_symbolic_embed",
+      "description": "Transformer projections with in_features=512. CEGAR should discover embed_dim==512.",
+      "has_bug": false,
+      "status": "SAFE",
+      "iterations": 2,
+      "predicates_discovered": [
+        "x.shape[-1] == 512"
+      ],
+      "num_predicates": 1,
+      "contracts_inferred": [
+        "TransformerEncoder.forward(x): requires [x.shape[-1] == 512]"
+      ],
+      "num_contracts": 1,
+      "real_bugs_found": 0,
+      "expected_predicates": [
+        "x.shape[-1] == 512"
+      ],
+      "time_ms": 230.06,
+      "predicate_quality_report": {
+        "accepted": 1,
+        "rejected": 0,
+        "avg_quality": 0.6407442995073612,
+        "rejected_details": []
+      }
+    },
+    {
+      "name": "multilayer_mlp_symbolic",
+      "description": "3-layer MLP (784->256->128->10) with symbolic input. CEGAR should discover features==784.",
+      "has_bug": false,
+      "status": "SAFE",
+      "iterations": 2,
+      "predicates_discovered": [
+        "x.shape[-1] == 784"
+      ],
+      "num_predicates": 1,
+      "contracts_inferred": [
+        "DeepMLP.forward(x): requires [x.shape[-1] == 784]"
+      ],
+      "num_contracts": 1,
+      "real_bugs_found": 0,
+      "expected_predicates": [
+        "x.shape[-1] == 784"
+      ],
+      "time_ms": 173.99,
+      "predicate_quality_report": {
+        "accepted": 1,
+        "rejected": 0,
+        "avg_quality": 0.4826501122951353,
+        "rejected_details": []
+      }
+    },
+    {
+      "name": "resnet_symbolic_channels",
+      "description": "ResNet-style block with Conv2d(64, 64, 3). CEGAR should discover in_channels==64.",
+      "has_bug": false,
+      "status": "SAFE",
+      "iterations": 2,
+      "predicates_discovered": [
+        "x.shape[1] == 64"
+      ],
+      "num_predicates": 1,
+      "contracts_inferred": [
+        "ResNetBlock.forward(x): requires [x.shape[1] == 64]"
+      ],
+      "num_contracts": 1,
+      "real_bugs_found": 0,
+      "expected_predicates": [
+        "x.shape[1] == 64"
+      ],
+      "time_ms": 438.16,
+      "predicate_quality_report": {
+        "accepted": 1,
+        "rejected": 0,
+        "avg_quality": 0.6407442995073612,
+        "rejected_details": []
+      }
+    },
+    {
+      "name": "autoencoder_symbolic",
+      "description": "Autoencoder (784->256->64->256->784) with symbolic input. CEGAR should discover features==784.",
+      "has_bug": false,
+      "status": "SAFE",
+      "iterations": 2,
+      "predicates_discovered": [
+        "x.shape[-1] == 784"
+      ],
+      "num_predicates": 1,
+      "contracts_inferred": [
+        "Autoencoder.forward(x): requires [x.shape[-1] == 784]"
+      ],
+      "num_contracts": 1,
+      "real_bugs_found": 0,
+      "expected_predicates": [
+        "x.shape[-1] == 784"
+      ],
+      "time_ms": 671.97,
+      "predicate_quality_report": {
+        "accepted": 1,
+        "rejected": 0,
+        "avg_quality": 0.4826501122951353,
+        "rejected_details": []
+      }
+    },
+    {
+      "name": "buggy_mlp_symbolic",
+      "description": "MLP with symbolic input AND a real bug: fc1 outputs 256 but fc2 expects 128. CEGAR should find the bug AND discover input contracts.",
+      "has_bug": true,
+      "status": "REAL_BUG_FOUND",
+      "iterations": 2,
+      "predicates_discovered": [
+        "x.shape[-1] == 768"
+      ],
+      "num_predicates": 1,
+      "contracts_inferred": [
+        "BuggyMLP.forward(x): requires [x.shape[-1] == 768]"
+      ],
+      "num_contracts": 1,
+      "real_bugs_found": 2,
+      "expected_predicates": [],
+      "time_ms": 282.61,
+      "predicate_quality_report": {
+        "accepted": 1,
+        "rejected": 2,
+        "avg_quality": 0.6244477823374734,
+        "rejected_details": [
+          {
+            "predicate": "x.shape[-1] == 128",
+            "score": 0.0
+          },
+          {
+            "predicate": "x.shape[-1] == 128",
+            "score": 0.0
+          }
+        ]
+      }
+    },
+    {
+      "name": "wide_net_symbolic",
+      "description": "Wide network (1024->512->256->128) with symbolic input. CEGAR should discover all contracts and prove safe.",
+      "has_bug": false,
+      "status": "SAFE",
+      "iterations": 2,
+      "predicates_discovered": [
+        "x.shape[-1] == 1024"
+      ],
+      "num_predicates": 1,
+      "contracts_inferred": [
+        "WideNet.forward(x): requires [x.shape[-1] == 1024]"
+      ],
+      "num_contracts": 1,
+      "real_bugs_found": 0,
+      "expected_predicates": [
+        "x.shape[-1] == 1024"
+      ],
+      "time_ms": 409.84,
+      "predicate_quality_report": {
+        "accepted": 1,
+        "rejected": 0,
+        "avg_quality": 0.6407442995073612,
+        "rejected_details": []
+      }
+    }
+  ]
+}

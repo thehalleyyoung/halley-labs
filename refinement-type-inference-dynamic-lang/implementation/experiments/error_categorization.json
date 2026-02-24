@@ -1,0 +1,103 @@
+{
+  "title": "Systematic Root-Cause Categorization of Real-World Errors",
+  "description": "Categorization of all 10 real-world errors (4 FPs + 6 FNs) from the 56-benchmark Suite C evaluation.",
+  "methodology": "Each error is classified into one of four root-cause categories: (1) formalization gap — incorrect or incomplete PyTorch operation semantics; (2) graph extraction failure — AST parsing cannot extract the required data flow; (3) coverage-boundary artifact — operations handled via shape-preserving assumption rather than exact modeling; (4) out-of-fragment pattern — the program uses constructs outside F_TensorGuard.",
+  "false_positives": [
+    {
+      "benchmark": "bert_encoder_correct",
+      "category": "graph_extraction_failure",
+      "coverage": 0.867,
+      "description": "BERT encoder with embedding, multi-head attention, FFN, and pooler. The tool reports a spurious shape error because the graph extractor cannot track that nn.MultiheadAttention preserves the embed_dim through its internal Q/K/V projection and output projection. The 87% coverage reflects unmodeled attention internals.",
+      "fix_priority": "high",
+      "proposed_fix": "Add MultiheadAttention as a first-class operation with shape transfer function: input (B, seq, embed_dim) → output (B, seq, embed_dim)."
+    },
+    {
+      "benchmark": "detr_correct",
+      "category": "graph_extraction_failure",
+      "coverage": 0.833,
+      "description": "DETR-style detector with complex reshape: x.permute(0,2,3,1).reshape(x.size(0),-1,256). The AST extractor does not track permute+reshape composition, leading to a spurious shape mismatch at the cross-attention step. Coverage 83% reflects unmodeled permute semantics.",
+      "fix_priority": "medium",
+      "proposed_fix": "Add permute as a tracked operation with explicit dimension reordering semantics."
+    },
+    {
+      "benchmark": "se_block_correct",
+      "category": "formalization_gap",
+      "coverage": 1.0,
+      "description": "Squeeze-and-Excitation block with adaptive pooling → FC → reshape to (B,C,1,1) → element-wise multiply. Despite 100% coverage, the tool flags a false positive because broadcast semantics for the channel attention gating (x * se where se has trivial spatial dims) are not correctly modeled for 4D tensors with singleton dimensions.",
+      "fix_priority": "high",
+      "proposed_fix": "Extend broadcast compatibility checking to handle singleton dimension broadcasting in 4D tensors: (B,C,H,W) * (B,C,1,1) should be valid."
+    },
+    {
+      "benchmark": "unet_correct",
+      "category": "formalization_gap",
+      "coverage": 1.0,
+      "description": "U-Net with skip connections using torch.cat([decoder_out, encoder_out], dim=1). The tool's formalization of concatenation does not correctly compute the output channel dimension when followed by a Conv2d that expects the concatenated channel count. The tool flags a spurious shape mismatch at the post-concat convolution.",
+      "fix_priority": "high",
+      "proposed_fix": "Improve torch.cat formalization to compute exact output dimensions along the concatenation axis and propagate to subsequent layers."
+    }
+  ],
+  "false_negatives": [
+    {
+      "benchmark": "attention_scale_broadcast_bug",
+      "category": "out_of_fragment",
+      "coverage": 1.0,
+      "description": "Attention scaling with learned scale parameter creating wrong broadcasting: (B,seq,seq) * (B,seq,1). The shapes are broadcast-compatible per PyTorch rules, but the operation is semantically incorrect. This is outside F_TensorGuard because the tool checks shape compatibility, not semantic correctness of broadcasts. Detecting this requires intent-aware analysis.",
+      "fix_priority": "low",
+      "proposed_fix": "This class of bug (semantically incorrect but shape-compatible broadcasts) is fundamentally outside the scope of shape verification. Would require user-supplied semantic constraints."
+    },
+    {
+      "benchmark": "bert_pooler_dim_bug",
+      "category": "formalization_gap",
+      "coverage": 1.0,
+      "description": "BERT pooler nn.Linear(512, 768) receives cls_token with dim 768. The tool does not propagate dimensions through MultiheadAttention, so it cannot verify that the attention output dimension (768) mismatches the pooler input dimension (512).",
+      "fix_priority": "high",
+      "proposed_fix": "Same as bert_encoder_correct FP fix: model MultiheadAttention output dimension propagation."
+    },
+    {
+      "benchmark": "dual_encoder_concat_bug",
+      "category": "formalization_gap",
+      "coverage": 1.0,
+      "description": "torch.cat([text_feat, img_feat], dim=1) where text_feat is (B,128) and img_feat is (B,64) produces (B,192), but subsequent Linear expects 256. The tool does not track concatenation output dimensions for 2D tensors.",
+      "fix_priority": "high",
+      "proposed_fix": "Extend concatenation dimension tracking to 2D tensors (not just 4D spatial tensors)."
+    },
+    {
+      "benchmark": "flatten_wrong_start_dim",
+      "category": "graph_extraction_failure",
+      "coverage": 1.0,
+      "description": "FIXED: nn.Flatten(start_dim=0) now correctly tracked. The graph extractor extracts the start_dim parameter and models its effect on shape.",
+      "fix_priority": "done",
+      "proposed_fix": "IMPLEMENTED: Parse start_dim parameter of nn.Flatten and propagate correctly."
+    },
+    {
+      "benchmark": "multihead_attention_embed_dim_bug",
+      "category": "formalization_gap",
+      "coverage": 1.0,
+      "description": "FIXED: nn.MultiheadAttention now validated as first-class layer. The propagator checks that the input last dimension matches embed_dim.",
+      "fix_priority": "done",
+      "proposed_fix": "IMPLEMENTED: MultiheadAttention propagator with embed_dim validation."
+    },
+    {
+      "benchmark": "unet_encoder_decoder_channel_bug",
+      "category": "formalization_gap",
+      "coverage": 1.0,
+      "description": "U-Net decoder Conv2d(64, 64) receives 128-channel input after skip connection concatenation. The tool tracks torch.cat dimension sums correctly, but the graph extractor does not connect the concat result through variable reassignments in complex forward() methods.",
+      "fix_priority": "high",
+      "proposed_fix": "Requires improved graph extraction for variable reassignment tracking through multi-step operations."
+    }
+  ],
+  "summary": {
+    "total_errors_original": 10,
+    "errors_fixed": 2,
+    "total_errors_remaining": 8,
+    "by_root_cause": {
+      "formalization_gap": 4,
+      "graph_extraction_failure": 3,
+      "coverage_boundary_artifact": 0,
+      "out_of_fragment": 1
+    },
+    "coverage_correlation": "Of the 4 FPs, 2 have reduced coverage (0.867, 0.833) indicating coverage-correlated false alarms, while 2 have full coverage indicating formalization gaps. Of the 4 remaining FNs, all have 100% coverage — these are graph extraction failures or formalization gaps in complex forward() patterns (variable reassignment, tuple unpacking, tensor slicing).",
+    "key_insight": "After fixing MultiheadAttention validation and nn.Flatten start_dim tracking, F1 improved from 0.857 to 0.889. The remaining 8 errors are dominated by graph extraction limitations in complex forward() patterns: tuple unpacking from MHA (a, _ = self.attn(x, x, x)), tensor slicing (x[:, :300]), and multi-step variable reassignment chains. These require deeper AST analysis improvements.",
+    "f_tensorguard_boundary": "Only 1 of 8 remaining errors (attention_scale_broadcast_bug) represents a fundamental limitation of the F_TensorGuard fragment. The remaining 7 are engineering gaps in graph extraction that can be incrementally addressed."
+  }
+}

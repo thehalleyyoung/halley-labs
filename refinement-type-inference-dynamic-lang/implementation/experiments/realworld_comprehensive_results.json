@@ -1,0 +1,276 @@
+{
+  "suite": "realworld_comprehensive",
+  "timestamp": "2026-02-24T04:45:30",
+  "correct_models": [
+    {
+      "name": "resnet_block",
+      "description": "Standard ResNet residual block with skip connection",
+      "tensorguard_safe": true,
+      "syntactic_safe": true,
+      "tensorguard_time_ms": 256.4501762390137,
+      "violations": [],
+      "cegar_iterations": 0,
+      "cegar_predicates": 0,
+      "z3_queries": 0,
+      "confidence": "Confidence.HIGH"
+    },
+    {
+      "name": "transformer_encoder_layer",
+      "description": "Standard Transformer encoder layer",
+      "tensorguard_safe": true,
+      "syntactic_safe": true,
+      "tensorguard_time_ms": 221.49991989135742,
+      "violations": [],
+      "cegar_iterations": 0,
+      "cegar_predicates": 0,
+      "z3_queries": 0,
+      "confidence": "Confidence.HIGH"
+    },
+    {
+      "name": "simple_vae_encoder",
+      "description": "VAE encoder with mu and logvar heads",
+      "tensorguard_safe": true,
+      "syntactic_safe": true,
+      "tensorguard_time_ms": 21.612882614135742,
+      "violations": [],
+      "cegar_iterations": 0,
+      "cegar_predicates": 0,
+      "z3_queries": 0,
+      "confidence": "Confidence.HIGH"
+    },
+    {
+      "name": "conv_classifier",
+      "description": "Simple CNN classifier (correct flatten)",
+      "tensorguard_safe": true,
+      "syntactic_safe": true,
+      "tensorguard_time_ms": 35.41994094848633,
+      "violations": [],
+      "cegar_iterations": 0,
+      "cegar_predicates": 0,
+      "z3_queries": 0,
+      "confidence": "Confidence.HIGH"
+    },
+    {
+      "name": "gated_linear_unit",
+      "description": "GLU module with correct split",
+      "tensorguard_safe": true,
+      "syntactic_safe": true,
+      "tensorguard_time_ms": 26.520729064941406,
+      "violations": [],
+      "cegar_iterations": 0,
+      "cegar_predicates": 0,
+      "z3_queries": 0,
+      "confidence": "Confidence.HIGH"
+    },
+    {
+      "name": "layer_norm_mlp",
+      "description": "MLP with LayerNorm (matching dims)",
+      "tensorguard_safe": true,
+      "syntactic_safe": true,
+      "tensorguard_time_ms": 48.58088493347168,
+      "violations": [],
+      "cegar_iterations": 0,
+      "cegar_predicates": 0,
+      "z3_queries": 0,
+      "confidence": "Confidence.HIGH"
+    },
+    {
+      "name": "se_block",
+      "description": "Squeeze-and-Excitation block (correct)",
+      "tensorguard_safe": true,
+      "syntactic_safe": true,
+      "tensorguard_time_ms": 309.13710594177246,
+      "violations": [],
+      "cegar_iterations": 0,
+      "cegar_predicates": 0,
+      "z3_queries": 0,
+      "confidence": "Confidence.HIGH"
+    }
+  ],
+  "buggy_models": [
+    {
+      "name": "mlp_dim_mismatch",
+      "description": "MLP with mismatched hidden dimensions (256 vs 128)",
+      "bug_type": "shape_mismatch",
+      "tensorguard_found": true,
+      "syntactic_found": true,
+      "tensorguard_time_ms": 129.69207763671875,
+      "violations": [
+        "SafetyViolation(kind='shape_incompatible', step_index=2, step=Step(LAYER_CALL, in=['h'], out=__ret_2, layer=fc2), message='Linear expects last dim=128, got 256', tensor_a='h', tensor_b=None, shape_a=TensorShape(dims=(batch, 256)), shape_b=None, device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)",
+        "SafetyViolation(kind='shape_incompatible', step_index=2, step=Step(LAYER_CALL, in=['h'], out=__ret_2, layer=fc2), message='Z3 violation (shape_incompatible) at step 2:\\n  grad___inner_1_s2 = True\\n  dev_x_s0 = CPU_15\\n  grad_x_s0 = False\\n  phase_s2 = TRAIN_15\\n  dev___inner_1_s2 = CPU_15\\n  dev___inner_1_s1 = CPU_15\\n  batch = 1\\n  phase_s1 = TRAIN_15\\n  phase_s0 = TRAIN_15\\n  grad___inner_1_s1 = True\\n  grad_x_s2 = False\\n  dev_h_s2 = CPU_15\\n  dev_x_s2 = CPU_15\\n  grad_h_s2 = False\\n  dev_x_s1 = CPU_15\\n  grad_x_s1 = False', tensor_a=None, tensor_b=None, shape_a=None, shape_b=None, device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)"
+      ],
+      "cegar_iterations": 0,
+      "cegar_predicates": 0,
+      "z3_queries": 0,
+      "confidence": "Confidence.HIGH"
+    },
+    {
+      "name": "residual_dim_mismatch",
+      "description": "Residual connection with shape mismatch from projection",
+      "bug_type": "shape_mismatch",
+      "tensorguard_found": true,
+      "syntactic_found": false,
+      "tensorguard_time_ms": 67.37112998962402,
+      "violations": [
+        "SafetyViolation(kind='shape_incompatible', step_index=2, step=Step(ADD, in=['x', 'h'], out=__binop_3, layer=None), message='Cannot broadcast (batch, 512) and (batch, 256)', tensor_a='x', tensor_b='h', shape_a=TensorShape(dims=(batch, 512)), shape_b=TensorShape(dims=(batch, 256)), device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)",
+        "SafetyViolation(kind='shape_incompatible', step_index=2, step=Step(ADD, in=['x', 'h'], out=__binop_3, layer=None), message='Z3 violation (shape_incompatible) at step 2:\\n  grad___inner_1_s2 = True\\n  dev_x_s0 = CPU_18\\n  grad_x_s0 = False\\n  phase_s2 = TRAIN_18\\n  dev___inner_1_s2 = CPU_18\\n  dev___inner_1_s1 = CPU_18\\n  phase_s1 = TRAIN_18\\n  batch = 1\\n  phase_s0 = TRAIN_18\\n  dev_x_s2 = CPU_18\\n  grad___inner_1_s1 = True\\n  grad_x_s2 = False\\n  dev_h_s2 = CPU_18\\n  grad_h_s2 = True\\n  dev_x_s1 = CPU_18\\n  grad_x_s1 = False', tensor_a=None, tensor_b=None, shape_a=None, shape_b=None, device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)"
+      ],
+      "cegar_iterations": 0,
+      "cegar_predicates": 0,
+      "z3_queries": 0,
+      "confidence": "Confidence.HIGH"
+    },
+    {
+      "name": "conv_channel_mismatch",
+      "description": "Conv2d chain with mismatched channels",
+      "bug_type": "shape_mismatch",
+      "tensorguard_found": true,
+      "syntactic_found": true,
+      "tensorguard_time_ms": 118.17598342895508,
+      "violations": [
+        "SafetyViolation(kind='shape_incompatible', step_index=2, step=Step(LAYER_CALL, in=['h'], out=__ret_2, layer=conv2), message='Conv2d expects 64 input channels, got 32', tensor_a='h', tensor_b=None, shape_a=TensorShape(dims=(batch, 32, 30, 30)), shape_b=None, device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)",
+        "SafetyViolation(kind='shape_incompatible', step_index=2, step=Step(LAYER_CALL, in=['h'], out=__ret_2, layer=conv2), message='Z3 violation (shape_incompatible) at step 2:\\n  dev___inner_1_s2 = CPU_20\\n  grad___inner_1_s2 = True\\n  grad_x_s0 = False\\n  dev___inner_1_s1 = CPU_20\\n  dev_x_s2 = CPU_20\\n  phase_s2 = TRAIN_20\\n  dev_h_s2 = CPU_20\\n  dev_x_s1 = CPU_20\\n  batch = 1\\n  phase_s1 = TRAIN_20\\n  grad___inner_1_s1 = True\\n  grad_x_s2 = False\\n  phase_s0 = TRAIN_20\\n  grad_h_s2 = False\\n  dev_x_s0 = CPU_20\\n  grad_x_s1 = False', tensor_a=None, tensor_b=None, shape_a=None, shape_b=None, device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)"
+      ],
+      "cegar_iterations": 0,
+      "cegar_predicates": 0,
+      "z3_queries": 0,
+      "confidence": "Confidence.HIGH"
+    },
+    {
+      "name": "attention_head_mismatch",
+      "description": "Multi-head attention with wrong projection dim",
+      "bug_type": "shape_mismatch",
+      "tensorguard_found": true,
+      "syntactic_found": false,
+      "tensorguard_time_ms": 159.9740982055664,
+      "violations": [
+        "SafetyViolation(kind='shape_incompatible', step_index=2, step=Step(ADD, in=['x', 'projected'], out=__binop_2, layer=None), message='Cannot broadcast (seq, batch, 512) and (seq, batch, 256)', tensor_a='x', tensor_b='projected', shape_a=TensorShape(dims=(seq, batch, 512)), shape_b=TensorShape(dims=(seq, batch, 256)), device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)",
+        "SafetyViolation(kind='shape_incompatible', step_index=2, step=Step(ADD, in=['x', 'projected'], out=__binop_2, layer=None), message='Z3 violation (shape_incompatible) at step 2:\\n  grad_attn_out_s2 = True\\n  dev_x_s0 = CPU_23\\n  grad_x_s0 = False\\n  phase_s2 = TRAIN_23\\n  seq = 1\\n  dev_projected_s2 = CPU_23\\n  batch = 1\\n  dev_attn_out_s1 = CPU_23\\n  grad_projected_s2 = True\\n  phase_s0 = TRAIN_23\\n  phase_s1 = TRAIN_23\\n  grad_x_s2 = False\\n  dev_x_s2 = CPU_23\\n  dev_x_s1 = CPU_23\\n  grad_attn_out_s1 = True\\n  dev_attn_out_s2 = CPU_23\\n  grad_x_s1 = False', tensor_a=None, tensor_b=None, shape_a=None, shape_b=None, device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)"
+      ],
+      "cegar_iterations": 0,
+      "cegar_predicates": 0,
+      "z3_queries": 0,
+      "confidence": "Confidence.HIGH"
+    },
+    {
+      "name": "encoder_decoder_mismatch",
+      "description": "Encoder-decoder with mismatched bottleneck dimensions",
+      "bug_type": "shape_mismatch",
+      "tensorguard_found": true,
+      "syntactic_found": false,
+      "tensorguard_time_ms": 75.16598701477051,
+      "violations": [
+        "SafetyViolation(kind='shape_incompatible', step_index=1, step=Step(LAYER_CALL, in=['z'], out=__ret_1, layer=decoder), message='Sequential sub-layer _seq_0: Linear expects last dim=32, got 64', tensor_a='z', tensor_b=None, shape_a=TensorShape(dims=(batch, 64)), shape_b=None, device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)"
+      ],
+      "cegar_iterations": 0,
+      "cegar_predicates": 0,
+      "z3_queries": 0,
+      "confidence": "Confidence.HIGH"
+    },
+    {
+      "name": "broadcast_add_mismatch",
+      "description": "Broadcasting add with incompatible dimensions",
+      "bug_type": "broadcast_incompatible",
+      "tensorguard_found": true,
+      "syntactic_found": true,
+      "tensorguard_time_ms": 50.38809776306152,
+      "violations": [
+        "SafetyViolation(kind='shape_incompatible', step_index=2, step=Step(ADD, in=['a', 'b'], out=__ret_1, layer=None), message='Cannot broadcast (batch, 128) and (batch, 64)', tensor_a='a', tensor_b='b', shape_a=TensorShape(dims=(batch, 128)), shape_b=TensorShape(dims=(batch, 64)), device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)",
+        "SafetyViolation(kind='shape_incompatible', step_index=2, step=Step(ADD, in=['a', 'b'], out=__ret_1, layer=None), message='Z3 violation (shape_incompatible) at step 2:\\n  dev_b_s2 = CPU_27\\n  grad_x_s0 = False\\n  grad_b_s2 = True\\n  phase_s2 = TRAIN_27\\n  grad_a_s1 = True\\n  dev_x_s2 = CPU_27\\n  phase_s1 = TRAIN_27\\n  grad_a_s2 = True\\n  phase_s0 = TRAIN_27\\n  batch = 1\\n  dev_x_s1 = CPU_27\\n  dev_a_s1 = CPU_27\\n  grad_x_s2 = False\\n  dev_a_s2 = CPU_27\\n  grad_x_s1 = False\\n  dev_x_s0 = CPU_27', tensor_a=None, tensor_b=None, shape_a=None, shape_b=None, device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)"
+      ],
+      "cegar_iterations": 0,
+      "cegar_predicates": 0,
+      "z3_queries": 0,
+      "confidence": "Confidence.HIGH"
+    },
+    {
+      "name": "matmul_inner_mismatch",
+      "description": "Matrix multiplication with mismatched inner dims",
+      "bug_type": "matmul_mismatch",
+      "tensorguard_found": true,
+      "syntactic_found": true,
+      "tensorguard_time_ms": 42.771100997924805,
+      "violations": [
+        "SafetyViolation(kind='shape_incompatible', step_index=3, step=Step(MATMUL, in=['q', '__inner_1'], out=attn, layer=None), message='matmul dimension mismatch: a has inner dim 64, b has inner dim 128', tensor_a='q', tensor_b='__inner_1', shape_a=TensorShape(dims=(batch, 64)), shape_b=TensorShape(dims=(128, batch)), device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)",
+        "SafetyViolation(kind='shape_incompatible', step_index=3, step=Step(MATMUL, in=['q', '__inner_1'], out=attn, layer=None), message='Z3 violation (shape_incompatible) at step 3:\\n  dev_q_s1 = CPU_29\\n  dev_x_s1 = CPU_29\\n  grad_k_s3 = True\\n  dev_q_s3 = CPU_29\\n  grad_q_s2 = True\\n  grad_x_s0 = False\\n  phase_s2 = TRAIN_29\\n  dev_x_s0 = CPU_29\\n  dev___inner_1_s3 = CPU_29\\n  dev_k_s3 = CPU_29\\n  dev_k_s2 = CPU_29\\n  phase_s1 = TRAIN_29\\n  phase_s0 = TRAIN_29\\n  grad___inner_1_s3 = True\\n  grad_q_s1 = True\\n  grad_q_s3 = True\\n  dev_x_s2 = CPU_29\\n  dev_x_s3 = CPU_29\\n  grad_x_s1 = False\\n  grad_k_s2 = True\\n  phase_s3 = TRAIN_29\\n  dev_q_s2 = CPU_29\\n  grad_x_s3 = False\\n  batch = 1\\n  grad_x_s2 = False', tensor_a=None, tensor_b=None, shape_a=None, shape_b=None, device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)"
+      ],
+      "cegar_iterations": 0,
+      "cegar_predicates": 0,
+      "z3_queries": 0,
+      "confidence": "Confidence.HIGH"
+    },
+    {
+      "name": "deep_chain_accumulation",
+      "description": "Deep chain where dim error accumulates across layers",
+      "bug_type": "shape_mismatch",
+      "tensorguard_found": true,
+      "syntactic_found": true,
+      "tensorguard_time_ms": 188.22121620178223,
+      "violations": [
+        "SafetyViolation(kind='shape_incompatible', step_index=6, step=Step(LAYER_CALL, in=['h'], out=__ret_4, layer=fc4), message='Linear expects last dim=512, got 256', tensor_a='h', tensor_b=None, shape_a=TensorShape(dims=(batch, 256)), shape_b=None, device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)",
+        "SafetyViolation(kind='shape_incompatible', step_index=6, step=Step(LAYER_CALL, in=['h'], out=__ret_4, layer=fc4), message='Z3 violation (shape_incompatible) at step 6:\\n  grad___inner_1_s4 = True\\n  grad_h_s4 = False\\n  dev_x_s0 = CPU_31\\n  dev___inner_1_s3 = CPU_31\\n  grad___inner_2_s5 = True\\n  dev___inner_2_s3 = CPU_31\\n  grad_h_s5 = False\\n  grad___inner_1_s3 = True\\n  phase_s2 = TRAIN_31\\n  phase_s4 = TRAIN_31\\n  dev_x_s5 = CPU_31\\n  dev_x_s4 = CPU_31\\n  phase_s1 = TRAIN_31\\n  dev___inner_1_s5 = CPU_31\\n  dev___inner_2_s6 = CPU_31\\n  dev_h_s4 = CPU_31\\n  dev___inner_1_s4 = CPU_31\\n  phase_s5 = TRAIN_31\\n  grad___inner_2_s4 = True\\n  grad___inner_1_s2 = True\\n  dev_h_s6 = CPU_31\\n  grad___inner_1_s5 = True\\n  grad_x_s6 = False\\n  grad___inner_3_s5 = True\\n  grad___inner_2_s6 = True\\n  dev_h_s3 = CPU_31\\n  grad_x_s3 = False\\n  grad___inner_1_s1 = True\\n  grad_h_s2 = False\\n  dev_h_s2 = CPU_31\\n  dev_h_s5 = CPU_31\\n  dev_x_s1 = CPU_31\\n  dev___inner_1_s6 = CPU_31\\n  grad_h_s6 = False\\n  dev___inner_3_s5 = CPU_31\\n  grad_x_s0 = False\\n  grad___inner_3_s6 = True\\n  grad_x_s5 = False\\n  dev_x_s2 = CPU_31\\n  phase_s6 = TRAIN_31\\n  grad_h_s3 = False\\n  dev_x_s3 = CPU_31\\n  dev___inner_2_s4 = CPU_31\\n  grad_x_s1 = False\\n  phase_s0 = TRAIN_31\\n  dev___inner_3_s6 = CPU_31\\n  dev___inner_1_s2 = CPU_31\\n  dev___inner_2_s5 = CPU_31\\n  grad_x_s4 = False\\n  batch = 1\\n  dev___inner_1_s1 = CPU_31\\n  grad___inner_1_s6 = True\\n  grad___inner_2_s3 = True\\n  grad_x_s2 = False\\n  phase_s3 = TRAIN_31\\n  dev_x_s6 = CPU_31', tensor_a=None, tensor_b=None, shape_a=None, shape_b=None, device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)"
+      ],
+      "cegar_iterations": 0,
+      "cegar_predicates": 0,
+      "z3_queries": 0,
+      "confidence": "Confidence.HIGH"
+    },
+    {
+      "name": "skip_connection_asymmetric",
+      "description": "U-Net-like skip connection with mismatched channels",
+      "bug_type": "shape_mismatch",
+      "tensorguard_found": true,
+      "syntactic_found": true,
+      "tensorguard_time_ms": 83.41121673583984,
+      "violations": [
+        "SafetyViolation(kind='shape_incompatible', step_index=3, step=Step(LAYER_CALL, in=['u1'], out=__ret_1, layer=up2), message='Conv2d expects 192 input channels, got 64', tensor_a='u1', tensor_b=None, shape_a=TensorShape(dims=(batch, 64, 26, 26)), shape_b=None, device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)",
+        "SafetyViolation(kind='shape_incompatible', step_index=3, step=Step(LAYER_CALL, in=['u1'], out=__ret_1, layer=up2), message='Z3 violation (shape_incompatible) at step 3:\\n  grad_d1_s3 = True\\n  grad_x_s0 = False\\n  grad_d1_s2 = True\\n  dev_d2_s2 = CPU_34\\n  dev_d1_s2 = CPU_34\\n  dev_x_s1 = CPU_34\\n  phase_s3 = TRAIN_34\\n  grad_u1_s3 = True\\n  dev_d2_s3 = CPU_34\\n  dev_x_s0 = CPU_34\\n  dev_d1_s3 = CPU_34\\n  grad_x_s1 = False\\n  dev_x_s2 = CPU_34\\n  dev_x_s3 = CPU_34\\n  grad_d1_s1 = True\\n  grad_d2_s3 = True\\n  dev_d1_s1 = CPU_34\\n  phase_s2 = TRAIN_34\\n  grad_x_s3 = False\\n  batch = 1\\n  phase_s1 = TRAIN_34\\n  dev_u1_s3 = CPU_34\\n  phase_s0 = TRAIN_34\\n  grad_x_s2 = False\\n  grad_d2_s2 = True', tensor_a=None, tensor_b=None, shape_a=None, shape_b=None, device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)"
+      ],
+      "cegar_iterations": 0,
+      "cegar_predicates": 0,
+      "z3_queries": 0,
+      "confidence": "Confidence.HIGH"
+    },
+    {
+      "name": "multi_step_broadcast_chain",
+      "description": "Multi-step computation requiring Z3 broadcasting reasoning",
+      "bug_type": "broadcast_incompatible",
+      "tensorguard_found": true,
+      "syntactic_found": true,
+      "tensorguard_time_ms": 281.9690704345703,
+      "violations": [
+        "SafetyViolation(kind='shape_incompatible', step_index=2, step=Step(ADD, in=['a', 'b'], out=combined, layer=None), message='Cannot broadcast (batch, 256) and (batch, 128)', tensor_a='a', tensor_b='b', shape_a=TensorShape(dims=(batch, 256)), shape_b=TensorShape(dims=(batch, 128)), device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)",
+        "SafetyViolation(kind='shape_incompatible', step_index=2, step=Step(ADD, in=['a', 'b'], out=combined, layer=None), message='Z3 violation (shape_incompatible) at step 2:\\n  dev_x_s2 = CPU_37\\n  dev_x_s1 = CPU_37\\n  grad_x_s0 = False\\n  dev_a_s1 = CPU_37\\n  grad_b_s2 = True\\n  dev_a_s2 = CPU_37\\n  grad_a_s1 = True\\n  dev_x_s0 = CPU_37\\n  phase_s2 = TRAIN_37\\n  grad_a_s2 = True\\n  batch = 1\\n  dev_b_s2 = CPU_37\\n  grad_x_s2 = False\\n  phase_s1 = TRAIN_37\\n  phase_s0 = TRAIN_37\\n  grad_x_s1 = False', tensor_a=None, tensor_b=None, shape_a=None, shape_b=None, device_a=None, device_b=None, confidence=<Confidence.HIGH: 'high'>, fp_category=None)"
+      ],
+      "cegar_iterations": 0,
+      "cegar_predicates": 0,
+      "z3_queries": 0,
+      "confidence": "Confidence.HIGH"
+    }
+  ],
+  "metrics": {
+    "tensorguard": {
+      "TP": 10,
+      "FP": 0,
+      "TN": 7,
+      "FN": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "total": 17
+    },
+    "syntactic_baseline": {
+      "TP": 7,
+      "FP": 0,
+      "TN": 7,
+      "FN": 3,
+      "precision": 1.0,
+      "recall": 0.7,
+      "f1": 0.8235,
+      "total": 17
+    }
+  },
+  "cegar_ablation": {},
+  "fp_taxonomy": {},
+  "z3_stats": {}
+}

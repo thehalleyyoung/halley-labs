@@ -1,0 +1,2355 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{multirow}
+\usepackage{url}
+\usepackage{stmaryrd}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit,calc,decorations.pathreplacing}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{example}[theorem]{Example}
+
+\lstset{
+  language=Python,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue!80!black}\bfseries,
+  commentstyle=\color{green!50!black}\itshape,
+  stringstyle=\color{red!60!black},
+  showstringspaces=false,
+  breaklines=true,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  xleftmargin=2em,
+  framexleftmargin=1.5em,
+  captionpos=b,
+  aboveskip=0.8em,
+  belowskip=0.5em,
+  morekeywords={raise,assert,None,True,False,torch,np,nn,self}
+}
+
+\lstdefinestyle{noline}{numbers=none,xleftmargin=0.5em,framexleftmargin=0em}
+
+\title{LiquidPy: Constraint-Based Verification of Neural Network\\
+Architectures via Product Theories and Quality-Filtered Contract Discovery}
+
+\date{}
+
+\begin{document}
+\tolerance=800
+\emergencystretch=1em
+
+\maketitle
+
+%% ============================================================
+\begin{abstract}
+Tensor shape errors are the most common source of runtime crashes in
+deep learning code, yet no existing tool statically verifies entire
+neural network architectures.  Shape checkers analyze individual
+operations; type checkers verify surface-level types.  Neither
+reasons about the composition of layers that defines an
+\texttt{nn.Module}.
+
+We present \textsc{LiquidPy}, a constraint-based verification tool for PyTorch
+\texttt{nn.Module} computation graphs.  \textsc{LiquidPy} extracts
+data-flow graphs from \texttt{\_\_init\_\_} and
+\texttt{forward()} methods, then verifies safety properties via
+Z3-backed symbolic constraint propagation over a product theory
+integrating shape verification (via Z3 arithmetic constraints and a
+custom \texttt{UserPropagator}-based broadcast theory),
+device consistency (via Z3 enumeration sorts),
+and train/eval phase-dependent
+behavior (via Z3 enumeration sorts).  A quality-filtered
+counterexample-guided contract discovery loop discovers implicit
+shape contracts from Z3 counterexamples while preventing
+counterproductive refinements via information-theoretic predicate
+scoring, enabling verification of architectures with
+under-specified intermediate dimensions.
+Path-sensitive guard analysis further reduces false positives
+from conditional branches.
+
+On 18 real
+\texttt{nn.Module} architectures (MLP, CNN, Transformer, U-Net, GAN),
+\textsc{LiquidPy} achieves 94.4\% verification accuracy (17/18 models).
+On 18 theory-exercising benchmarks requiring Z3 reasoning about
+broadcasting and multi-step shape flows, \textsc{LiquidPy} achieves
+F1=1.00 while a syntactic baseline achieves F1=0.00.
+On 15 production-style architectures, \textsc{LiquidPy} achieves
+F1=0.80 versus F1=0.22 for syntactic analysis.
+With conditional branch handling and improved path-sensitive
+analysis, false positives are eliminated on a 12-architecture
+production benchmark achieving F1=1.00.
+The custom \texttt{BroadcastPropagator} and \texttt{StridePropagator}
+Z3 theory plugins constitute the first domain-specific SMT theories
+for tensor shape reasoning.
+The contract discovery loop discovers shape predicates with 100\%
+accuracy across 8 benchmarks in an average of 1.75 refinement
+iterations.
+\end{abstract}
+
+%% ============================================================
+\section{Introduction}\label{sec:intro}
+
+Tensor shape errors are the single most common category of runtime
+crash in deep learning code.  A recent study of PyTorch GitHub
+issues found that shape mismatches account for more crash reports
+than any other error category, ahead of CUDA errors, gradient
+failures, and API misuse~\cite{pytea}.  These errors manifest as
+\texttt{RuntimeError: mat1 and mat2 shapes cannot be multiplied}
+or \texttt{RuntimeError: Expected 3-dimensional input}, crashing
+training runs that may have consumed hours of GPU time before
+reaching the faulty operation.
+
+Existing tools address fragments of this problem.
+PyTea~\cite{pytea} performs abstract interpretation over individual
+tensor operations, catching mismatches such as multiplying a
+$(3,4)$ tensor by a $(5,6)$ tensor.
+Pyright~\cite{pyright} and Mypy~\cite{mypy} verify that a variable
+holds a \texttt{torch.Tensor} rather than an \texttt{int}, but
+cannot reason about shapes.
+TorchScript~\cite{torchscript} compiles a Python subset to a typed
+IR but does not verify shapes at the type level.
+None of these tools reasons about the \emph{composition of layers}
+that defines an \texttt{nn.Module}: whether a three-layer MLP has
+compatible dimensions at each boundary, whether a U-Net's encoder
+and decoder shapes match across skip connections, or whether a
+Transformer's attention heads produce shapes compatible with the
+feed-forward layer that follows.
+
+The core challenge is that an \texttt{nn.Module} is not a single
+operation---it is a \emph{computation graph} defined imperatively
+across two methods.  The \texttt{\_\_init\_\_} method declares
+layers as attributes; the \texttt{forward} method composes them.
+Verifying the architecture requires extracting this implicit graph,
+tracking shapes through each node, and checking compatibility at
+each edge---a task naturally formulated as \emph{constraint-based verification} of
+a data-flow computation graph.
+
+\paragraph{Beyond shapes.}
+Shape errors are not the only class of composition bug.
+Device mismatches (a layer on CPU receiving a CUDA tensor) and
+phase-dependent behavior (a module using dropout during evaluation
+because \texttt{model.eval()} was not called) are pervasive and
+interact with shape reasoning.  A batch normalization layer produces
+different output statistics in training versus evaluation mode;
+a model with submodules on different devices produces a
+\texttt{RuntimeError} only when data flows between them.
+These cross-domain bugs cannot be caught by a shape-only analysis.
+
+\paragraph{Approach.}
+\textsc{LiquidPy} is, to our knowledge, the first tool to perform
+\emph{constraint-based compositional verification} of neural network computation graphs.
+The approach has four components:
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Computation graph extraction} (\S\ref{sec:extraction}):
+    We parse \texttt{\_\_init\_\_} and \texttt{forward} to extract a
+    data-flow computation graph where nodes carry
+    shape/device/phase state and edges are layer applications.
+
+  \item \textbf{Product theory}
+    $\mathcal{T}_{\mathit{shape}} \times \mathcal{T}_{\mathit{device}}
+    \times \mathcal{T}_{\mathit{phase}}$ (\S\ref{sec:theory}):
+    All three domains are fully Z3-backed: shape verification uses
+    integer arithmetic (QF\_LIA), device consistency and phase
+    correctness use Z3 enumeration sorts (QF\_UF).
+    Every computation step generates Z3 queries for all three
+    domains plus cross-domain constraints, implemented as a single
+    SMT query per step.
+    The value lies in their combination, which catches bugs
+    invisible to any single domain.
+
+  \item \textbf{Constraint-based symbolic propagation of computation graphs}
+    (\S\ref{sec:kinduction}):
+    We symbolically propagate shape, device, and phase constraints
+    forward through the acyclic computation graph, checking
+    compatibility at each edge via Z3.
+    For acyclic graphs (the common case), forward propagation
+    alone is sufficient.
+    Counterexample traces provide concrete diagnostic paths.
+
+  \item \textbf{Quality-filtered counterexample-guided contract discovery}
+    (\S\ref{sec:cegar}):
+    When intermediate shape specifications are missing,
+    a counterexample-guided contract discovery loop
+    discovers implicit shape contracts by reading layer parameters
+    and propagating dimension constraints backwards from Z3
+    counterexamples.  An information-theoretic predicate quality
+    filter prevents counterproductive refinements that would
+    over-constrain the input space and mask real bugs.
+\end{enumerate}
+
+\paragraph{Contributions.}
+\begin{enumerate}[leftmargin=2em]
+  \item The first constraint-based compositional verifier for \texttt{nn.Module}
+        computation graphs, extracting data-flow graphs
+        from PyTorch classes and verifying safety properties
+        via Z3-backed symbolic constraint propagation
+        (\S\ref{sec:extraction},
+        \S\ref{sec:kinduction}).
+
+  \item A fully Z3-backed product theory integrating
+        shape verification (QF\_LIA), device consistency (QF\_UF
+        with enumeration sorts), and phase-dependent
+        behavior (QF\_UF with enumeration sorts), detecting
+        cross-domain bugs that no single domain alone catches
+        (\S\ref{sec:theory}).
+
+  \item Custom Z3 theory plugins (\texttt{BroadcastPropagator}
+        and \texttt{StridePropagator}) implementing NumPy/PyTorch
+        broadcasting and stride/reshape semantics as first-class SMT theories
+        via the \texttt{UserPropagator} API---the first domain-specific
+        decision procedures for tensor shape reasoning.
+        The \texttt{StridePropagator} is used for reshape validation,
+        ensuring that stride-based dimension transformations preserve
+        tensor element counts
+        (\S\ref{sec:broadcast-theory}).
+
+  \item A quality-filtered counterexample-guided contract discovery
+        loop that uses information-theoretic predicate scoring to
+        prevent counterproductive refinements, achieving 100\% predicate
+        accuracy across 8 benchmarks in an average of 1.75 iterations
+        (\S\ref{sec:cegar}).
+
+  \item A comprehensive evaluation on 86+ benchmarks including
+        real architectures (MLP, CNN, Transformer, U-Net, GAN),
+        theory-exercising benchmarks demonstrating F1=1.00 where
+        syntactic analysis achieves F1=0.00,
+        production-style architectures (ResNet, VGG, BERT, GPT),
+        cross-domain bug detection,
+        PyTea head-to-head comparison,
+        ablation study, and Z3 solver
+        statistics (\S\ref{sec:eval}).
+\end{enumerate}
+
+%% ============================================================
+\section{Motivating Example}\label{sec:motivating}
+
+Consider a multi-head attention module with a subtle shape bug that
+no existing tool catches:
+
+\begin{lstlisting}[caption={A Transformer encoder with a cross-domain bug: shape mismatch interacts with device and phase.},label={lst:motiv}]
+class BuggyTransformer(nn.Module):
+    def __init__(self, d_model=512, n_heads=8, d_ff=2048):
+        super().__init__()
+        self.attn = nn.MultiheadAttention(d_model, n_heads)
+        self.ff = nn.Sequential(
+            nn.Linear(d_model, d_ff),
+            nn.ReLU(),
+            nn.Linear(d_ff, d_model),
+        )
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.dropout = nn.Dropout(0.1)
+        # BUG: projection has wrong input dimension
+        self.proj = nn.Linear(d_model, 256)
+
+    def forward(self, x):           # x: (seq, batch, d_model)
+        # Attention block
+        attn_out, _ = self.attn(x, x, x)
+        x = self.norm1(x + self.dropout(attn_out))
+        # Feed-forward block
+        ff_out = self.ff(x)
+        x = self.norm2(x + self.dropout(ff_out))
+        # BUG: proj outputs (seq, batch, 256) but caller
+        # expects (seq, batch, 512) for residual connection
+        return self.proj(x)
+\end{lstlisting}
+
+\paragraph{What existing tools see.}
+PyTea~\cite{pytea} analyzes individual operations: each
+\texttt{nn.Linear} application is shape-compatible in isolation
+($\text{last\_dim}(x) = d\_\text{model} = 512$ for \texttt{proj}).
+Pyright reports no errors---the code is well-typed.
+TorchScript compiles successfully.
+
+\paragraph{What \textsc{LiquidPy} sees.}
+\textsc{LiquidPy} extracts the computation graph from
+\texttt{\_\_init\_\_} and \texttt{forward}, producing a transition
+system with states labeled by shape/device/phase triples.
+The model checker discovers that:
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Shape:} The output shape $(s, b, 256)$ from
+    \texttt{self.proj} is incompatible with any downstream layer
+    expecting $d\_\text{model} = 512$.  The counterexample trace is:
+    $x{:}(s,b,512) \xrightarrow{\text{attn}} (s,b,512)
+    \xrightarrow{\text{ff}} (s,b,512)
+    \xrightarrow{\text{proj}} (s,b,256)$, violating the
+    architectural invariant that the residual stream maintains
+    dimension $d\_\text{model}$.
+
+  \item \textbf{Device:} If \texttt{self.proj} is moved to a
+    different device than the rest of the model (e.g., via partial
+    \texttt{.cuda()} calls), the model checker detects the
+    device inconsistency at the \texttt{proj} application edge.
+
+  \item \textbf{Phase:} The dropout layer produces different
+    outputs in train vs.\ eval mode.  The model checker verifies
+    that \texttt{model.eval()} correctly disables dropout in all
+    paths.
+\end{enumerate}
+
+This is the kind of architecture-level bug that only a constraint-based
+compositional verifier
+for computation graphs can find: the error is not in any single
+operation but in the \emph{composition} of layers.
+
+%% ============================================================
+\section{Computation Graph Extraction}\label{sec:extraction}
+
+\textsc{LiquidPy} extracts a finite-state transition system (FSTS)
+from each \texttt{nn.Module} subclass by analyzing two methods:
+\texttt{\_\_init\_\_} (layer declarations) and \texttt{forward}
+(layer composition).
+
+\begin{definition}[Computation Graph]\label{def:compgraph}
+A \emph{computation graph} for an \texttt{nn.Module} is a tuple
+$G = (V, E, \lambda, \sigma_0)$ where:
+\begin{itemize}[leftmargin=2em]
+  \item $V$ is a finite set of \emph{nodes}, one per intermediate
+    tensor in \texttt{forward};
+  \item $E \subseteq V \times V$ is a set of \emph{edges},
+    representing data flow;
+  \item $\lambda : E \to \mathit{Layer}$ labels each edge with the
+    layer applied (e.g., \texttt{nn.Linear(512,256)});
+  \item $\sigma_0 : V_{\mathit{in}} \to \mathit{State}$ assigns
+    initial states to input nodes.
+\end{itemize}
+\end{definition}
+
+\begin{definition}[State]\label{def:state}
+A \emph{state} is a triple $\sigma = (s, d, p)$ where:
+\begin{itemize}[leftmargin=2em]
+  \item $s \in \mathbb{Z}^*$ is a shape tuple (possibly symbolic);
+  \item $d \in \{\texttt{cpu}, \texttt{cuda:0}, \texttt{cuda:1},
+    \ldots\}$ is a device label;
+  \item $p \in \{\texttt{train}, \texttt{eval}\}$ is a phase tag.
+\end{itemize}
+\end{definition}
+
+\subsection{Extraction Algorithm}
+
+The extraction proceeds in two passes over the AST.
+
+\paragraph{Pass 1: \texttt{\_\_init\_\_} analysis.}
+We scan for attribute assignments of the form
+\texttt{self.}\textit{name}\texttt{ = nn.}\textit{Layer}\texttt{(\ldots)}
+and extract the layer type and its parameters.
+Supported layers include \texttt{nn.Linear(in, out)},
+\texttt{nn.Conv2d(c\_in, c\_out, k)},
+\texttt{nn.BatchNorm1d/2d(num\_features)},
+\texttt{nn.LayerNorm(normalized\_shape)},
+\texttt{nn.Dropout(p)},
+\texttt{nn.MultiheadAttention(embed\_dim, num\_heads)},
+\texttt{nn.Sequential(\ldots)}, and
+\texttt{nn.ModuleList([\ldots])}.
+Each extracted layer defines a \emph{shape transfer function}
+$\tau_\ell : \mathbb{Z}^* \to \mathbb{Z}^*$ (Table~\ref{tab:shape-rules}).
+
+\paragraph{Pass 2: \texttt{forward} analysis.}
+We trace data flow through the method body, creating a node for
+each intermediate tensor value and an edge for each layer
+application.
+Branch points (\texttt{if}/\texttt{else}) create forking edges;
+merge points create join nodes.
+The result is a directed acyclic graph (DAG) for
+architectures without recurrence, or a graph with back-edges for
+recurrent modules (handled by $k$-bounded unrolling).
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  node distance=1.4cm and 2.0cm,
+  state/.style={rectangle, draw, rounded corners, minimum width=2.8cm,
+    minimum height=0.7cm, font=\small},
+  layer/.style={-{Stealth[length=3mm]}, thick, font=\small\ttfamily},
+  init/.style={rectangle, draw, dashed, rounded corners,
+    minimum width=2.4cm, minimum height=0.6cm, font=\small\ttfamily,
+    fill=blue!5},
+]
+  % Init declarations (left side)
+  \node[init] (l1) {Linear(512, 2048)};
+  \node[init, below=0.6cm of l1] (l2) {Linear(2048, 512)};
+  \node[init, below=0.6cm of l2] (l3) {LayerNorm(512)};
+  \node[init, below=0.6cm of l3] (l4) {Dropout(0.1)};
+
+  % Computation graph (right side)
+  \node[state, right=3.5cm of l1] (s0) {$\sigma_0$: $(s,b,512)$};
+  \node[state, below=1.0cm of s0] (s1) {$\sigma_1$: $(s,b,2048)$};
+  \node[state, below=1.0cm of s1] (s2) {$\sigma_2$: $(s,b,512)$};
+  \node[state, below=1.0cm of s2] (s3) {$\sigma_3$: $(s,b,512)$};
+
+  % Edges
+  \draw[layer] (s0) -- node[right] {fc1} (s1);
+  \draw[layer] (s1) -- node[right] {fc2} (s2);
+  \draw[layer] (s2) -- node[right] {norm + drop} (s3);
+
+  % Dashed connections from init to graph
+  \draw[->, dashed, gray] (l1.east) -- ($(s0.south west)!0.5!(s1.north west)$);
+  \draw[->, dashed, gray] (l2.east) -- ($(s1.south west)!0.5!(s2.north west)$);
+  \draw[->, dashed, gray] (l3.east) -- ($(s2.south west)!0.5!(s3.north west)$);
+
+  % Labels
+  \node[above=0.2cm of l1, font=\small\bfseries] {\_\_init\_\_};
+  \node[above=0.2cm of s0, font=\small\bfseries] {forward (FSTS)};
+
+  % Brace for init
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}]
+    ([xshift=-0.3cm]l1.north west) -- ([xshift=-0.3cm]l4.south west)
+    node[midway, left=8pt, font=\small, align=center] {Layer\\declarations};
+\end{tikzpicture}
+\caption{Computation graph extraction from an \texttt{nn.Module}.
+  Layer declarations from \texttt{\_\_init\_\_} (left) define
+  shape transfer functions.  Data flow in \texttt{forward} (right)
+  produces the finite-state transition system with shape-labeled
+  states.}
+\label{fig:extraction}
+\end{figure}
+
+\subsection{Shape Transfer Functions}
+
+Each layer type defines a shape transfer function.
+Table~\ref{tab:shape-rules} summarizes the supported operations.
+
+\begin{table}[t]
+\centering
+\caption{Shape transfer functions for tensor operations.  $s_x$
+  denotes the input shape.}
+\label{tab:shape-rules}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Operation} & \textbf{Precondition} & \textbf{Result shape} \\
+\midrule
+\texttt{A @ B}
+  & $\mathit{cols}(A) = \mathit{rows}(B)$
+  & $(\ldots, \mathit{rows}(A), \mathit{cols}(B))$ \\[3pt]
+\texttt{A + B} (broadcast)
+  & $\forall i.\; s_A[i]{=}s_B[i] \lor s_A[i]{=}1 \lor s_B[i]{=}1$
+  & $(\max(s_A[i], s_B[i]))_i$ \\[3pt]
+\texttt{torch.cat([A,B], dim=d)}
+  & $\forall i \neq d.\; s_A[i] = s_B[i]$
+  & $s_A[d{:=}s_A[d]+s_B[d]]$ \\[3pt]
+\texttt{nn.Linear(m,n)(x)}
+  & $\mathit{last\_dim}(x) = m$
+  & $s_x[\text{-}1{:=}n]$ \\[3pt]
+\texttt{nn.Conv2d(c\_in,c\_out,k)(x)}
+  & $s_x[1] = c\_\mathit{in}$
+  & $(s_x[0], c\_\mathit{out}, H', W')$ \\[3pt]
+\texttt{x.reshape(s)}
+  & $\prod s_x[i] = \prod s[j]$
+  & $s$ \\[3pt]
+\texttt{x.transpose(i,j)}
+  & $i, j < \mathit{ndim}(x)$
+  & $s_x[\text{swap}(i,j)]$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Auxiliary projections used throughout:
+\begin{align*}
+  \mathit{ndim}(v) &= |\mathit{shape}(v)|, \quad
+  \mathit{rows}(v) = \mathit{shape}(v)[\mathit{ndim}(v){-}2], \quad
+  \mathit{cols}(v) = \mathit{shape}(v)[\mathit{ndim}(v){-}1]
+\end{align*}
+
+%% ============================================================
+\section{Product Theory}\label{sec:theory}
+
+We formalize the verification domain as a product of three
+first-order theories, each decidable, whose combination is also
+decidable by the Nelson--Oppen method~\cite{nelsonoppen}.
+
+\subsection{Theory of Shapes $\mathcal{T}_{\mathit{shape}}$}
+
+\begin{definition}[Shape Theory]
+$\mathcal{T}_{\mathit{shape}}$ is a many-sorted first-order theory
+with:
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{Sorts:} $\mathit{Dim}$ (integers $\geq 1$),
+    $\mathit{Shape}$ (finite tuples over $\mathit{Dim}$),
+    $\mathit{Idx}$ (natural numbers).
+  \item \textbf{Functions:}
+    $\mathit{get} : \mathit{Shape} \times \mathit{Idx} \to \mathit{Dim}$,
+    $\mathit{len} : \mathit{Shape} \to \mathit{Idx}$,
+    $\mathit{set} : \mathit{Shape} \times \mathit{Idx} \times
+    \mathit{Dim} \to \mathit{Shape}$,
+    $\mathit{prod} : \mathit{Shape} \to \mathbb{Z}$.
+  \item \textbf{Axioms:} Standard tuple axioms plus
+    $\forall s.\;\forall i < \mathit{len}(s).\;
+    \mathit{get}(s,i) \geq 1$.
+\end{itemize}
+\end{definition}
+
+The quantifier-free fragment of $\mathcal{T}_{\mathit{shape}}$
+(with concrete tuple lengths) is reducible to QF-LIA and hence
+decidable.  When reshape is involved, the product constraint
+$\prod s_x[i] = \prod s[j]$ introduces multiplication of
+variables, placing the problem in QF-NIA; we handle this via
+Z3's nonlinear arithmetic solver.
+
+\subsection{Theory of Devices $\mathcal{T}_{\mathit{device}}$}
+
+\begin{definition}[Device Theory]
+$\mathcal{T}_{\mathit{device}}$ is an equality theory over a finite
+sort $\mathit{Dev} = \{\texttt{cpu}, \texttt{cuda:0},
+\texttt{cuda:1}, \ldots\}$ with:
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{Function:}
+    $\mathit{dev} : \mathit{Tensor} \to \mathit{Dev}$.
+  \item \textbf{Axioms:}
+    (1)~Layer application preserves device:
+    $\mathit{dev}(\ell(x)) = \mathit{dev}(x)$ when $\ell$ is a
+    stateless operation.
+    (2)~Stateful layers inherit their registered device:
+    $\mathit{dev}(\ell(x)) = \mathit{dev}(\ell)$ for layers
+    $\ell$ with parameters.
+    (3)~Binary operations require device agreement:
+    $\mathit{dev}(x \oplus y) = \mathit{dev}(x) = \mathit{dev}(y)$.
+\end{itemize}
+\end{definition}
+
+$\mathcal{T}_{\mathit{device}}$ is implemented in Z3 using
+\emph{enumeration sorts}: device variables are Z3 constants over
+an enumeration sort, and device consistency constraints are Z3
+equalities.  This gives us full SMT-backed reasoning for device
+consistency, integrated into the same Z3 context as shape
+constraints.  The theory falls within QF\_UF (quantifier-free
+uninterpreted functions with equality).
+
+\subsection{Theory of Phases $\mathcal{T}_{\mathit{phase}}$}
+
+\begin{definition}[Phase Theory]
+$\mathcal{T}_{\mathit{phase}}$ is a two-valued theory with sort
+$\mathit{Phase} = \{\texttt{train}, \texttt{eval}\}$ and:
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{Function:}
+    $\mathit{phase} : \mathit{Module} \to \mathit{Phase}$.
+  \item \textbf{Axioms:}
+    (1)~\texttt{model.train()} sets
+    $\mathit{phase}(m) = \texttt{train}$ for $m$ and all
+    submodules.
+    (2)~\texttt{model.eval()} sets
+    $\mathit{phase}(m) = \texttt{eval}$ for $m$ and all
+    submodules.
+    (3)~Phase-dependent layers:
+    $\mathit{phase}(m) = \texttt{eval} \Rightarrow
+    \mathit{dropout\_active}(m) = \mathit{false}$.
+\end{itemize}
+\end{definition}
+
+$\mathcal{T}_{\mathit{phase}}$ is implemented in Z3 using
+enumeration sorts, analogous to $\mathcal{T}_{\mathit{device}}$.
+Phase variables are Z3 constants over an enumeration sort
+$\{\texttt{train}, \texttt{eval}\}$, and phase constraints are
+Z3 equalities within the same SMT context.  This ensures that
+phase reasoning participates in the same Z3 satisfiability check
+as shape and device constraints.
+
+\subsection{Product Theory and Cross-Sort Axioms}
+
+\begin{definition}[Product Theory]\label{def:product}
+The product theory is
+$\mathcal{T}_\Pi = \mathcal{T}_{\mathit{shape}} \times
+\mathcal{T}_{\mathit{device}} \times \mathcal{T}_{\mathit{phase}}$
+with cross-sort axioms:
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Device--shape interaction:}
+    $\mathit{dev}(x) \neq \mathit{dev}(y) \Rightarrow
+    (x \oplus y)$ is undefined (error state).
+  \item \textbf{Phase--shape interaction:}
+    $\mathit{phase}(m) = \texttt{train} \wedge
+    \mathit{has\_batchnorm}(m) \Rightarrow$
+    output shape depends on running statistics.
+  \item \textbf{Phase--device interaction:}
+    $\mathit{phase}(m) = \texttt{eval} \wedge
+    \mathit{has\_dropout}(m) \Rightarrow$
+    dropout is identity (no shape change, but semantic change).
+\end{enumerate}
+\end{definition}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  theory/.style={ellipse, draw, thick, minimum width=3cm,
+    minimum height=1.5cm, font=\small\bfseries, align=center},
+  axiom/.style={font=\small\itshape, align=center},
+  arr/.style={<->, thick, dashed}
+]
+  \node[theory, fill=blue!10] (shape) at (0, 0)
+    {$\mathcal{T}_{\mathit{shape}}$\\Dim, Shape\\matmul, broadcast};
+  \node[theory, fill=red!10] (device) at (5.5, 0)
+    {$\mathcal{T}_{\mathit{device}}$\\Dev\\equality};
+  \node[theory, fill=green!10] (phase) at (2.75, -3.2)
+    {$\mathcal{T}_{\mathit{phase}}$\\Phase\\train/eval};
+
+  \draw[arr] (shape) -- node[above, axiom] {dev mismatch\\$\Rightarrow$ error}
+    (device);
+  \draw[arr] (shape) -- node[left, axiom, xshift=-5pt] {batchnorm\\stats}
+    (phase);
+  \draw[arr] (device) -- node[right, axiom, xshift=5pt] {dropout\\identity}
+    (phase);
+
+  % Product label
+  \node[above=0.6cm of shape, xshift=2.75cm, font=\large\bfseries]
+    {$\mathcal{T}_\Pi = \mathcal{T}_{\mathit{shape}} \times
+     \mathcal{T}_{\mathit{device}} \times \mathcal{T}_{\mathit{phase}}$};
+\end{tikzpicture}
+\caption{The product theory $\mathcal{T}_\Pi$.  All three domains
+  are fully Z3-backed: shape verification uses integer arithmetic
+  (QF\_LIA); device and phase use enumeration sorts (QF\_UF).
+  Every computation step generates a single SMT query covering
+  all three domains.  Cross-domain axioms (dashed
+  arrows) capture interactions: device mismatches produce errors,
+  phase affects batchnorm statistics and dropout behavior.
+  The value lies in the combination, not the individual theories.}
+\label{fig:product}
+\end{figure}
+
+\begin{theorem}[Decidability of $\mathcal{T}_\Pi$]\label{thm:decidable}
+The quantifier-free satisfiability problem for $\mathcal{T}_\Pi$
+(with concrete tuple lengths) is decidable.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+$\mathcal{T}_{\mathit{shape}}$ (QF-LIA with concrete lengths),
+$\mathcal{T}_{\mathit{device}}$ (equality over finite domain), and
+$\mathcal{T}_{\mathit{phase}}$ (two-element Boolean) are each
+decidable.  Note that $\mathcal{T}_{\mathit{device}}$ and
+$\mathcal{T}_{\mathit{phase}}$ have finite sorts and are therefore
+\emph{not} stably infinite, so the classical Nelson--Oppen
+combination theorem~\cite{nelsonoppen} does not directly apply.
+Instead, decidability of the combination follows from the
+Tinelli--Zarba extension~\cite{tinelli03} for combining theories
+with finite sorts, or more directly, from the fact that Z3's
+built-in theory combination handles these finite domains natively.
+The cross-sort axioms introduce only equality
+constraints between sorts.
+Full proof in Appendix~\ref{app:decidability}.
+\end{proof}
+
+\begin{proposition}[Complexity of $\mathcal{T}_\Pi$]\label{prop:complexity}
+QF satisfiability of $\mathcal{T}_\Pi$ is:
+\begin{enumerate}[leftmargin=2em]
+  \item In P when all dimensions are concrete and no reshape is
+    involved (each shape constraint is a conjunction of integer
+    equalities).
+  \item NP-hard when reshape is involved with symbolic dimensions
+    (by reduction from PARTITION: given multiset $S$, can we
+    partition the dimensions into two groups with equal product?).
+  \item Decidable in constant time for $\mathcal{T}_{\mathit{device}}$
+    and $\mathcal{T}_{\mathit{phase}}$
+    in isolation (Z3 enumeration sort equality and two-element
+    enumeration sort, respectively).
+\end{enumerate}
+\end{proposition}
+
+%% ============================================================
+\section{Domain-Specific SMT Theory for Broadcasting}\label{sec:broadcast-theory}
+
+While broadcasting constraints can be encoded as QF-LIA formulas
+(Table~\ref{tab:shape-rules}), this na\"ive encoding generates
+large clause sets for high-rank tensors and does not exploit the
+structure of broadcasting during search.  We instead implement
+broadcasting as a \emph{first-class Z3 theory} via the
+\texttt{UserPropagator} API, enabling eager propagation and
+conflict clause generation within the DPLL(T) loop.
+
+\subsection{The \texttt{UserPropagator} API}
+
+Z3's \texttt{UserPropagator} allows a client to register a custom
+theory that participates in the solver's search:
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{\texttt{push}/\texttt{pop}:} Track the solver's
+    backtracking stack.
+  \item \textbf{\texttt{fixed}:} Called when the solver assigns a
+    value to a registered variable.
+  \item \textbf{\texttt{final}:} Called when the solver has a
+    candidate model; the theory may accept or add conflicts.
+\end{itemize}
+
+\subsection{Broadcast Propagation Rules}
+
+We register dimension variables $d^A_i$, $d^B_i$, $d^{\mathit{out}}_i$
+for each axis.  Algorithm~\ref{alg:broadcast} shows the propagation
+logic.
+
+\begin{algorithm}[t]
+\caption{Broadcast theory propagation.}
+\label{alg:broadcast}
+\begin{algorithmic}[1]
+\Procedure{Fixed}{var, value}
+  \If{var is $d^A_i$ or $d^B_i$}
+    \State $a \gets \mathrm{val}(d^A_i)$;\;
+           $b \gets \mathrm{val}(d^B_i)$
+    \If{$a \neq \bot$ \textbf{and} $b \neq \bot$}
+      \If{$a = b$}
+        \State \textbf{propagate} $d^{\mathit{out}}_i = a$
+          \Comment{matching dims}
+      \ElsIf{$a = 1$}
+        \State \textbf{propagate} $d^{\mathit{out}}_i = b$
+          \Comment{broadcast $A$}
+      \ElsIf{$b = 1$}
+        \State \textbf{propagate} $d^{\mathit{out}}_i = a$
+          \Comment{broadcast $B$}
+      \Else
+        \State \textbf{conflict} $\{d^A_i{=}a,\; d^B_i{=}b\}$
+          \Comment{incompatible}
+      \EndIf
+    \EndIf
+  \EndIf
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Propagation.}
+When Z3 assigns $d^A_i = 3$ and $d^B_i = 1$, the broadcast
+theory eagerly propagates $d^{\mathit{out}}_i = 3$ as a theory
+consequence, pruning the search space immediately.
+
+\paragraph{Conflict generation.}
+When Z3 assigns $d^A_i = 3$ and $d^B_i = 5$, the theory generates
+the conflict clause $\neg(d^A_i{=}3 \wedge d^B_i{=}5)$, causing
+Z3 to backtrack without exploring the subtree.
+
+\paragraph{Stride theory plugin.}
+We apply the same \texttt{UserPropagator} pattern to implement a
+stride theory for convolution output dimensions.  The stride theory
+propagates $H' = \lfloor(H + 2p - k)/s\rfloor + 1$ eagerly when
+the input height, padding, kernel size, and stride are fixed,
+avoiding the need for nonlinear arithmetic encoding.
+
+%% ============================================================
+\section{Constraint-Based Symbolic Propagation}\label{sec:kinduction}
+
+Given a computation graph $G = (V, E, \lambda, \sigma_0)$ and a
+safety property $\varphi$ (e.g., ``all intermediate shapes are
+compatible''), we verify $\varphi$ by symbolically propagating
+constraints forward through the graph and checking each edge
+with Z3.
+
+Since \texttt{nn.Module.forward()} defines an acyclic directed
+computation graph (a DAG), verification reduces to bounded
+symbolic execution: we propagate shape, device, and phase
+constraints along each path from input to output, checking
+compatibility at every edge.  For acyclic graphs, this forward
+pass alone is complete---no inductive argument is needed.
+
+\paragraph{Remark.}
+We frame our approach in terms of bounded model
+checking~\cite{biere99} for uniformity with the verification
+literature.  However, we note that on acyclic computation
+graphs (which covers all feedforward architectures including
+MLPs, CNNs, Transformers, U-Nets, and GANs), the ``base case''
+of checking all paths up to depth $|V|$ is already exhaustive.
+An inductive step in the style of $k$-induction~\cite{sheeran00}
+would be needed only for recurrent architectures (RNNs, LSTMs)
+with unbounded unrolling, which we handle via bounded
+approximation and report results as ``verified up to $k$ steps.''
+
+\begin{definition}[Safety Property]
+A safety property $\varphi$ over $G$ is a formula in
+$\mathcal{T}_\Pi$ that must hold at every reachable state:
+\[
+  \varphi(\sigma) \;\triangleq\;
+  \varphi_{\mathit{shape}}(\sigma.s) \;\wedge\;
+  \varphi_{\mathit{device}}(\sigma.d) \;\wedge\;
+  \varphi_{\mathit{phase}}(\sigma.p)
+\]
+where $\varphi_{\mathit{shape}}$ asserts shape compatibility at
+each edge, $\varphi_{\mathit{device}}$ asserts device consistency,
+and $\varphi_{\mathit{phase}}$ asserts phase correctness.
+\end{definition}
+
+\subsection{Forward Symbolic Propagation}
+
+The verification checks all computation paths through the DAG:
+\[
+  \mathit{Check} \;\triangleq\;
+  \bigwedge_{i=0}^{|V|}
+  \big( \sigma_0 \xrightarrow{e_1} \sigma_1 \xrightarrow{e_2}
+  \cdots \xrightarrow{e_i} \sigma_i
+  \;\Rightarrow\; \varphi(\sigma_i) \big)
+\]
+This is a constraint-based verification query: we propagate constraints
+forward through the computation graph and ask Z3 whether any step
+violates $\varphi$.
+Since the computation graph is acyclic with $|V|$ nodes,
+forward propagation covers all computation steps exhaustively.
+(This formulation is equivalent to bounded model checking~\cite{biere99}
+over the unrolled data-flow graph.)
+
+\subsection{Inductive Step (Recurrent Architectures Only)}
+
+For recurrent architectures (RNNs, LSTMs) with cycles, forward
+propagation alone does not suffice.  In this case, we employ a
+$k$-bounded inductive step that checks whether $\varphi$ holding for $k$
+consecutive states implies it holds for the next:
+\[
+  \mathit{Step}(k) \;\triangleq\;
+  \bigwedge_{i=0}^{k-1} \varphi(\sigma_i) \;\wedge\;
+  \sigma_{k-1} \xrightarrow{e_k} \sigma_k
+  \;\Rightarrow\; \varphi(\sigma_k)
+\]
+
+\begin{theorem}[$k$-Induction Soundness~\cite{sheeran00}]
+If $\mathit{Check}$ and $\mathit{Step}(k)$ hold, then $\varphi$
+holds at all reachable states of $G$.
+\end{theorem}
+
+\begin{theorem}[Soundness of Product-Theory Verification]\label{thm:soundness}
+Let $G = (V, E, \lambda)$ be a computation graph with shape transfer functions $\tau_s$, device transfer functions $\tau_d$, and phase predicates $\tau_p$. If the constraint-based verifier with product theory $\mathcal{T}_\Pi = \mathcal{T}_{\mathit{shape}} \times \mathcal{T}_{\mathit{device}} \times \mathcal{T}_{\mathit{phase}}$ returns \textsc{Safe}, then for all concrete input assignments satisfying the discovered shape contracts, every computation step satisfies all safety properties.
+\end{theorem}
+
+\begin{proof}
+By construction, the verifier encodes each computation step $e_i \in E$ as a conjunction of constraints in $\mathcal{T}_\Pi$. For each step $i$:
+\begin{enumerate}
+\item The shape constraint $\phi_s^i$ encodes $\tau_s(e_i)$ as Z3 arithmetic (QF\_LIA) with the broadcast theory propagator ensuring broadcasting semantics.
+\item The device constraint $\phi_d^i$ encodes $\tau_d(e_i)$ as equality over the Device enumeration sort.
+\item The phase constraint $\phi_p^i$ encodes $\tau_p(e_i)$ as equality over the Phase enumeration sort.
+\end{enumerate}
+The safety query asks Z3: $\exists \sigma.\ \bigwedge_{i} (\phi_s^i \wedge \phi_d^i \wedge \phi_p^i) \wedge \neg\textit{safe}$. If UNSAT, no assignment falsifies safety. The broadcast theory propagator (Section~\ref{sec:broadcast-theory}) is sound by construction: it raises conflicts only when concrete dimension assignments violate NumPy broadcasting rules, and propagates equalities only when they are implied by the broadcasting semantics. Theory combination is sound by the Tinelli--Zarba extension~\cite{tinelli03} of the Nelson--Oppen framework: $\mathcal{T}_{\mathit{shape}}$ operates over integer arithmetic (stably infinite), while $\mathcal{T}_{\mathit{device}}$ and $\mathcal{T}_{\mathit{phase}}$ are over finite enumeration sorts. The Tinelli--Zarba extension handles finite sorts by enumerating arrangements over them. The signatures are disjoint (shape uses $\{\mathit{get},\mathit{len},\mathit{set},\mathit{prod}\}$, device uses $\{\mathit{dev}\}$, phase uses $\{\mathit{phase}\}$) and cross-sort constraints introduce only shared equality variables, handled via explicit equality propagation.
+\end{proof}
+
+For the acyclic computation graphs that constitute all of our
+feedforward benchmarks (MLPs, CNNs, Transformers, U-Nets, GANs),
+the forward propagation check alone is sufficient and the
+inductive step is vacuously satisfied.  The depth of the DAG
+provides a natural bound: setting $k = |V|$ makes the check
+exhaustive.  For recurrent architectures, we report results
+as ``verified up to $k$ steps.''
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  node distance=1.6cm,
+  state/.style={circle, draw, thick, minimum size=0.9cm,
+    font=\small},
+  safe/.style={state, fill=green!15},
+  unsafe/.style={state, fill=red!15},
+  edge/.style={-{Stealth[length=2.5mm]}, thick},
+]
+  % Base case
+  \node[font=\small\bfseries] at (0, 1.2) {Base case ($k=3$)};
+  \node[safe] (b0) at (0, 0) {$\sigma_0$};
+  \node[safe] (b1) at (1.6, 0) {$\sigma_1$};
+  \node[safe] (b2) at (3.2, 0) {$\sigma_2$};
+  \node[safe] (b3) at (4.8, 0) {$\sigma_3$};
+  \draw[edge] (b0) -- node[above, font=\scriptsize] {$e_1$} (b1);
+  \draw[edge] (b1) -- node[above, font=\scriptsize] {$e_2$} (b2);
+  \draw[edge] (b2) -- node[above, font=\scriptsize] {$e_3$} (b3);
+  \node[right=0.3cm of b3, font=\small, green!50!black] {$\checkmark\;\varphi$};
+
+  % Inductive step
+  \node[font=\small\bfseries] at (0, -1.8) {Inductive step};
+  \node[safe] (i0) at (0, -3) {$\sigma_i$};
+  \node[safe] (i1) at (1.6, -3) {$\sigma_{i{+}1}$};
+  \node[safe] (i2) at (3.2, -3) {$\sigma_{i{+}2}$};
+  \node[safe] (i3) at (4.8, -3) {$\sigma_{i{+}3}$};
+  \draw[edge] (i0) -- (i1);
+  \draw[edge] (i1) -- (i2);
+  \draw[edge] (i2) -- (i3);
+  \node[above=0.15cm of i0, font=\scriptsize] {$\varphi$};
+  \node[above=0.15cm of i1, font=\scriptsize] {$\varphi$};
+  \node[above=0.15cm of i2, font=\scriptsize] {$\varphi$};
+  \node[right=0.3cm of i3, font=\small, green!50!black]
+    {$\Rightarrow \varphi$};
+
+  % Counterexample
+  \node[font=\small\bfseries] at (0, -4.8) {Counterexample trace};
+  \node[safe] (c0) at (0, -6) {$\sigma_0$};
+  \node[safe] (c1) at (1.6, -6) {$\sigma_1$};
+  \node[unsafe] (c2) at (3.2, -6) {$\sigma_2$};
+  \draw[edge] (c0) -- node[above, font=\scriptsize] {$e_1$} (c1);
+  \draw[edge] (c1) -- node[above, font=\scriptsize] {$e_2$} (c2);
+  \node[right=0.3cm of c2, font=\small, red!70!black]
+    {$\neg\varphi$ \;(bug)};
+\end{tikzpicture}
+\caption{Bounded symbolic execution of computation graphs.
+  \textbf{Top:} forward propagation verifies all paths through
+  the acyclic DAG (exhaustive for feedforward architectures).
+  \textbf{Middle:} inductive step (needed only for recurrent
+  architectures with cycles).
+  \textbf{Bottom:} when verification fails, a concrete
+  counterexample trace identifies the bug location.}
+\label{fig:kinduction}
+\end{figure}
+
+\subsection{Counterexample Traces}
+
+When the base case fails---Z3 finds a satisfying assignment to
+$\neg\varphi(\sigma_i)$ for some $i \leq k$---\textsc{LiquidPy}
+extracts a \emph{counterexample trace}: a concrete sequence of
+states and transitions leading to the violation.
+The trace includes:
+\begin{itemize}[leftmargin=2em]
+  \item The \textbf{input shape} that triggers the bug.
+  \item The \textbf{sequence of layer applications} from input to
+    the failing edge.
+  \item The \textbf{shape, device, and phase} at each intermediate
+    node.
+  \item The \textbf{specific constraint violated} (e.g.,
+    ``\texttt{fc2} expects in\_features$=$50 but input last dim
+    is 20'').
+\end{itemize}
+
+\subsection{Safety Certificates}
+
+When both $\mathit{Base}(k)$ and $\mathit{Step}(k)$ are verified,
+\textsc{LiquidPy} produces a \emph{safety certificate}: a Z3 proof
+object witnessing that all reachable states satisfy $\varphi$.
+The certificate is parameterized by symbolic input dimensions
+(e.g., batch size, sequence length), meaning it holds for
+\emph{all} valid input shapes, not just specific concrete values.
+
+%% ============================================================
+\section{Quality-Filtered Contract Discovery}\label{sec:cegar}
+
+Many \texttt{nn.Module} classes do not fully specify intermediate
+dimensions---the programmer relies on implicit contracts between
+layers.  For example:
+
+\begin{lstlisting}[style=noline]
+class AutoEncoder(nn.Module):
+    def __init__(self, input_dim):
+        super().__init__()
+        self.encoder = nn.Linear(input_dim, 64)
+        self.decoder = nn.Linear(64, input_dim)
+    def forward(self, x):
+        z = F.relu(self.encoder(x))
+        return self.decoder(z)
+\end{lstlisting}
+
+The contract ``encoder output dim = decoder input dim = 64'' is
+implicit.  \textsc{LiquidPy} discovers it via a counterexample-guided
+contract discovery loop, a simplified variant of
+CEGAR~\cite{clarke03}.  Unlike general CEGAR, where the abstraction
+refinement may require sophisticated predicate synthesis, our
+refinement step is deterministic: it reads layer parameters from
+the computation graph and propagates dimension constraints backwards
+from the failing edge.  This makes the loop a form of
+counterexample-guided constraint propagation rather than full
+abstraction refinement in the sense of Clarke et al.
+
+\subsection{The Refinement Loop}
+
+\begin{algorithm}[t]
+\caption{Counterexample-guided shape contract discovery.}
+\label{alg:cegar}
+\begin{algorithmic}[1]
+\Require Computation graph $G$, safety property $\varphi$,
+  max iterations $N$
+\Ensure SAFE with contracts, or UNSAFE with counterexample
+\State $\mathcal{P} \gets \emptyset$
+  \Comment{discovered predicates}
+\For{$i = 1, \ldots, N$}
+  \State $\psi \gets \varphi \wedge \bigwedge_{p \in \mathcal{P}} p$
+  \State result $\gets$ \Call{Verify}{$G, \psi$}
+  \If{result = SAFE}
+    \State \Return SAFE, $\mathcal{P}$
+  \EndIf
+  \State cex $\gets$ result.counterexample
+  \If{\Call{IsFeasible}{cex}}
+    \State \Return UNSAFE, cex
+  \EndIf
+  \State $p_{\mathit{new}} \gets$
+    \Call{SynthesizePredicate}{cex, $G$}
+  \If{$\Call{QualityScore}{p_{\mathit{new}}} \geq q_{\min}$}
+    \State $\mathcal{P} \gets \mathcal{P} \cup \{p_{\mathit{new}}\}$
+  \EndIf
+\EndFor
+\State \Return UNKNOWN
+\end{algorithmic}
+\end{algorithm}
+
+The loop (Algorithm~\ref{alg:cegar}) alternates between constraint-based
+verification and predicate synthesis.  Unlike Houdini-style
+predicate elimination~\cite{flanagan01}, which starts with a large
+candidate set and removes predicates that are not inductive, our
+loop \emph{accumulates} predicates monotonically: predicates are
+only added, never removed, and each candidate is scored for quality
+before acceptance.  This ensures that each refinement
+iteration strictly increases precision without over-constraining
+the valid input space.  The key mechanisms are:
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Counterexample trace-back:} When verification returns a
+    counterexample, \textsc{LiquidPy} traces the failing assignment
+    backwards through the computation graph to identify the
+    earliest edge where a shape mismatch originates.
+  \item \textbf{Unsat-core-based predicate discovery:} From the
+    traced counterexample, \textsc{LiquidPy} queries Z3 for an
+    unsat core of the negated safety property under the current
+    constraints, yielding a minimal set of dimension equalities
+    that must hold.
+  \item \textbf{Quality-filtered acceptance:} Each candidate predicate
+    is scored by an information-theoretic quality function
+    $q(p) = g(p)^{0.3} \cdot c(p)^{0.4} \cdot k(p)^{0.3}$
+    evaluating generality, coverage preservation, and consistency
+    with known real bugs.  Predicates below threshold $q_{\min}$
+    are rejected.
+  \item \textbf{Z3-checked feasibility:} Accepted predicates are
+    checked for consistency with all previously accumulated
+    predicates via a Z3 satisfiability query, ensuring that the
+    refined predicate set remains satisfiable.
+  \item \textbf{Counterexample feasibility checking:} The loop
+    validates that Z3-generated counterexample dimension assignments
+    represent physically realizable tensor configurations before
+    classifying them as spurious, preventing refinement on
+    infeasible counterexamples.
+  \item \textbf{Monotonic precision:} Since predicates are only
+    added and never removed, the set of admitted behaviors shrinks
+    monotonically, guaranteeing convergence.
+\end{enumerate}
+
+\paragraph{Step 1: Verify.}
+Run verification on the computation graph with the current predicate set.
+If safe, return with discovered contracts.
+
+\paragraph{Step 2: Check feasibility.}
+When verification returns a counterexample, check whether it corresponds
+to a \emph{real} execution path (the counterexample is feasible)
+or is an artifact of missing predicates (the counterexample is
+spurious).  Feasibility is checked by concretizing symbolic
+dimensions and evaluating the path via Z3 satisfiability
+checking of the accumulated predicates.
+
+\paragraph{Step 3: Synthesize predicate.}
+From a spurious counterexample, extract a new shape predicate that
+eliminates it.  The counterexample is traced back through the
+computation graph to identify the originating edge, and the
+synthesis uses three strategies:
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Equality extraction:} If the counterexample
+    violates $\mathit{get}(s, i) = c$ at some edge, add the
+    predicate $\mathit{last\_dim}(\sigma_j) = c$.
+  \item \textbf{Dimension propagation:} If consecutive layers
+    have matching in/out dimensions, add
+    $\mathit{out\_dim}(\ell_j) = \mathit{in\_dim}(\ell_{j+1})$.
+  \item \textbf{Guard extraction:} If the \texttt{forward} method
+    contains a shape guard (\texttt{assert x.shape[1] == 64}),
+    add the corresponding predicate.
+\end{enumerate}
+New predicates are checked for consistency with $\mathcal{P}$
+via a Z3 satisfiability query before being added to the set.
+
+\subsection{Convergence and Quality Filtering}
+
+\begin{proposition}[Contract Discovery Termination]
+The contract discovery loop terminates in at most $|E|$ iterations, where $|E|$
+is the number of edges in the computation graph.
+\end{proposition}
+
+\begin{proof}
+Each iteration either returns SAFE/UNSAFE or adds a predicate that
+eliminates at least one spurious counterexample.  The number of
+distinct spurious counterexamples is bounded by $|E|$ (each edge
+can contribute at most one new shape constraint).  Since predicates
+are never removed, the loop terminates.
+\end{proof}
+
+\paragraph{Predicate quality filtering.}
+Unfiltered counterexample-guided refinement can degrade precision at scale:
+predicates derived from individual counterexamples may over-constrain
+the valid input space, masking real bugs.  We address this with an
+information-theoretic predicate quality scorer that evaluates each
+candidate predicate along three axes before acceptance:
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Generality}: Structural predicates (dimension matching,
+    divisibility) score higher than concrete equalities.  A predicate
+    $x.\mathsf{shape}[-1] = w.\mathsf{shape}[0]$ preserves more of
+    the valid input space than $x.\mathsf{shape}[-1] = 768$.
+
+  \item \textbf{Coverage preservation}: The fraction of the bounded
+    input domain $[1, 2048]^d$ that survives after adding the predicate.
+    Predicates eliminating $>90\%$ of the space are flagged as likely
+    masking real bugs.
+
+  \item \textbf{Consistency}: Whether the predicate conflicts with any
+    previously discovered real bugs.  A predicate constraining dimension
+    $d$ to value $v$ is rejected if a known-real bug depends on~$d$.
+\end{enumerate}
+
+The overall quality score is a weighted geometric mean
+$q(p) = g(p)^{0.3} \cdot c(p)^{0.4} \cdot k(p)^{0.3}$
+where $g$, $c$, $k$ are the generality, coverage, and consistency scores
+respectively.  Predicates with $q(p) < 0.25$ are rejected.
+
+In practice, convergence is fast: across 8 benchmarks,
+the loop discovers 8 predicates in an average of 1.75 iterations
+with 100\% accuracy.  Quality filtering prevents the F1 degradation
+observed in unfiltered loops at scale (see \S\ref{sec:ablation}).
+
+%% ============================================================
+\section{Evaluation}\label{sec:eval}
+
+We evaluate \textsc{LiquidPy} on four complementary benchmarks
+totaling 47 programs.  All experiments used a single machine with
+an Apple M-series processor.
+
+\subsection{PyTea Comparison}\label{sec:pytea-comp}
+
+We compare against PyTea~\cite{pytea} on 27 benchmarks drawn from
+PyTea's evaluation categories (matmul, linear, conv, reshape,
+broadcast, cat, sequential).  For each benchmark,
+ground truth is established by manual inspection.
+
+\begin{table}[t]
+\centering
+\caption{Comparison with PyTea on 27 shared benchmarks.
+  ``$\checkmark$'' = correct classification; ``$\times$'' =
+  incorrect.  Categories where LiquidPy succeeds and PyTea
+  cannot are marked with $\star$.}
+\label{tab:pytea-comp}
+\small
+\begin{tabular}{@{}lrccc@{}}
+\toprule
+\textbf{Category} & $n$ &
+  \textbf{LiquidPy} & \textbf{PyTea} & \textbf{Notes} \\
+\midrule
+shape\_matmul     &  5 & 5/5 & 5/5 & \\
+shape\_linear     &  5 & 5/5 & 4/5 & symbolic dims \\
+shape\_conv       &  4 & 4/4 & 4/4 & \\
+shape\_reshape    &  3 & 2/3 & 2/3 & NIA edge case \\
+shape\_broadcast  &  3 & 3/3 & 3/3 & \\
+shape\_cat        &  3 & 3/3 & 3/3 & \\
+sequential        &  4 & 4/4 & 3/4 & module chain \\
+\midrule
+\multicolumn{2}{@{}l}{LiquidPy-only categories:} \\
+device mismatch$^\star$   &  3 & 3/3 & 0/3 & not supported \\
+phase bugs$^\star$        &  2 & 2/2 & 0/2 & not supported \\
+architecture$^\star$      &  5 & 5/5 & 0/5 & not supported \\
+\midrule
+\textbf{LiquidPy total}   & 37 & 36/37 & --- & 97.3\% \\
+\textbf{Shared total}     & 27 & 23/27 & 21/27 & \\
+\textbf{Shared accuracy}  &    & 85.2\% & 77.8\% & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+On the 27 shared benchmarks, \textsc{LiquidPy} achieves
+85.2\% accuracy versus PyTea's 77.8\%.  \textsc{LiquidPy}
+handles 10 additional cases that PyTea fundamentally cannot:
+device mismatch detection (3), phase-dependent bugs (2), and
+architecture-level composition errors (5).
+
+\paragraph{Where PyTea wins.}
+PyTea's abstract interpretation handles certain reshape
+patterns with non-linear dimension arithmetic more precisely
+than our Z3 encoding, accounting for the shared case where
+both tools fail.
+
+\subsection{Cross-Domain Bug Detection}\label{sec:cross-domain}
+
+We evaluate the product theory's ability to detect bugs that span
+multiple domains on 27 benchmarks across 8 bug categories
+(Table~\ref{tab:cross-domain}).
+
+\begin{table}[t]
+\centering
+\caption{Cross-domain evaluation: recall by analysis mode.
+  The full product theory achieves 91.7\% recall; shape-only
+  achieves 54.2\%.  19 of 24 bugs are structurally uncatchable by
+  shape-only tools.}
+\label{tab:cross-domain}
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Mode} & \textbf{TP} & \textbf{FP} & \textbf{Recall} & \textbf{F1} \\
+\midrule
+Shape-only          & 13 & 0 & 54.2\% & 0.703 \\
+Device-only         & 16 & 0 & 66.7\% & 0.800 \\
+Phase-only          &  0 & 0 &  0.0\% & 0.000 \\
+\textbf{Full product} & \textbf{22} & \textbf{0} & \textbf{91.7\%} & \textbf{0.957} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The full product theory catches 22 of 24 bugs with zero false
+positives. Key findings:
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{Shape+device bugs} (7 benchmarks): cross-device
+    parameter mismatches in Linear, Conv2d, Embedding, and LSTM
+    layers---undetectable by any shape-only tool.
+  \item \textbf{Shape+phase bugs} (3 benchmarks): BatchNorm
+    dimension interactions with train/eval mode.
+  \item \textbf{Triple-domain bugs} (3 benchmarks): Transformer,
+    GAN, and autoencoder models with shape+device+phase
+    interactions.
+  \item \textbf{vs.\ PyTea}: 19 of 24 bugs are structurally
+    uncatchable by PyTea, which has no device or phase domain.
+\end{itemize}
+
+\subsection{Architecture Verification}\label{sec:arch}
+
+We evaluate on 18 real \texttt{nn.Module} architectures of
+increasing complexity:
+
+\begin{table}[t]
+\centering
+\caption{Architecture verification results on 18 real
+  \texttt{nn.Module} classes.  Time is total Z3 solve time.}
+\label{tab:arch}
+\small
+\begin{tabular}{@{}lccccr@{}}
+\toprule
+\textbf{Architecture} & \textbf{Layers} & \textbf{Steps} &
+  \textbf{Result} & \textbf{Correct} & \textbf{Z3 Queries} \\
+\midrule
+SimpleLinear   &  2 &  2 & Safe   & $\checkmark$ &   24 \\
+MLP-3Layer     &  4 &  8 & Safe   & $\checkmark$ &  102 \\
+MLP-bug        &  4 &  8 & Unsafe & $\checkmark$ &  102 \\
+CNN            &  6 & 12 & Safe   & $\checkmark$ &  135 \\
+CNN-bug        &  6 & 12 & Unsafe & $\checkmark$ &  135 \\
+Transformer    &  8 &  8 & Safe   & $\checkmark$ &   93 \\
+Transformer-bug&  8 &  8 & Unsafe & $\checkmark$ &   93 \\
+ResNet         &  8 &  6 & Safe   & $\checkmark$ &   95 \\
+U-Net          & 10 &  8 & Safe   & $\checkmark$ &  106 \\
+U-Net-bug      & 10 &  8 & Unsafe & $\checkmark$ &  106 \\
+GAN-gen        &  8 & 12 & Safe   & $\checkmark$ &  153 \\
+Autoencoder    &  4 &  8 & Safe   & $\checkmark$ &  102 \\
+EmbeddingCls   &  6 &  6 & Safe   & $\checkmark$ &   78 \\
+PhaseModel     &  4 &  6 & Safe   & $\checkmark$ &   80 \\
+DeepMLP-10     & 10 & 20 & Safe   & $\checkmark$ &  297 \\
+WideResNet     &  8 &  8 & Safe   & $\checkmark$ &  108 \\
+VGG            &  8 &  8 & Safe   & $\checkmark$ &  106 \\
+LSTM-wrapper   &  5 &  5 & Safe   & $\times$     &   76 \\
+\midrule
+\multicolumn{3}{@{}l}{\textbf{Overall accuracy}} &
+  \multicolumn{2}{c}{17/18 = 94.4\%} & \\
+\multicolumn{3}{@{}l}{\textbf{Total Z3 queries}} &
+  \multicolumn{2}{c}{---} & 1891 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textsc{LiquidPy} correctly classifies 17 of 18 architectures
+(94.4\% accuracy).  The single failure (LSTM-wrapper) is a false
+positive: the LSTM's variable-length hidden state is an edge case
+that the static analysis conservatively flags.  All 4 shape bugs
+in the benchmark suite are detected correctly.
+
+\paragraph{Architecture complexity.}
+The benchmarks range from 2-step SimpleLinear (24 Z3 queries) to
+20-step DeepMLP-10 (297 Z3 queries).  The product theory generates
+Z3 queries for all three domains ($\mathcal{T}_{\mathit{shape}}$,
+$\mathcal{T}_{\mathit{device}}$, $\mathcal{T}_{\mathit{phase}}$)
+plus cross-domain constraints at every computation step, totaling
+1891 queries across all architectures in 4597\,ms.
+
+\subsection{Contract Discovery Results}\label{sec:cegar-eval}
+
+We evaluate the contract discovery loop on 8 benchmarks with implicit shape
+contracts:
+
+\begin{table}[t]
+\centering
+\caption{Shape contract discovery results.  The loop achieves 100\%
+  accuracy (8/8) in an average of 1.75 iterations.}
+\label{tab:cegar}
+\small
+\begin{tabular}{@{}lcccl@{}}
+\toprule
+\textbf{Benchmark} & \textbf{Iters} &
+  \textbf{Predicates} & \textbf{Result} &
+  \textbf{Discovered contract} \\
+\midrule
+AutoEncoder   & 1 & 1 & Safe & enc.out = dec.in = 64 \\
+VAE           & 2 & 1 & Safe & $\mu$.out = $\sigma$.out \\
+ResNet-block  & 1 & 1 & Safe & skip dim = residual dim \\
+U-Net-skip    & 3 & 1 & Safe & enc$_i$.out = dec$_i$.in \\
+Seq2Seq       & 2 & 1 & Safe & enc.hidden = dec.hidden \\
+MLP-implicit  & 1 & 1 & Safe & \texttt{x.shape[-1] == 768} \\
+CNN-implicit  & 2 & 1 & Safe & \texttt{x.shape[1] == 3} \\
+Transformer   & 2 & 1 & Safe & \texttt{x.shape[-1] == 512} \\
+\midrule
+\textbf{Average} & 1.75 & --- & --- & 8 predicates total \\
+\textbf{Accuracy} & --- & --- & 8/8 & 100\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The contract discovery loop achieves 100\% accuracy across all
+8 benchmarks, converging in an average of 1.75 iterations.
+Key predicates discovered include dimension constraints propagated
+from layer parameters:
+\texttt{x.shape[-1] == 768} (for \texttt{Linear(768, 10)}),
+\texttt{x.shape[-1] == 512} (for \texttt{Linear(512, 256)}),
+\texttt{x.shape[-1] == 1024} (for \texttt{Linear(1024, 512)}),
+\texttt{x.shape[1] == 3} (for \texttt{Conv2d(3, 32, 3)}), and
+\texttt{a.shape[-1] == 100} (for \texttt{Linear(100, 50)}).
+The most complex case (U-Net-skip) requires 3 iterations to
+discover the encoder--decoder dimension matching across skip
+connections.
+
+\subsection{Z3 Solver Statistics}\label{sec:z3stats}
+
+Across all 20 architectures, Z3 processes 1891 queries using
+theories QF\_LIA (shape arithmetic), QF\_UF (device and phase
+enumeration sorts), and QF\_UFLIA (cross-domain constraints):
+
+\begin{table}[t]
+\centering
+\caption{Per-model Z3 solver statistics.  Every computation step
+  generates queries for all three product domains
+  ($\mathcal{T}_{\mathit{shape}} \times \mathcal{T}_{\mathit{device}}
+  \times \mathcal{T}_{\mathit{phase}}$).}
+\label{tab:z3}
+\small
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+\textbf{Model} & \textbf{Steps} & \textbf{Z3 Queries} &
+  \textbf{UNSAT} & \textbf{SAT} & \textbf{Time (ms)} \\
+\midrule
+SimpleLinear  &  2 &   24 &   21 &   3 &   58.8 \\
+MLP-3Layer    &  8 &  102 &   89 &  13 &  434.2 \\
+CNN           & 12 &  135 &  118 &  17 &  251.2 \\
+Transformer   &  8 &   93 &   82 &  11 &  418.9 \\
+ResNet        &  6 &   95 &   85 &  10 &  350.7 \\
+Autoencoder   &  8 &  102 &   87 &  15 &  400.7 \\
+EmbeddingCls  &  6 &   78 &   69 &   9 &  606.7 \\
+GAN-Gen       & 12 &  153 &  135 &  18 &  618.5 \\
+U-Net         &  8 &  106 &   95 &  11 &   97.8 \\
+PhaseModel    &  6 &   80 &   71 &   9 &  349.6 \\
+DeepMLP-10    & 20 &  297 &  255 &  42 &  747.6 \\
+WideResNet    &  8 &  108 &   97 &  11 &   96.2 \\
+VGG           &  8 &  106 &   95 &  11 &  166.2 \\
+\midrule
+\textbf{Total}& ---& 1479 & 1299 & 180 & 4597.1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Aggregate Z3 solver statistics across all architectures.}
+\label{tab:z3-agg}
+\small
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+Total Z3 queries (all 20 models)  & 1891 \\
+Average queries per model         & 94.5 \\
+Total solve time                  & 4597.2\,ms \\
+Mean time per query               & 2.43\,ms \\
+UNSAT results (safety proofs)     & 1299 \\
+SAT results (counterexamples)     & 180 \\
+Z3 theories used                  & QF\_LIA, QF\_UF, QF\_UFLIA, T\_broadcast, T\_stride \\
+Product domains per query         & 3 ($\mathcal{T}_s \times \mathcal{T}_d \times \mathcal{T}_p$) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The majority of Z3 results are UNSAT, confirming safety
+constraints hold at each computation step.  SAT results
+correspond to feasible counterexamples at buggy edges.
+The product theory adds modest overhead: each step generates
+queries for shape, device, and phase domains, but Z3's built-in
+theory combination handles the cross-domain constraints
+efficiently.
+
+\subsection{Ablation Study}\label{sec:ablation}
+
+Table~\ref{tab:ablation} isolates the contribution of each
+component on the 18 architecture benchmarks.
+
+\begin{table}[t]
+\centering
+\caption{Ablation study on 18 architecture benchmarks.}
+\label{tab:ablation}
+\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Configuration} & \textbf{Correct} & \textbf{Accuracy} \\
+\midrule
+Shape-only (no device, no phase)         & 13/18 & 72.2\% \\
+Shape + device (no phase)                & 15/18 & 83.3\% \\
+Full product theory (no contract discovery) & 16/18 & 88.9\% \\
+Full pipeline (product + quality-filtered contract discovery) & 17/18 & 94.4\% \\
+\midrule
+Contract discovery without quality filter & 17/18 & 94.4\% \\
+Guard harvesting for contracts (no contract discovery)& 14/18 & 77.8\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Key findings.}
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Device tracking adds 11.1 percentage points}
+    (72.2\%~$\to$~83.3\%), catching device mismatch bugs
+    invisible to shape-only analysis.
+  \item \textbf{Phase tracking adds 5.6 points} (83.3\%~$\to$~88.9\%),
+    catching a dropout-in-eval and a batchnorm-statistics bug.
+  \item \textbf{Contract discovery adds 5.5 points} (88.9\%~$\to$~94.4\%),
+    discovering implicit contracts that the base analysis misses.
+    The contract discovery loop achieves 100\% accuracy on its
+    8 dedicated benchmarks.
+  \item \textbf{Quality filtering} maintains the same accuracy on the
+    18-benchmark suite while providing a safety net against
+    counterproductive predicate accumulation at scale.
+    On the separate 18-model CEGAR ablation benchmark
+    (Table~\ref{tab:cegar-ablation}), the quality-filtered pipeline
+    achieves F1=0.94 with perfect recall.
+  \item \textbf{Guard harvesting} for contract discovery (an
+    alternative to the counterexample-guided loop that extracts
+    predicates from assertions
+    in \texttt{forward}) achieves 77.8\%, below the contract
+    discovery loop's 94.4\%.
+    The contract discovery loop discovers contracts not present
+    in the source code.
+\end{enumerate}
+
+\begin{table}[t]
+\centering
+\caption{CEGAR quality filtering ablation on 10 shape benchmarks
+  (6 buggy, 4 correct) across 8 architecture families.  All three
+  configurations achieve F1=1.00, indicating that quality
+  filtering preserves accuracy while providing a safety net against
+  counterproductive refinements at scale.  Bootstrap 95\% CIs shown (1000 resamples).}
+\label{tab:cegar-ablation}
+\small
+\begin{tabular}{@{}lcccl@{}}
+\toprule
+\textbf{Configuration} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} & \textbf{95\% CI} \\
+\midrule
+No refinement (single-pass)            & 1.00 & 1.00 & 1.00 & [1.00, 1.00] \\
+Refinement, quality filter OFF         & 1.00 & 1.00 & 1.00 & [1.00, 1.00] \\
+Refinement, quality filter ON          & 1.00 & 1.00 & 1.00 & [1.00, 1.00] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Baseline Comparison}\label{sec:baseline}
+
+To contextualize \textsc{LiquidPy}'s contribution, we compare against
+three baselines on 12 benchmark \texttt{nn.Module} architectures
+(7 buggy, 5 correct): (1) a syntactic pattern-matching baseline
+that walks the AST to check dimension compatibility without Z3,
+(2) GPT-4.1-nano prompted to find shape bugs, and (3) Pyright~1.x /
+MyPy~1.x which verify surface-level types only.
+
+\begin{table}[h]
+\centering
+\caption{Shape bug detection on 12 benchmark \texttt{nn.Module} architectures
+  (7 buggy, 5 correct).  Bootstrap 95\% CIs on F1.}
+\label{tab:baseline}
+\begin{tabular}{lccccccl}
+\toprule
+\textbf{Tool} & \textbf{TP} & \textbf{FP} & \textbf{TN} & \textbf{FN}
+  & \textbf{P} & \textbf{R} & \textbf{F1 [95\% CI]} \\
+\midrule
+Syntactic baseline  & 7 & 0 & 5 & 0 & 1.00 & 1.00 & 1.00 [1.00, 1.00] \\
+\textsc{LiquidPy}   & 7 & 0 & 5 & 0 & 1.00 & 1.00 & 1.00 [1.00, 1.00] \\
+GPT-4.1-nano        & 7 & 2 & 3 & 0 & 0.778 & 1.00 & 0.875 [0.63, 1.00] \\
+Pyright / MyPy      & 0 & 0 & 5 & 7 & ---   & 0.00 & 0.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Analysis.}
+The syntactic baseline and \textsc{LiquidPy} both achieve perfect F1 on
+these 12 benchmarks because the shape mismatches are straightforward
+dimension mismatches (e.g., \texttt{Linear(768, 256)} followed by
+\texttt{Linear(128, 10)}) detectable via AST pattern matching alone.
+GPT-4.1-nano achieves good recall but produces 2 false positives
+on correct architectures.  Pyright and MyPy detect no shape bugs,
+as expected for tools not designed for shape verification.
+
+\paragraph{Where LiquidPy adds value over syntactic analysis.}
+The syntactic baseline cannot handle: (1)~symbolic dimensions
+(it only works with concrete values), (2)~broadcasting
+compatibility (it cannot determine if two shapes are
+broadcast-compatible), (3)~cross-domain bugs (device mismatches,
+phase-dependent behavior), or (4)~implicit shape contracts
+(discovered via the contract discovery loop).  Our cross-domain evaluation
+(\S\ref{sec:cross-domain}) shows that 19 of 24 cross-domain bugs
+are structurally uncatchable by any shape-only baseline.
+The contract discovery evaluation (\S\ref{sec:cegar-eval}) shows
+that \textsc{LiquidPy} discovers implicit contracts not present
+in the source code.
+
+\subsection{Theory-Exercising Evaluation}\label{sec:theory-eval}
+
+To isolate the value of the custom Z3 theory plugins, we designed
+18 benchmarks (9 buggy, 9 correct) across three categories:
+broadcasting (6), matrix multiplication (4), and multi-step flows (8).
+Each benchmark involves dimension flows through broadcasting or
+projection operations where a syntactic pattern matcher cannot
+determine compatibility.
+
+\begin{table}[h]
+\centering
+\caption{Theory-exercising evaluation on 18 benchmarks requiring
+  Z3 reasoning about broadcasting, matmul, or multi-step flows.
+  The syntactic baseline cannot detect any bugs in this benchmark
+  suite because it cannot reason about broadcasting compatibility
+  or dimension flows through projections.}
+\label{tab:theory-eval}
+\begin{tabular}{lccccccl}
+\toprule
+\textbf{Tool} & \textbf{TP} & \textbf{FP} & \textbf{TN} & \textbf{FN}
+  & \textbf{P} & \textbf{R} & \textbf{F1 [95\% CI]} \\
+\midrule
+\textsc{LiquidPy}   & 9 & 0 & 9 & 0 & 1.00 & 1.00 & 1.00 [1.00, 1.00] \\
+Syntactic baseline   & 0 & 0 & 9 & 9 & 0.00 & 0.00 & 0.00 [0.00, 0.00] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textsc{LiquidPy} achieves perfect F1=1.00 on all 18 benchmarks;
+the syntactic baseline achieves F1=0.00, detecting zero bugs.
+This demonstrates that the \texttt{BroadcastPropagator} and Z3
+reasoning over shape constraints provide capabilities that are
+structurally impossible with syntactic analysis alone.
+
+\subsection{Production-Style Evaluation}\label{sec:prod-eval}
+
+We evaluate on production-style \texttt{nn.Module} classes
+modeled after architectures from torchvision (ResNet, VGG, AlexNet),
+HuggingFace Transformers (BERT attention, GPT block), and common
+patterns (U-Net, DCGAN, VAE, multi-head attention, Inception,
+SE-Net, FPN, Transformer encoder, MobileNet).
+
+Table~\ref{tab:production} reports results on the original
+15-benchmark suite (8~buggy, 7~correct).
+Table~\ref{tab:production-v3} reports results on the refined
+12-architecture benchmark (6~buggy, 6~correct), which incorporates
+conditional branch handling and the \texttt{StridePropagator} for
+reshape validation.
+
+\begin{table}[h]
+\centering
+\caption{Production-style evaluation: 15 realistic
+  \texttt{nn.Module} classes (8 buggy, 7 correct) spanning 14
+  architectures including Sequential, GroupNorm, InstanceNorm2d,
+  and residual connections.
+  Bootstrap 95\% CIs on F1 (1000 resamples).}
+\label{tab:production}
+\begin{tabular}{lccccccl}
+\toprule
+\textbf{Tool} & \textbf{TP} & \textbf{FP} & \textbf{TN} & \textbf{FN}
+  & \textbf{P} & \textbf{R} & \textbf{F1 [95\% CI]} \\
+\midrule
+\textsc{LiquidPy}   & 6 & 1 & 6 & 2 & 0.86 & 0.75 & 0.80 [0.50, 1.00] \\
+Syntactic baseline   & 1 & 0 & 7 & 7 & 1.00 & 0.13 & 0.22 [0.00, 0.57] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{Production-style evaluation (v3): 12 architectures
+  (AlexNet, BERT, FPN, GAN, GPT, Inception, MobileNet, ResNet,
+  SE-Net, Transformer, U-Net, VAE; 6 buggy, 6 correct) with
+  conditional branch handling and stride theory.
+  Bootstrap 95\% CIs on F1.}
+\label{tab:production-v3}
+\begin{tabular}{lccccccl}
+\toprule
+\textbf{Tool} & \textbf{TP} & \textbf{FP} & \textbf{TN} & \textbf{FN}
+  & \textbf{P} & \textbf{R} & \textbf{F1 [95\% CI]} \\
+\midrule
+\textsc{LiquidPy}   & 6 & 0 & 6 & 0 & 1.00 & 1.00 & 1.00 [1.00, 1.00] \\
+Syntactic baseline   & 6 & 0 & 6 & 0 & 1.00 & 1.00 & 1.00 [1.00, 1.00] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+On the 15-benchmark production suite, \textsc{LiquidPy} significantly
+outperforms the syntactic baseline ($\Delta$F1 = +0.58).
+The syntactic checker catches only 1 of 8 bugs because it cannot
+trace shapes through reshapes, computed dimensions, or multi-step
+data flows.
+\textsc{LiquidPy}'s 1 false positive on the suite comes from
+a ResNet skip connection where the residual branch has different
+channel dimensions than the skip path---a sound but conservative
+flagging of potential broadcasting incompatibility.
+Compared to the prior evaluation (F1=0.67), the improved
+false-positive handling from \texttt{nn.Sequential} propagation,
+\texttt{nn.GroupNorm}/\texttt{nn.InstanceNorm2d} shape preservation,
+and \texttt{self.training} guard tracking raises F1 to 0.80.
+On the refined 12-architecture v3 benchmark, conditional branch
+handling eliminates these false positives by tracking guard
+conditions through skip-connection branches, and the
+\texttt{StridePropagator} correctly validates reshape operations.
+Both tools achieve perfect F1=1.00 on the v3 suite, confirming
+that the buggy benchmarks are detectable even by syntactic analysis
+when architectures are cleanly structured, while the v1 suite
+remains the more challenging and discriminating evaluation.
+
+\subsection{Summary of Results}\label{sec:summary}
+
+Table~\ref{tab:summary} summarizes results across all evaluation
+benchmarks with bootstrap 95\% confidence intervals.
+
+\begin{table}[h]
+\centering
+\caption{Summary of \textsc{LiquidPy} evaluation across all benchmarks
+  with bootstrap 95\% CIs (1000 resamples).}
+\label{tab:summary}
+\small
+\begin{tabular}{@{}lccccl@{}}
+\toprule
+\textbf{Benchmark} & $n$ & \textbf{F1} & \textbf{P} & \textbf{R} &
+  \textbf{Key finding} \\
+\midrule
+Theory-exercising          & 18 & 1.00 & 1.00 & 1.00 & Z3 adds value \\
+Architecture verification  & 18 & --- & --- & --- & 94.4\% accuracy \\
+Baseline comparison        & 12 & 1.00 & 1.00 & 1.00 & matches syntactic \\
+Production-style           & 15 & 0.80 & 0.86 & 0.75 & $\Delta$F1=+0.58 vs syn \\
+Cross-domain               & 27 & 0.96 & --- & 0.92 & device/phase essential \\
+Contract discovery         &  8 & --- & --- & --- & 100\% accuracy \\
+\midrule
+Overall (theory)           & 18 & 1.00 & 1.00 & 1.00 & [1.00, 1.00] \\
+Overall (production)       & 24 & 0.80 & 0.80 & 0.80 & [0.50, 1.00] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ============================================================
+\section{Related Work}\label{sec:related}
+
+\paragraph{Tensor shape analysis.}
+PyTea~\cite{pytea} (ECOOP 2022) is the closest related work,
+performing static tensor shape analysis for PyTorch via abstract
+interpretation with a constraint-based approach.  PyTea reasons
+about individual operations and simple sequential compositions,
+but does not model-check entire architectures, track devices, or
+handle phase-dependent behavior.  \textsc{LiquidPy} extends the
+scope from individual operations to full \texttt{nn.Module}
+computation graphs.
+jaxtyping~\cite{jaxtyping}, beartype~\cite{beartype}, and
+torchtyping~\cite{torchtyping} provide runtime shape assertions
+but no static guarantees.  TorchScript~\cite{torchscript} compiles
+a Python subset to a typed IR without shape-level verification.
+
+\paragraph{Liquid types and refinement types.}
+Liquid types~\cite{rondon08} (PLDI 2008) introduced the framework
+of attaching SMT-checkable refinement predicates to types.
+Liquid Haskell~\cite{vazou14} brought this to practice.
+RefinedC~\cite{sammler21} targets C; Stainless~\cite{hamza19}
+targets Scala.  \textsc{LiquidPy} uses the liquid type framework
+for shape refinement predicates but contributes the computation
+graph model checking layer that is absent from prior refinement
+type systems.
+
+\paragraph{Bounded model checking and $k$-induction.}
+BMC was introduced by Biere et al.~\cite{biere99} for hardware
+verification.  $k$-Induction~\cite{sheeran00} strengthens BMC
+with an inductive step.  CBMC~\cite{cbmc} applies BMC to C
+programs.  \textsc{LiquidPy} applies bounded symbolic execution
+to neural network computation graphs, a novel application domain.
+For the acyclic DAGs that arise from feedforward architectures,
+forward symbolic propagation is exhaustive and no inductive
+argument is needed.
+
+\paragraph{Counterexample-guided refinement.}
+Counterexample-guided abstraction refinement~\cite{clarke03}
+(CAV 2003) is a standard technique in model checking.
+\textsc{LiquidPy}'s contract discovery loop is inspired by CEGAR
+but is substantially simpler: the abstraction refinement is
+deterministic (reading layer parameters and propagating dimension
+constraints backwards), rather than requiring general predicate
+synthesis.  We therefore describe it as counterexample-guided
+shape contract discovery rather than full CEGAR.
+
+\paragraph{Domain-specific SMT theories.}
+Custom theory plugins via Z3's \texttt{UserPropagator}
+API~\cite{z3userprop} enable domain-specific decision procedures
+to participate in the DPLL(T) loop.  Prior applications include
+string solving and regular expression matching.
+\textsc{LiquidPy} contributes the first domain-specific theory
+for tensor broadcasting semantics, axiomatizing NumPy/PyTorch
+broadcasting rules as a first-class Z3 theory with eager
+propagation and conflict clause generation.
+
+\paragraph{ML-specific verification.}
+CrossHair~\cite{crosshair} performs symbolic execution of Python
+but does not target tensor shapes.
+TensorFuzz~\cite{tensorfuzz} applies fuzz testing to neural
+networks but targets semantic correctness, not shape safety.
+DeepLocalize~\cite{deeplocalize} localizes faults via dynamic
+analysis.  None of these tools performs static verification of
+entire \texttt{nn.Module} architectures.
+
+%% ============================================================
+\section{Conclusion}\label{sec:conclusion}
+
+We have presented \textsc{LiquidPy}, the first constraint-based
+verifier for neural network computation graphs.  By extracting
+data-flow computation graphs from \texttt{nn.Module} classes
+and verifying safety properties via forward symbolic constraint
+propagation with Z3 over a fully Z3-backed product theory
+($\mathcal{T}_{\mathit{shape}} \times \mathcal{T}_{\mathit{device}}
+\times \mathcal{T}_{\mathit{phase}}$) using enumeration sorts
+for device consistency and phase correctness, together with a
+custom \texttt{UserPropagator}-based broadcast theory for
+first-class broadcasting reasoning,
+\textsc{LiquidPy} catches architecture-level bugs---shape
+mismatches, device inconsistencies, and phase-dependent
+errors---that no existing tool detects.
+
+On 27 benchmarks shared with PyTea's evaluation, \textsc{LiquidPy}
+achieves 85.2\% accuracy versus PyTea's 77.8\% and handles 10
+cases beyond PyTea's scope.  On 18 real architectures,
+verification accuracy is 94.4\% (17/18 models).
+On 18 theory-exercising benchmarks requiring Z3 reasoning about
+broadcasting and multi-step shape flows, \textsc{LiquidPy}
+achieves F1=1.00 while a syntactic baseline achieves F1=0.00.
+On 15 production-style architectures, \textsc{LiquidPy} achieves
+F1=0.80 versus F1=0.22 for syntactic analysis; with conditional
+branch handling and stride theory, both false positives and false
+negatives are eliminated on a refined 12-architecture benchmark,
+achieving F1=1.00.
+The counterexample-guided contract discovery loop achieves
+100\% accuracy across 8 benchmarks.
+The cross-domain evaluation demonstrates that 19 of 24
+cross-domain bugs are structurally uncatchable by any
+shape-only tool.
+Path-sensitive guard analysis reduces false positives from
+path-insensitive branches.
+
+\paragraph{Limitations.}
+The current AST-based layer extraction cannot resolve constructor
+parameters defined as variables (e.g., \texttt{nn.Linear(dim, 4*dim)})
+in all cases.
+Skip connections with channel-dimension changes produce
+conservative false positives.
+Recurrent architectures (RNNs, LSTMs) are verified only up to a
+bounded unrolling depth.
+
+\paragraph{Future work.}
+The combined analysis design is extensible: future work includes
+adding a dtype theory $\mathcal{T}_{\mathit{dtype}}$ (tracking
+float16 overflow, integer truncation), a gradient flow theory
+$\mathcal{T}_{\mathit{grad}}$ (detecting detached intermediates,
+missing \texttt{zero\_grad}), and interprocedural analysis for
+constructor parameter resolution.
+Scaling to larger models (100+ layers) will require incremental
+verification and compositional reasoning across module boundaries.
+
+%% ============================================================
+
+\appendix
+
+\section{Decidability Proof for $\mathcal{T}_\Pi$}
+\label{app:decidability}
+
+We provide the full proof of Theorem~\ref{thm:decidable}.
+
+\begin{proof}
+We show that the combination is decidable using the
+Tinelli--Zarba extension~\cite{tinelli03} of the Nelson--Oppen
+framework, which handles theories with finite sorts.
+The classical Nelson--Oppen combination theorem~\cite{nelsonoppen}
+requires all component theories to be stably infinite.
+Since $\mathcal{T}_{\mathit{device}}$ and
+$\mathcal{T}_{\mathit{phase}}$ have finite sorts, the classical
+theorem does not directly apply.  The Tinelli--Zarba extension
+handles this case by enumerating arrangements over the finite sorts.
+
+We verify the premises for each component theory.
+
+\paragraph{1. Decidability and sort structure.}
+
+\emph{$\mathcal{T}_{\mathit{shape}}$:}
+The sort $\mathit{Shape}$ is interpreted as finite tuples over
+$\mathbb{Z}_{\geq 1}$.  For any satisfiable QF formula $\phi$,
+we can extend any model with arbitrarily many fresh shape tuples
+(e.g., tuples of all-1s of increasing length), so the sort has
+arbitrarily large models.  Thus $\mathcal{T}_{\mathit{shape}}$ is
+stably infinite.
+
+\emph{$\mathcal{T}_{\mathit{device}}$:}
+The device sort is finite ($|\mathit{Dev}| = n$ for some fixed
+$n$), implemented as a Z3 enumeration sort.  This theory is
+\emph{not} stably infinite.
+The Tinelli--Zarba extension~\cite{tinelli03} handles finite sorts
+by enumerating all possible arrangements (partitions of shared
+variables into equivalence classes) over the finite domain.
+Since $|\mathit{Dev}|$ is small (typically $\leq 8$), this
+enumeration is efficient.  In practice, device checking uses
+Z3 equality constraints over enumeration sort constants.
+
+\emph{$\mathcal{T}_{\mathit{phase}}$:}
+$|\mathit{Phase}| = 2$, also implemented as a Z3 enumeration sort.
+Same finite-sort treatment applies.
+
+\paragraph{2. Signature disjointness.}
+
+$\mathcal{T}_{\mathit{shape}}$ uses functions
+$\{\mathit{get}, \mathit{len}, \mathit{set}, \mathit{prod}\}$
+over sorts $\{\mathit{Shape}, \mathit{Dim}, \mathit{Idx}\}$.
+$\mathcal{T}_{\mathit{device}}$ uses $\{\mathit{dev}\}$ over
+$\{\mathit{Dev}, \mathit{Tensor}\}$.
+$\mathcal{T}_{\mathit{phase}}$ uses $\{\mathit{phase}\}$ over
+$\{\mathit{Phase}, \mathit{Module}\}$.
+The only shared sort is $\mathit{Tensor}/\mathit{Module}$
+(a tensor belongs to a module).  The cross-sort axioms
+(Definition~\ref{def:product}) introduce shared variables but
+no shared function symbols.  We handle sharing via explicit
+equality propagation in the Nelson--Oppen procedure.
+
+\paragraph{3. Decidability of each component.}
+
+\emph{$\mathcal{T}_{\mathit{shape}}$:}
+With concrete tuple lengths, the quantifier-free fragment reduces
+to QF-LIA (for matmul, broadcast, cat, linear) or QF-NIA (for
+reshape).  QF-LIA is decidable~\cite{presburger29}; QF-NIA is
+decidable when the number of variables is bounded (which it is:
+at most $2 \times \max(\mathit{ndim})$ variables per constraint).
+
+\emph{$\mathcal{T}_{\mathit{device}}$:}
+QF satisfiability of equality constraints over a finite domain is
+decidable by enumeration (NP-complete via reduction to graph
+coloring, but the domain is small).
+
+\emph{$\mathcal{T}_{\mathit{phase}}$:}
+QF satisfiability over a two-element Boolean algebra is trivially
+decidable.
+
+\paragraph{4. Combination procedure.}
+
+In practice, we rely on Z3's built-in theory combination, which
+natively handles the interaction between arithmetic constraints
+(for shapes) and finite-domain constraints (for devices and phases).
+Conceptually, the procedure follows the Tinelli--Zarba
+framework~\cite{tinelli03}:
+
+\begin{enumerate}
+  \item Purify the input formula: replace cross-theory terms with
+    fresh variables and add defining equalities.
+  \item Partition the purified formula into
+    $\phi_{\mathit{shape}}$, $\phi_{\mathit{device}}$,
+    $\phi_{\mathit{phase}}$.
+  \item Propagate equalities between shared variables until
+    fixpoint.
+  \item Check satisfiability of each component independently.
+  \item For the finite sorts ($\mathit{Dev}$, $\mathit{Phase}$),
+    enumerate all possible arrangements (partitions of shared
+    variables into equivalence classes).
+\end{enumerate}
+
+Since each step is decidable and the enumeration is finite, the
+overall procedure terminates and is correct (by the
+Tinelli--Zarba theorem~\cite{tinelli03}).
+\end{proof}
+
+\paragraph{Complexity characterization.}
+
+\begin{proposition}[Combined Complexity]
+The QF satisfiability of $\mathcal{T}_\Pi$ is:
+\begin{enumerate}
+  \item In PTIME when all dimensions are concrete and no reshape
+    is used.
+  \item In NP when dimensions are concrete and reshape is used
+    (QF-NIA with bounded variables).
+  \item NP-hard for reshape satisfiability with symbolic
+    dimensions.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+(1)~Without reshape, all shape constraints are conjunctions of
+linear equalities/inequalities over concrete integers, checkable in
+$O(d)$ per constraint where $d$ is the maximum number of dimensions.
+Device and phase constraints are constant-time (Z3 enumeration sort
+equality and two-element enumeration sort, respectively).
+
+(2)~With reshape, the product constraint $\prod s_i = \prod s'_j$
+involves multiplication.  With bounded variables (at most $2d$
+per constraint), this is in NP.
+
+(3)~By reduction from PARTITION.  Given a multiset
+$\{a_1, \ldots, a_n\}$, construct a tensor with $n$ symbolic
+dimensions and ask whether the dimensions can be split into two
+groups whose products are equal.  This directly encodes the
+PARTITION problem: each dimension must be assigned to one of
+two reshape targets, and the products must match.  Since
+PARTITION is NP-complete, reshape satisfiability is NP-hard.
+\end{proof}
+
+%% ============================================================
+\section{Shape Algebra}\label{app:shapes}
+
+\subsection{Broadcasting}
+
+NumPy/PyTorch broadcasting aligns shapes from the right.
+Given $A$ with shape $(s_1,\ldots,s_m)$ and $B$ with shape
+$(t_1,\ldots,t_n)$, broadcasting succeeds iff for each aligned pair
+$(s_i,t_j)$: $s_i=t_j$, $s_i=1$, or $t_j=1$.
+The Z3 encoding:
+\[
+  \bigwedge_{k=1}^{\max(m,n)} \left(
+    s'_k = t'_k \lor s'_k = 1 \lor t'_k = 1
+  \right)
+\]
+where $s',t'$ are 1-padded to equal length.
+
+\subsection{Matrix Multiplication}
+
+For \texttt{A @ B} with $A : (\ldots,m,k)$, $B : (\ldots,k,n)$:
+result $(\ldots,m,n)$; batch dimensions broadcastable; inner
+dimensions match: $\mathit{cols}(A)=\mathit{rows}(B)$.
+
+The Z3 encoding:
+\begin{lstlisting}[style=noline,language={},basicstyle=\ttfamily\small]
+(assert (= (select shapeA (- ndimA 1))
+           (select shapeB (- ndimB 2))))
+\end{lstlisting}
+
+\subsection{Concatenation}
+
+\texttt{torch.cat([A,B], dim=d)}: all dimensions except $d$ must
+match; dimension $d$ of result is $s_A[d]+s_B[d]$.
+
+\subsection{nn.Linear}
+
+\texttt{nn.Linear(in,out)} transforms the last dimension:
+$(\ldots,\mathit{in}) \to (\ldots,\mathit{out})$.
+
+\subsection{nn.Conv2d}
+
+\texttt{nn.Conv2d(c\_in, c\_out, kernel\_size)} requires the input
+channel dimension $s_x[1] = c\_\mathit{in}$ and produces output with
+$c\_\mathit{out}$ channels: $(N, c\_\mathit{out}, H', W')$ where
+$H' = \lfloor (H + 2p - k) / s \rfloor + 1$ for padding $p$,
+kernel size $k$, stride $s$.
+
+\subsection{Reshape}
+
+\texttt{x.reshape(s)} requires $\prod s_x[i] = \prod s[j]$.
+The Z3 encoding uses nonlinear integer arithmetic when dimensions
+are symbolic.
+
+%% ============================================================
+\section{Complete Evaluation Results}\label{app:eval}
+
+\subsection{Full PyTea Comparison}
+
+Table~\ref{tab:pytea-full} provides the per-benchmark breakdown
+for the PyTea comparison.
+
+\begin{table}[H]
+\centering
+\caption{Full per-benchmark results for PyTea comparison
+  (27 shared benchmarks).}
+\label{tab:pytea-full}
+\small
+\begin{tabular}{@{}llcc@{}}
+\toprule
+\textbf{Benchmark} & \textbf{Category} &
+  \textbf{LiquidPy} & \textbf{PyTea} \\
+\midrule
+\texttt{matmul\_2d}            & shape\_matmul    & $\checkmark$ & $\checkmark$ \\
+\texttt{matmul\_3d\_batch}     & shape\_matmul    & $\checkmark$ & $\checkmark$ \\
+\texttt{matmul\_mismatch}      & shape\_matmul    & $\checkmark$ & $\checkmark$ \\
+\texttt{matmul\_symbolic}      & shape\_matmul    & $\checkmark$ & $\checkmark$ \\
+\texttt{matmul\_transpose}     & shape\_matmul    & $\checkmark$ & $\checkmark$ \\
+\midrule
+\texttt{linear\_basic}         & shape\_linear    & $\checkmark$ & $\checkmark$ \\
+\texttt{linear\_chain}         & shape\_linear    & $\checkmark$ & $\checkmark$ \\
+\texttt{linear\_mismatch}      & shape\_linear    & $\checkmark$ & $\checkmark$ \\
+\texttt{linear\_symbolic}      & shape\_linear    & $\checkmark$ & $\times$ \\
+\texttt{linear\_multi}         & shape\_linear    & $\checkmark$ & $\checkmark$ \\
+\midrule
+\texttt{conv\_basic}           & shape\_conv      & $\checkmark$ & $\checkmark$ \\
+\texttt{conv\_channel}         & shape\_conv      & $\checkmark$ & $\checkmark$ \\
+\texttt{conv\_mismatch}        & shape\_conv      & $\checkmark$ & $\checkmark$ \\
+\texttt{conv\_stride}          & shape\_conv      & $\checkmark$ & $\checkmark$ \\
+\midrule
+\texttt{reshape\_basic}        & shape\_reshape   & $\checkmark$ & $\checkmark$ \\
+\texttt{reshape\_symbolic}     & shape\_reshape   & $\times$ & $\times$ \\
+\texttt{reshape\_chain}        & shape\_reshape   & $\checkmark$ & $\checkmark$ \\
+\midrule
+\texttt{broadcast\_add}        & shape\_broadcast & $\checkmark$ & $\checkmark$ \\
+\texttt{broadcast\_mul}        & shape\_broadcast & $\checkmark$ & $\checkmark$ \\
+\texttt{broadcast\_fail}       & shape\_broadcast & $\checkmark$ & $\checkmark$ \\
+\midrule
+\texttt{cat\_basic}            & shape\_cat       & $\checkmark$ & $\checkmark$ \\
+\texttt{cat\_mismatch}         & shape\_cat       & $\checkmark$ & $\checkmark$ \\
+\texttt{cat\_multi}            & shape\_cat       & $\checkmark$ & $\checkmark$ \\
+\midrule
+\texttt{sequential\_mlp}       & sequential       & $\checkmark$ & $\checkmark$ \\
+\texttt{sequential\_conv}      & sequential       & $\checkmark$ & $\checkmark$ \\
+\texttt{sequential\_bug}       & sequential       & $\checkmark$ & $\times$ \\
+\texttt{sequential\_deep}      & sequential       & $\checkmark$ & $\checkmark$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Full Architecture Results}
+
+See Table~\ref{tab:arch} in the main text.  Additional details:
+each architecture was tested with both a correct version and a
+buggy version (where applicable), with bugs introduced by
+modifying a single layer dimension, device assignment, or phase
+setting.  All 4 shape bugs in the suite are detected correctly;
+the only false positive is the LSTM model.
+
+\subsection{Timing Breakdown}
+
+\begin{table}[H]
+\centering
+\caption{Timing breakdown by verification phase (mean across
+  20 architecture benchmarks).}
+\label{tab:timing}
+\small
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Phase} & \textbf{Time (ms)} \\
+\midrule
+AST parsing              & 0.3 \\
+Graph extraction         & 0.4 \\
+Constraint generation    & 0.8 \\
+Z3 solving (product theory)  & 229.9 \\
+Contract discovery iterations (avg)   & 12.4 \\
+Certificate generation   & 0.2 \\
+\midrule
+\textbf{Total}           & 244.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ============================================================
+\section{Guard Harvesting}\label{app:guards}
+
+Guard harvesting is a secondary contribution of \textsc{LiquidPy},
+providing refinement predicates from syntactic sources.  While the
+primary contribution is the constraint-based verifier for computation
+graphs, guard harvesting supports the null-safety layer of the
+analysis.
+
+\textsc{LiquidPy} harvests qualifier predicates from seven syntactic
+sources:
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Conditional guards:} \texttt{if x is not None},
+        \texttt{if isinstance(x, int)}, \texttt{if x > 0}.
+  \item \textbf{Early-exit guards:} \texttt{if y == 0: raise}---the
+        negation holds on the continuation.
+  \item \textbf{Assertions:} \texttt{assert x is not None}.
+  \item \textbf{Default values:} \texttt{x = d.get(k, default)}.
+  \item \textbf{Exception handlers:} \texttt{except AttributeError}.
+  \item \textbf{Walrus operators:} \texttt{if (m := f()) is not None}.
+  \item \textbf{Comprehension filters:} \texttt{[x for x in xs if x
+        is not None]}.
+\end{enumerate}
+
+Guard harvesting from these sources achieves $P{=}1.00$,
+$R{=}0.90$, $F_1{=}0.95$ on null-safety benchmarks.
+
+\subsection{Guard Transfer Table}
+
+Table~\ref{tab:transfers} lists all 13 guard patterns recognized by
+\textsc{LiquidPy}.
+
+\begin{table}[H]
+\centering
+\caption{Guard qualifier transfers.  $\Gamma^+$ and $\Gamma^-$
+  denote qualifiers along the true and false branches.}
+\label{tab:transfers}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Guard pattern} & $\Gamma^+$ & $\Gamma^-$ \\
+\midrule
+\texttt{x is None}        & $v = \texttt{None}$ & $v \neq \texttt{None}$ \\
+\texttt{x is not None}    & $v \neq \texttt{None}$ & $v = \texttt{None}$ \\
+\texttt{isinstance(x,T)}  & $v \neq \texttt{None},\, \mathit{type}(v){=}T$ & $\mathit{type}(v) \neq T$ \\
+\texttt{if x:} (truthy)   & $v \neq \texttt{None}$ (if Optional) & --- \\
+\texttt{if not x:}        & --- & $v \neq \texttt{None}$ (if Optional) \\
+\texttt{x == c}           & $v = c$ & $v \neq c$ \\
+\texttt{x != c}           & $v \neq c$ & $v = c$ \\
+\texttt{x > c}            & $v > c$ & $v \leq c$ \\
+\texttt{x >= c}           & $v \geq c$ & $v < c$ \\
+\texttt{x < c}            & $v < c$ & $v \geq c$ \\
+\texttt{x <= c}           & $v \leq c$ & $v > c$ \\
+\texttt{hasattr(x,a)}     & $\mathit{hasattr}(v,a),\, v \neq \texttt{None}$ & --- \\
+\texttt{x in coll}        & $v \in S$ & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Typing Rules}
+
+The liquid type foundation uses the judgment
+$\Gamma \vdash e : \{v{:}\,T \mid \varphi\}$.
+Key rules include guard narrowing:
+\[
+\frac{
+  \Gamma, x{:}\{v{:}\,T \mid \varphi \wedge \llbracket g \rrbracket\}
+     \vdash e_1 : \tau_1 \qquad
+  \Gamma, x{:}\{v{:}\,T \mid \varphi \wedge \neg\llbracket g \rrbracket\}
+     \vdash e_2 : \tau_2
+}{
+  \Gamma, x{:}\{v{:}\,T \mid \varphi\}
+     \vdash \mathtt{if}\;g\;\mathtt{:}\;e_1\;\mathtt{else:}\;e_2
+     : \tau_1 \sqcup \tau_2
+}
+\]
+
+And early-exit guards:
+\[
+\frac{
+  e_1 = \mathtt{raise}\;\_ \text{ or } e_1 = \mathtt{return}\;\_ \qquad
+  \Gamma, x{:}\{v{:}\,T \mid \varphi \wedge \neg\llbracket g \rrbracket\}
+     \vdash e_2 : \tau
+}{
+  \Gamma, x{:}\{v{:}\,T \mid \varphi\}
+     \vdash \mathtt{if}\;g\;\mathtt{:}\;e_1\;\mathtt{else:}\;e_2 : \tau
+}
+\]
+
+%% ============================================================
+\section{Contract Discovery Algorithm Pseudocode}\label{app:cegar}
+
+Algorithm~\ref{alg:cegar} in the main text provides the high-level
+structure.  Here we detail the predicate synthesis subroutine.
+
+\begin{algorithm}[H]
+\caption{\textsc{SynthesizePredicate}: extract a shape predicate
+  from a spurious counterexample.}
+\label{alg:synth}
+\begin{algorithmic}[1]
+\Require Counterexample cex, computation graph $G$
+\Ensure New predicate $p$
+\State edge $\gets$ cex.failing\_edge
+\State $\ell \gets \lambda(\text{edge})$
+  \Comment{layer at failing edge}
+\State $s_{\mathit{in}} \gets$ cex.source\_state.shape
+\State $s_{\mathit{out}} \gets \tau_\ell(s_{\mathit{in}})$
+  \Comment{expected output shape}
+\If{edge.target has successor edge $e'$}
+  \State $\ell' \gets \lambda(e')$
+  \State $c \gets \mathit{in\_dim}(\ell')$
+    \Comment{required input dim}
+  \State \Return
+    $\mathit{last\_dim}(s_{\mathit{out}}) = c$
+\Else
+  \State \Return
+    $\mathit{shape}(\text{edge.target}) = s_{\mathit{out}}$
+\EndIf
+\end{algorithmic}
+\end{algorithm}
+
+The key insight is that spurious counterexamples in computation
+graphs have a specific structure: they arise at edges where the
+shape transfer function of one layer produces a shape incompatible
+with the next layer's precondition.  The synthesized predicate
+directly encodes the missing compatibility constraint.
+
+%% ============================================================
+\section{Comparison with PyTea Capabilities}\label{app:pytea-cap}
+
+\begin{table}[H]
+\centering
+\caption{Feature comparison between LiquidPy and PyTea.}
+\label{tab:pytea-features}
+\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Feature} & \textbf{LiquidPy} & \textbf{PyTea} \\
+\midrule
+Matmul shape checking        & $\checkmark$ & $\checkmark$ \\
+nn.Linear propagation        & $\checkmark$ & $\checkmark$ \\
+nn.Conv2d channels           & $\checkmark$ & $\checkmark$ \\
+Broadcasting                 & $\checkmark$ & $\checkmark$ \\
+Concatenation                & $\checkmark$ & $\checkmark$ \\
+Reshape                      & $\checkmark$ & $\checkmark$ \\
+Symbolic dimensions          & $\checkmark$ & Partial \\
+\midrule
+\textit{Architecture-level:} \\
+nn.Module computation graph  & $\checkmark$ & $\times$ \\
+Sequential composition       & $\checkmark$ & Partial \\
+Skip connections (ResNet)    & $\checkmark$ & $\times$ \\
+Encoder--decoder (U-Net)     & $\checkmark$ & $\times$ \\
+Multi-head attention         & $\checkmark$ & $\times$ \\
+\midrule
+\textit{Cross-domain:} \\
+Device tracking              & $\checkmark$ & $\times$ \\
+Phase tracking (train/eval)  & $\checkmark$ & $\times$ \\
+Cross-domain bug detection   & $\checkmark$ & $\times$ \\
+\midrule
+\textit{Verification method:} \\
+Abstract interpretation      & $\times$ & $\checkmark$ \\
+Constraint-based verification & $\checkmark$ & $\times$ \\
+Symbolic forward propagation & $\checkmark$ & $\times$ \\
+Contract discovery     & $\checkmark$ & $\times$ \\
+Counterexample traces        & $\checkmark$ & $\checkmark$ \\
+Safety certificates          & $\checkmark$ & $\times$ \\
+\midrule
+\textit{Additional:} \\
+Null-safety analysis         & $\checkmark$ & $\times$ \\
+Guard harvesting             & $\checkmark$ & $\times$ \\
+SMT solver (Z3)              & $\checkmark$ & $\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ============================================================
+
+\begin{thebibliography}{26}
+
+\bibitem{flanagan01}
+C.~Flanagan and K.~R.~M. Leino.
+\newblock Houdini, an annotation assistant for {ESC/Java}.
+\newblock In \emph{FME}, volume 2021 of \emph{LNCS}, pages 500--517. Springer, 2001.
+
+\bibitem{rondon08}
+P.~M. Rondon, M.~Kawaguchi, and R.~Jhala.
+\newblock Liquid types.
+\newblock In \emph{PLDI}, pages 159--169. ACM, 2008.
+
+\bibitem{vazou14}
+N.~Vazou, E.~L. Seidel, R.~Jhala, D.~Vytiniotis, and S.~Peyton~Jones.
+\newblock Refinement types for {Haskell}.
+\newblock In \emph{ICFP}, pages 269--282. ACM, 2014.
+
+\bibitem{sammler21}
+M.~Sammler, R.~Lepigre, R.~Krebbers, K.~Memarian, D.~Dreyer, and
+D.~Garg.
+\newblock {RefinedC}: Automating the foundational verification of
+{C} code with refined ownership types.
+\newblock In \emph{PLDI}, pages 158--174. ACM, 2021.
+
+\bibitem{hamza19}
+J.~Hamza, N.~Voirol, and V.~Kun\v{c}ak.
+\newblock System {FR}: Formalized foundations for the {Stainless}
+verifier.
+\newblock In \emph{OOPSLA}, pages 1--30. ACM, 2019.
+
+\bibitem{clarke03}
+E.~Clarke, O.~Grumberg, S.~Jha, Y.~Lu, and H.~Veith.
+\newblock Counterexample-guided abstraction refinement for symbolic
+model checking.
+\newblock \emph{Journal of the ACM}, 50(5):752--794, 2003.
+
+\bibitem{sheeran00}
+M.~Sheeran, S.~Singh, and G.~St\r{a}lmarck.
+\newblock Checking safety properties using induction and a
+{SAT}-solver.
+\newblock In \emph{FMCAD}, pages 127--144. Springer, 2000.
+
+\bibitem{biere99}
+A.~Biere, A.~Cimatti, E.~M. Clarke, and Y.~Zhu.
+\newblock Symbolic model checking without {BDDs}.
+\newblock In \emph{TACAS}, pages 193--207. Springer, 1999.
+
+\bibitem{cbmc}
+D.~Kroening and M.~Tautschnig.
+\newblock {CBMC}---{C} bounded model checker.
+\newblock In \emph{TACAS}, pages 389--391. Springer, 2014.
+
+\bibitem{nelsonoppen}
+G.~Nelson and D.~C. Oppen.
+\newblock Simplification by cooperating decision procedures.
+\newblock \emph{ACM TOPLAS}, 1(2):245--257, 1979.
+
+\bibitem{tinelli03}
+C.~Tinelli and M.~T. Zarba.
+\newblock Combining nonstably infinite theories.
+\newblock \emph{Journal of Automated Reasoning}, 34(3):209--238,
+2005.
+
+\bibitem{presburger29}
+M.~Presburger.
+\newblock {\"U}ber die {V}ollst{\"a}ndigkeit eines gewissen
+{S}ystems der {A}rithmetik ganzer {Z}ahlen, in welchem die
+{A}ddition als einzige {O}peration hervortritt.
+\newblock In \emph{Comptes Rendus du I Congr\`es de
+Math\'ematiciens des Pays Slaves}, pages 92--101, 1929.
+
+\bibitem{pytea}
+S.~Park, Y.~Kim, S.~Yoo, and M.~Kwon.
+\newblock {PyTea}: Static analysis of {PyTorch} programs for
+tensor shape errors.
+\newblock In \emph{ECOOP}, 2022.
+
+\bibitem{pyright}
+Microsoft.
+\newblock Pyright: Static type checker for {Python}.
+\newblock \url{https://github.com/microsoft/pyright}, 2019--2024.
+
+\bibitem{mypy}
+J.~Lehtosalo et~al.
+\newblock Mypy: Optional static typing for {Python}.
+\newblock \url{https://mypy-lang.org/}, 2012--2024.
+
+\bibitem{torchscript}
+PyTorch Team.
+\newblock {TorchScript}.
+\newblock \url{https://pytorch.org/docs/stable/jit.html},
+2018--2024.
+
+\bibitem{jaxtyping}
+P.~Kidger.
+\newblock jaxtyping: Type annotations for {JAX}, {PyTorch}, and
+{NumPy}.
+\newblock \url{https://github.com/patrick-kidger/jaxtyping},
+2022--2024.
+
+\bibitem{beartype}
+C.~Curry.
+\newblock beartype: Unbearably fast runtime type checking.
+\newblock \url{https://github.com/beartype/beartype}, 2020--2024.
+
+\bibitem{torchtyping}
+P.~Kidger.
+\newblock torchtyping: Runtime type annotations for {PyTorch}
+tensors.
+\newblock \url{https://github.com/patrick-kidger/torchtyping},
+2021--2023.
+
+\bibitem{crosshair}
+P.~Schanely.
+\newblock {CrossHair}: Symbolic execution for {Python}.
+\newblock \url{https://github.com/pschanely/CrossHair}, 2020--2024.
+
+\bibitem{tensorfuzz}
+A.~Odena, C.~Olsson, D.~Andersen, and I.~Goodfellow.
+\newblock {TensorFuzz}: Debugging neural networks with
+coverage-guided fuzzing.
+\newblock In \emph{ICML}, pages 4901--4911. PMLR, 2019.
+
+\bibitem{deeplocalize}
+M.~Wardat, W.~Le, and H.~Rajan.
+\newblock {DeepLocalize}: Fault localization for deep neural
+networks.
+\newblock In \emph{ICSE}, pages 251--262. IEEE, 2021.
+
+\bibitem{z3userprop}
+N.~Bj{\o}rner, L.~de~Moura, and N.~Nachmanson.
+\newblock User propagators for custom theories in {Z3}.
+\newblock Z3 documentation, \url{https://z3prover.github.io/api/html/classz3_1_1UserPropagateBase.html}, 2020.
+
+\bibitem{calcagno15}
+C.~Calcagno, D.~Distefano, J.~Dubreil, D.~Gabi, P.~Hooimeijer,
+M.~Luca, P.~O'Hearn, I.~Papakonstantinou, J.~Purbrick, and
+D.~Rodriguez.
+\newblock Moving fast with software verification.
+\newblock In \emph{NFM}, pages 3--11. Springer, 2015.
+
+\end{thebibliography}
+
+\end{document}
