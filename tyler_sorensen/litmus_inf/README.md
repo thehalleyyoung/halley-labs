@@ -33,23 +33,36 @@ Summary: 5 pattern(s) checked, 1 issue(s) across 1 file(s)
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| Portability pairs | 750 (75 patterns × 10 architectures) | CPU + GPU |
-| Code analyzer accuracy | 92.7% exact, 100% top-3 (n=111) | Stratified per-category below |
-| SMT internal consistency | 228/228 (CPU-only) | Same-author encodings; not external validation |
+| Portability pairs | 750 (75 patterns × 4 CPU + 1 GPU model ×6 scopes) | CPU + GPU |
+| Code analyzer accuracy | 96.6% exact, 98.0% top-3 (n=203) | 16 categories, 4 languages |
+| SMT internal consistency (CPU) | 228/228 | Wilson CI [98.3%, 100%] |
+| SMT internal consistency (GPU) | 108/108 | Wilson CI [96.6%, 100%] |
 | Fence proofs | 55 UNSAT + 40 SAT (Z3) | Machine-checked certificates |
-| herd7 agreement | 50/50 | Wilson CI [92.9%, 100%] |
+| herd7 agreement | 228/228 | Wilson CI [98.3%, 100%] |
 | Hardware consistency | 25/25 | Published observations |
-| Meaningful differential tests | 498 pass | + 2,280 trivial determinism checks |
-| Real-code evaluation | 93.3% exact on 15 snippets | Linux kernel, Folly, LLVM provenance |
+| Meaningful differential tests | 642 pass | + 3,000 trivial determinism checks |
+| Effective safety rate | 100% (203/203) | 4 SAFE + 3 NEUTRAL non-exact-matches, 0 UNSAFE |
 
-### Per-Category Accuracy (n=111)
+### Per-Category Accuracy (n=203)
 
 | Category | N | Exact | Top-3 |
 |----------|---|-------|-------|
-| C++ atomics | 11 | 100% | 100% |
-| kernel (Linux) | 8 | 100% | 100% |
-| real_code (provenance) | 15 | 93.3% | 100% |
-| gpu | 9 | 55.6% | 100% |
+| application | 23 | 100% | 100% |
+| data_structure | 15 | 100% | 100% |
+| systems | 3 | 100% | 100% |
+| riscv | 8 | 100% | 100% |
+| basic | 5 | 100% | 100% |
+| allocator | 3 | 100% | 100% |
+| mca | 2 | 100% | 100% |
+| fenced | 14 | 100% | 100% |
+| multi_thread | 14 | 100% | 100% |
+| gpu | 19 | 100% | 100% |
+| coherence | 6 | 100% | 100% |
+| real_code | 23 | 100% | 100% |
+| synchronization | 27 | 96% | 96% |
+| cpp_atomics | 20 | 90% | 90% |
+| kernel | 16 | 88% | 94% |
+| dependency | 5 | 60% | 100% |
 
 ## Usage
 
@@ -86,8 +99,8 @@ See `.github/workflows/litmus-check.yml` for the ready-to-use workflow.
 
 ```bash
 python3 run_paper_experiments.py         # All experiments
-python3 benchmark_suite.py              # 111-snippet benchmark
-python3 smt_validation.py              # Z3 proofs (CPU-only)
+python3 benchmark_suite.py              # 203-snippet benchmark
+python3 smt_validation.py              # Z3 proofs (CPU + GPU)
 python3 differential_testing.py         # Differential tests
 pdflatex paper.tex && pdflatex paper.tex  # Compile paper
 ```
@@ -107,10 +120,10 @@ pdflatex paper.tex && pdflatex paper.tex  # Compile paper
 ## Limitations
 
 - Operates on 75 built-in litmus patterns, not arbitrary programs
-- GPU models have **zero SMT validation** — formal claims are CPU-only
 - Fence costs are analytical weights, not hardware latencies
-- 228/228 SMT is internal consistency (same-author encodings), not external validation
+- 228/228 CPU SMT + 108/108 GPU SMT is internal consistency (same-author encodings)
 - Pattern-level safety does not compose to program-level safety
+- 0/7 non-exact-matches are UNSAFE (all SAFE or NEUTRAL)
 
 ## Dependencies
 

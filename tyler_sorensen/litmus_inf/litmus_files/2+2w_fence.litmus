@@ -1,0 +1,29 @@
+C 2+2w_fence
+
+{ int x=0; int y=0; }
+
+P0(
+  int* x, int* y
+) {
+  WRITE_ONCE(*x, 1);
+  smp_mb();
+  WRITE_ONCE(*y, 1);
+}
+
+P1(
+  int* x, int* y
+) {
+  WRITE_ONCE(*y, 2);
+  smp_mb();
+  WRITE_ONCE(*x, 2);
+}
+
+P2(
+  int* x, int* y
+) {
+  int r0 = READ_ONCE(*y);
+  smp_mb();
+  int r1 = READ_ONCE(*x);
+}
+
+exists (2:r0=2 /\ 2:r1=1)

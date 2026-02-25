@@ -1,0 +1,233 @@
+{
+  "spsc_queue_mp": {
+    "description": "Lock-free SPSC queue (message-passing pattern) ported from x86 to ARM/RISC-V",
+    "pattern": "mp",
+    "source": "x86",
+    "results": [
+      {
+        "target": "x86",
+        "safe": true,
+        "fence_fix": null
+      },
+      {
+        "target": "sparc",
+        "safe": false,
+        "fence_fix": "membar #StoreStore|#LoadLoad"
+      },
+      {
+        "target": "arm",
+        "safe": false,
+        "fence_fix": "dmb ishst (T0); dmb ishld (T1)"
+      },
+      {
+        "target": "riscv",
+        "safe": false,
+        "fence_fix": "fence w,w (T0); fence r,r (T1)"
+      },
+      {
+        "target": "opencl_wg",
+        "safe": false,
+        "fence_fix": "work_group_barrier(CLK_GLOBAL_MEM_FENCE)"
+      },
+      {
+        "target": "opencl_dev",
+        "safe": false,
+        "fence_fix": "atomic_work_item_fence(CLK_GLOBAL_MEM_FENCE, memory_order_acq_rel, memory_scope_device)"
+      },
+      {
+        "target": "vulkan_wg",
+        "safe": false,
+        "fence_fix": "work_group_barrier(CLK_GLOBAL_MEM_FENCE)"
+      },
+      {
+        "target": "vulkan_dev",
+        "safe": false,
+        "fence_fix": "atomic_work_item_fence(CLK_GLOBAL_MEM_FENCE, memory_order_acq_rel, memory_scope_device)"
+      },
+      {
+        "target": "ptx_cta",
+        "safe": false,
+        "fence_fix": "membar.cta"
+      },
+      {
+        "target": "ptx_gpu",
+        "safe": false,
+        "fence_fix": "membar.gl"
+      }
+    ],
+    "finding": "Pattern safe on x86 (TSO stores ordered), UNSAFE on ARM/RISC-V (no store-store ordering). Fix: add dmb ishst on ARM, fence w,w on RISC-V."
+  },
+  "dekker_algorithm": {
+    "description": "Dekker mutual exclusion algorithm ported from x86",
+    "pattern": "dekker",
+    "source": "x86",
+    "results": [
+      {
+        "target": "x86",
+        "safe": false,
+        "fence_fix": "MFENCE"
+      },
+      {
+        "target": "sparc",
+        "safe": false,
+        "fence_fix": "membar #StoreLoad|#LoadLoad"
+      },
+      {
+        "target": "arm",
+        "safe": false,
+        "fence_fix": "dmb ish (T0); dmb ish (T1)"
+      },
+      {
+        "target": "riscv",
+        "safe": false,
+        "fence_fix": "fence rw,rw (T0); fence rw,rw (T1)"
+      },
+      {
+        "target": "opencl_wg",
+        "safe": false,
+        "fence_fix": "work_group_barrier(CLK_GLOBAL_MEM_FENCE)"
+      },
+      {
+        "target": "opencl_dev",
+        "safe": false,
+        "fence_fix": "atomic_work_item_fence(CLK_GLOBAL_MEM_FENCE, memory_order_acq_rel, memory_scope_device)"
+      },
+      {
+        "target": "vulkan_wg",
+        "safe": false,
+        "fence_fix": "work_group_barrier(CLK_GLOBAL_MEM_FENCE)"
+      },
+      {
+        "target": "vulkan_dev",
+        "safe": false,
+        "fence_fix": "atomic_work_item_fence(CLK_GLOBAL_MEM_FENCE, memory_order_acq_rel, memory_scope_device)"
+      },
+      {
+        "target": "ptx_cta",
+        "safe": false,
+        "fence_fix": "membar.cta"
+      },
+      {
+        "target": "ptx_gpu",
+        "safe": false,
+        "fence_fix": "membar.gl"
+      }
+    ],
+    "finding": "Store buffering pattern is UNSAFE on all architectures. Requires full fence (mfence on x86, dmb ish on ARM, fence rw,rw on RISC-V)."
+  },
+  "gpu_scope_mismatch": {
+    "description": "GPU kernel with workgroup-scope barriers used for cross-workgroup communication",
+    "pattern": "gpu_barrier_scope_mismatch",
+    "results": [
+      {
+        "target": "x86",
+        "safe": true,
+        "fence_fix": null
+      },
+      {
+        "target": "sparc",
+        "safe": true,
+        "fence_fix": null
+      },
+      {
+        "target": "arm",
+        "safe": true,
+        "fence_fix": null
+      },
+      {
+        "target": "riscv",
+        "safe": true,
+        "fence_fix": null
+      },
+      {
+        "target": "opencl_wg",
+        "safe": false,
+        "fence_fix": "use device-scope barrier (work_group_barrier insufficient for cross-workgroup)"
+      },
+      {
+        "target": "opencl_dev",
+        "safe": false,
+        "fence_fix": "atomic_work_item_fence(CLK_GLOBAL_MEM_FENCE, memory_order_acq_rel, memory_scope_device)"
+      },
+      {
+        "target": "vulkan_wg",
+        "safe": false,
+        "fence_fix": "use device-scope barrier (work_group_barrier insufficient for cross-workgroup)"
+      },
+      {
+        "target": "vulkan_dev",
+        "safe": false,
+        "fence_fix": "atomic_work_item_fence(CLK_GLOBAL_MEM_FENCE, memory_order_acq_rel, memory_scope_device)"
+      },
+      {
+        "target": "ptx_cta",
+        "safe": false,
+        "fence_fix": "use membar.gl (membar.cta insufficient for cross-CTA)"
+      },
+      {
+        "target": "ptx_gpu",
+        "safe": false,
+        "fence_fix": "membar.gl"
+      }
+    ],
+    "finding": "Workgroup-scope barrier insufficient for cross-workgroup MP. Need device-scope fence (__threadfence() in CUDA, CLK_GLOBAL_MEM_FENCE in OpenCL)."
+  },
+  "seqlock_riscv": {
+    "description": "Seqlock pattern (fence w,w + fence r,r) ported to RISC-V",
+    "pattern": "mp_fence_ww_rr",
+    "source": "x86",
+    "results": [
+      {
+        "target": "x86",
+        "safe": true,
+        "fence_fix": null
+      },
+      {
+        "target": "sparc",
+        "safe": true,
+        "fence_fix": null
+      },
+      {
+        "target": "arm",
+        "safe": true,
+        "fence_fix": null
+      },
+      {
+        "target": "riscv",
+        "safe": true,
+        "fence_fix": null
+      },
+      {
+        "target": "opencl_wg",
+        "safe": true,
+        "fence_fix": null
+      },
+      {
+        "target": "opencl_dev",
+        "safe": true,
+        "fence_fix": null
+      },
+      {
+        "target": "vulkan_wg",
+        "safe": true,
+        "fence_fix": null
+      },
+      {
+        "target": "vulkan_dev",
+        "safe": true,
+        "fence_fix": null
+      },
+      {
+        "target": "ptx_cta",
+        "safe": true,
+        "fence_fix": null
+      },
+      {
+        "target": "ptx_gpu",
+        "safe": true,
+        "fence_fix": null
+      }
+    ],
+    "finding": "Asymmetric RISC-V fences (fence w,w + fence r,r) are sufficient for MP ordering, saving cost over full fence rw,rw."
+  }
+}

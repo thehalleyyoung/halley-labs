@@ -1099,5 +1099,339 @@ def run_full_smt_validation():
     return full_results
 
 
+def _po_preserved_gpu_smt(a, b, model_name, thread_ops, a_idx, b_idx, test=None):
+    """Check if program-order edge a→b is preserved under a GPU memory model.
+
+    GPU models follow ARM-relaxed semantics with scope-qualified fences:
+    - All cross-address po is relaxed (like ARM)
+    - Same-address po (po-loc) always preserved
+    - Fences restore ordering, but effectiveness depends on scope and test structure
+    - Under WG model with cross-wg tests, no fence is effective
+    """
+    if a.addr == b.addr:
+        return True  # po-loc always preserved
+
+    scope = 'workgroup' if model_name.endswith('-WG') or model_name == 'PTX-CTA' else 'device'
+
+    # Dependencies (for GPU patterns with dep annotations)
+    if b.dep_on is not None:
+        if b.dep_on == 'addr' and a.optype == 'load':
+            return True
+        if b.dep_on == 'data' and a.optype == 'load' and b.optype == 'store':
+            return True
+        if b.dep_on == 'ctrl' and a.optype == 'load' and b.optype == 'store':
+            return True
+
+    # Check for intervening fence with proper scope
+    for k in range(a_idx + 1, b_idx):
+        if thread_ops[k].optype == 'fence':
+            fence_op = thread_ops[k]
+            fence_scope = fence_op.scope or 'device'
+
+            # Check if test has multiple workgroups
+            has_multi_wg = False
+            if test:
+                wgs = set(op.workgroup for op in test.ops)
+                has_multi_wg = len(wgs) > 1
+
+            if scope == 'workgroup':
+                # Under WG model with cross-wg test, no fence is effective
+                if has_multi_wg:
+                    return False
+                # Single workgroup: any fence works
+                return True
+            else:
+                # Device model: device/system scope fences work
+                if fence_scope in ('device', 'system'):
+                    return True
+                # wg fence: not effective when test has cross-wg threads
+                if fence_scope == 'workgroup':
+                    if has_multi_wg:
+                        continue  # fence not effective, try next
+                    return True  # single wg: wg fence works
+
+    return False
+
+
+def encode_gpu_litmus_test_smt(test, model_name):
+    """Encode a GPU litmus test + scoped memory model as an SMT formula.
+
+    Extends the CPU encoding with scope hierarchy:
+    - Workgroup-scope: only same-wg ordering
+    - Device-scope: cross-wg ordering with device fences
+    - Scope mismatch detection: patterns that need device scope but only have wg
+    """
+    if not Z3_AVAILABLE:
+        return None, None, None, None
+
+    s = Solver()
+    s.set("timeout", 10000)
+
+    loads = test.loads
+    stores = test.stores
+    addrs = sorted(set(op.addr for op in test.ops if op.addr))
+
+    op_idx = {}
+    for i, op in enumerate(test.ops):
+        op_idx[id(op)] = i
+
+    # Read-from variables
+    rf_val = {}
+    stores_per_addr = {}
+    for addr in addrs:
+        addr_stores = get_stores_to_addr(test, addr)
+        stores_per_addr[addr] = addr_stores
+
+    for load in loads:
+        addr_stores = stores_per_addr[load.addr]
+        v = Int(f'rf_{op_idx[id(load)]}')
+        rf_val[id(load)] = v
+        s.add(v >= 0)
+        s.add(v < len(addr_stores))
+
+    # Coherence order variables
+    co_vars = {}
+    for addr in addrs:
+        addr_stores = stores_per_addr[addr]
+        non_init = [i for i, st in enumerate(addr_stores) if st[0] != 'init']
+        if len(non_init) < 2:
+            continue
+        for i in non_init:
+            for j in non_init:
+                if i != j:
+                    v = Bool(f'co_{addr}_{i}_{j}')
+                    co_vars[(addr, i, j)] = v
+        for i in non_init:
+            for j in non_init:
+                if i < j:
+                    s.add(Or(co_vars[(addr, i, j)], co_vars[(addr, j, i)]))
+                    s.add(Not(And(co_vars[(addr, i, j)], co_vars[(addr, j, i)])))
+        for i in non_init:
+            for j in non_init:
+                for k in non_init:
+                    if i != j and j != k and i != k:
+                        s.add(Implies(
+                            And(co_vars.get((addr, i, j), BoolVal(False)),
+                                co_vars.get((addr, j, k), BoolVal(False))),
+                            co_vars.get((addr, i, k), BoolVal(True))
+                        ))
+
+    # Timestamp variables for acyclicity
+    n_nodes = len(test.ops) + len(addrs)
+    ts = {}
+    for i, op in enumerate(test.ops):
+        ts[id(op)] = Int(f'ts_{i}')
+        s.add(ts[id(op)] >= 0)
+        s.add(ts[id(op)] < n_nodes * 10)
+    for addr in addrs:
+        ts[f'init_{addr}'] = Int(f'ts_init_{addr}')
+        s.add(ts[f'init_{addr}'] >= 0)
+
+    # Program order edges (GPU model-dependent)
+    ops_by_thread = defaultdict(list)
+    for op in test.ops:
+        ops_by_thread[op.thread].append(op)
+
+    scope = 'workgroup' if model_name.endswith('-WG') or model_name == 'PTX-CTA' else 'device'
+
+    for t, ops in ops_by_thread.items():
+        mem_ops = [op for op in ops if op.optype != 'fence']
+        for i in range(len(mem_ops)):
+            for j in range(i + 1, len(mem_ops)):
+                a, b = mem_ops[i], mem_ops[j]
+                a_global_idx = ops.index(a)
+                b_global_idx = ops.index(b)
+
+                preserved = _po_preserved_gpu_smt(a, b, model_name, ops, a_global_idx, b_global_idx, test)
+                if preserved:
+                    s.add(ts[id(a)] < ts[id(b)])
+
+    # Communication edges (rf): stores are globally visible regardless of scope
+    # Scope only affects ordering (po edges above), not visibility
+    for load in loads:
+        addr_stores = stores_per_addr[load.addr]
+        for si, store_tuple in enumerate(addr_stores):
+            if store_tuple[0] == 'init':
+                store_node = f'init_{store_tuple[1]}'
+            else:
+                store_op = _find_store_op(test, store_tuple)
+                if store_op is None:
+                    continue
+                store_node = id(store_op)
+
+            if store_node in ts:
+                s.add(Implies(rf_val[id(load)] == si,
+                              ts[store_node] < ts[id(load)]))
+
+    # Coherence order edges
+    for addr in addrs:
+        addr_stores = stores_per_addr[addr]
+        non_init = [i for i, st in enumerate(addr_stores) if st[0] != 'init']
+        for i in non_init:
+            st = addr_stores[i]
+            store_op = _find_store_op(test, st)
+            if store_op:
+                s.add(ts[f'init_{addr}'] < ts[id(store_op)])
+        for i in non_init:
+            for j in non_init:
+                if i != j and (addr, i, j) in co_vars:
+                    si = addr_stores[i]
+                    sj = addr_stores[j]
+                    oi = _find_store_op(test, si)
+                    oj = _find_store_op(test, sj)
+                    if oi and oj:
+                        s.add(Implies(co_vars[(addr, i, j)],
+                                      ts[id(oi)] < ts[id(oj)]))
+
+    # From-reads edges
+    for load in loads:
+        addr = load.addr
+        addr_stores = stores_per_addr[addr]
+        non_init = [i for i, st in enumerate(addr_stores) if st[0] != 'init']
+        for si in range(len(addr_stores)):
+            for sj in non_init:
+                if si != sj:
+                    sj_op = _find_store_op(test, addr_stores[sj])
+                    if sj_op is None:
+                        continue
+                    if si == 0:
+                        s.add(Implies(rf_val[id(load)] == si,
+                                      ts[id(load)] < ts[id(sj_op)]))
+                    elif (addr, si, sj) in co_vars:
+                        s.add(Implies(
+                            And(rf_val[id(load)] == si, co_vars[(addr, si, sj)]),
+                            ts[id(load)] < ts[id(sj_op)]
+                        ))
+
+    # Forbidden outcome constraint
+    forbidden_constraints = []
+    for load in loads:
+        if load.reg and load.reg in test.forbidden:
+            expected_val = test.forbidden[load.reg]
+            addr_stores = stores_per_addr[load.addr]
+            matching_indices = [i for i, st in enumerate(addr_stores) if st[2] == expected_val]
+            if matching_indices:
+                forbidden_constraints.append(
+                    Or(*[rf_val[id(load)] == idx for idx in matching_indices])
+                )
+            else:
+                forbidden_constraints.append(BoolVal(False))
+
+    forbidden_conj = And(*forbidden_constraints) if forbidden_constraints else BoolVal(True)
+    return s, rf_val, co_vars, forbidden_conj
+
+
+def validate_gpu_pattern_smt(pat_name, model_name):
+    """Validate a GPU pattern against a GPU model using SMT.
+
+    Maps GPU architecture names to model names for SMT encoding.
+    """
+    if not Z3_AVAILABLE:
+        return {'error': 'z3 not available'}
+
+    gpu_model_map = {
+        'opencl_wg': 'OpenCL-WG', 'opencl_dev': 'OpenCL-Dev',
+        'vulkan_wg': 'Vulkan-WG', 'vulkan_dev': 'Vulkan-Dev',
+        'ptx_cta': 'PTX-CTA', 'ptx_gpu': 'PTX-GPU',
+    }
+    smt_model = gpu_model_map.get(model_name, model_name)
+
+    pat_def = PATTERNS[pat_name]
+    n_threads = max(op.thread for op in pat_def['ops']) + 1
+    lt = LitmusTest(
+        name=pat_name, n_threads=n_threads,
+        addresses=pat_def['addresses'], ops=pat_def['ops'],
+        forbidden=pat_def['forbidden'],
+    )
+
+    start = time.time()
+    try:
+        solver, rf_val, co_vars, forbidden_conj = encode_gpu_litmus_test_smt(lt, smt_model)
+        if solver is None:
+            return {'error': 'z3 not available'}
+        solver.add(forbidden_conj)
+        result = solver.check()
+        elapsed = (time.time() - start) * 1000
+
+        if result == sat:
+            return {'smt_result': 'sat', 'allowed': True, 'time_ms': round(elapsed, 2)}
+        elif result == unsat:
+            return {'smt_result': 'unsat', 'allowed': False, 'time_ms': round(elapsed, 2)}
+        else:
+            return {'smt_result': 'timeout', 'allowed': None, 'time_ms': round(elapsed, 2)}
+    except Exception as e:
+        elapsed = (time.time() - start) * 1000
+        return {'smt_result': 'error', 'error': str(e), 'time_ms': round(elapsed, 2)}
+
+
+def cross_validate_gpu_smt():
+    """Cross-validate GPU SMT results against enumeration-based checker.
+
+    Returns validation report covering all GPU patterns × GPU architectures.
+    """
+    if not Z3_AVAILABLE:
+        return {'error': 'z3 not available'}
+
+    gpu_archs = ['opencl_wg', 'opencl_dev', 'vulkan_wg', 'vulkan_dev', 'ptx_cta', 'ptx_gpu']
+    gpu_patterns = [p for p in sorted(PATTERNS.keys()) if p.startswith('gpu_')]
+
+    results = []
+    agree = 0
+    disagree = 0
+    timeout = 0
+    total = 0
+
+    for pat_name in gpu_patterns:
+        pat_def = PATTERNS[pat_name]
+        n_threads = max(op.thread for op in pat_def['ops']) + 1
+        lt = LitmusTest(
+            name=pat_name, n_threads=n_threads,
+            addresses=pat_def['addresses'], ops=pat_def['ops'],
+            forbidden=pat_def['forbidden'],
+        )
+
+        for arch_name in gpu_archs:
+            total += 1
+            enum_allowed, n_checked = verify_test(lt, ARCHITECTURES[arch_name])
+            smt_result = validate_gpu_pattern_smt(pat_name, arch_name)
+
+            agrees = None
+            if smt_result.get('allowed') is not None:
+                agrees = smt_result['allowed'] == enum_allowed
+                if agrees:
+                    agree += 1
+                else:
+                    disagree += 1
+            else:
+                timeout += 1
+
+            results.append({
+                'pattern': pat_name,
+                'arch': arch_name,
+                'enum_allowed': enum_allowed,
+                'smt_allowed': smt_result.get('allowed'),
+                'smt_status': smt_result.get('smt_result'),
+                'smt_time_ms': smt_result.get('time_ms'),
+                'agrees': agrees,
+            })
+
+    resolved = agree + disagree
+    if resolved > 0:
+        agreement_p, ci_lo, ci_hi = wilson_ci(agree, resolved)
+    else:
+        agreement_p, ci_lo, ci_hi = 0, 0, 0
+
+    return {
+        'total_checks': total,
+        'agree': agree,
+        'disagree': disagree,
+        'timeout': timeout,
+        'agreement_rate': round(agreement_p * 100, 1) if resolved > 0 else None,
+        'wilson_95ci': [round(ci_lo * 100, 1), round(ci_hi * 100, 1)] if resolved > 0 else None,
+        'results': results,
+        'disagreements': [r for r in results if r.get('agrees') == False],
+    }
+
+
 if __name__ == '__main__':
     run_full_smt_validation()

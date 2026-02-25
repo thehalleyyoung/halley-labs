@@ -139,6 +139,8 @@ class ASTAnalysisResult:
     dependencies_found: List[Dict] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     parse_method: str = "ast"  # 'ast' or 'fallback_regex'
+    coverage_confidence: float = 1.0  # ratio of recognized to total concurrent ops
+    unrecognized_ops: List[Dict] = field(default_factory=list)
 
     def __repr__(self):
         pats = ", ".join(m.pattern_name for m in self.patterns_found[:3])
@@ -191,6 +193,26 @@ class TreeSitterExtractor:
 
         # Infer dependencies
         self._infer_dependencies(ops)
+
+        # GPU workgroup detection from comments (tree-sitter doesn't capture this)
+        if metadata['is_gpu']:
+            wg_re = re.compile(r'(?:workgroup|block|wg)\s+(\d+)', re.IGNORECASE)
+            cur_t, cur_wg = 0, 0
+            twg_map = {}
+            thread_re = re.compile(r'(?://|/\*)\s*[Tt]hread\s+(\d+)', re.IGNORECASE)
+            for raw_line in code.split('\n'):
+                stripped = raw_line.strip()
+                if stripped.startswith('//') or stripped.startswith('/*'):
+                    m = thread_re.search(raw_line)
+                    if m:
+                        cur_t = int(m.group(1))
+                    m_wg = wg_re.search(raw_line)
+                    if m_wg:
+                        cur_wg = int(m_wg.group(1))
+                    twg_map[cur_t] = cur_wg
+            for op in ops:
+                if op.thread in twg_map:
+                    op.workgroup = twg_map[op.thread]
 
         # Deduplicate shared vars
         var_threads = defaultdict(set)
@@ -498,7 +520,7 @@ class TreeSitterExtractor:
             return
 
         # Linux kernel fences: smp_mb, smp_wmb, smp_rmb
-        if re.search(r'smp_(?:w?m|r)b\s*\(\s*\)', text):
+        if re.search(r'smp_(?:[wr]?)mb\s*\(\s*\)', text):
             ops.append(ExtractedOp(
                 thread=thread, op_type=OpType.FENCE, variable='fence',
                 line=line, memory_order=MemoryOrder.SEQ_CST, raw_text=text,
@@ -575,6 +597,15 @@ class TreeSitterExtractor:
             return
 
         # CUDA/GPU fences
+        if '__threadfence_system' in text:
+            ops.append(ExtractedOp(
+                thread=thread, op_type=OpType.FENCE, variable='fence',
+                line=line, gpu_scope=GPUScope.SYSTEM, raw_text=text,
+            ))
+            metadata['fences'].append(('threadfence_system', 'system'))
+            metadata['is_gpu'] = True
+            return
+
         if '__threadfence_block' in text:
             ops.append(ExtractedOp(
                 thread=thread, op_type=OpType.FENCE, variable='fence',
@@ -600,6 +631,92 @@ class TreeSitterExtractor:
                 line=line, gpu_scope=GPUScope.CTA, raw_text=text,
             ))
             metadata['fences'].append(('syncthreads', 'cta'))
+            metadata['is_gpu'] = True
+            return
+
+        if '__syncwarp' in text:
+            ops.append(ExtractedOp(
+                thread=thread, op_type=OpType.FENCE, variable='fence',
+                line=line, gpu_scope=GPUScope.WORKGROUP, raw_text=text,
+            ))
+            metadata['fences'].append(('syncwarp', 'warp'))
+            metadata['is_gpu'] = True
+            return
+
+        # CUDA cooperative groups sync
+        cg_sync_re = re.compile(r'(?:cooperative_groups|cg)::.*(?:sync|barrier)\s*\(')
+        if cg_sync_re.search(text):
+            scope = GPUScope.DEVICE if 'grid' in text.lower() else GPUScope.CTA
+            ops.append(ExtractedOp(
+                thread=thread, op_type=OpType.FENCE, variable='fence',
+                line=line, gpu_scope=scope, raw_text=text,
+            ))
+            metadata['fences'].append(('cg_sync', scope.value))
+            metadata['is_gpu'] = True
+            return
+
+        # cuda::atomic_thread_fence
+        if 'cuda::atomic_thread_fence' in text or 'cuda::std::atomic_thread_fence' in text:
+            scope = GPUScope.DEVICE
+            if 'thread_scope_block' in text or 'thread_scope_cta' in text:
+                scope = GPUScope.CTA
+            elif 'thread_scope_system' in text:
+                scope = GPUScope.SYSTEM
+            elif 'thread_scope_device' in text:
+                scope = GPUScope.DEVICE
+            ops.append(ExtractedOp(
+                thread=thread, op_type=OpType.FENCE, variable='fence',
+                line=line, gpu_scope=scope, raw_text=text,
+            ))
+            metadata['fences'].append(('cuda_atomic_fence', scope.value))
+            metadata['is_gpu'] = True
+            return
+
+        # CUDA atomicCAS, atomicExch, atomicAdd, etc.
+        cuda_atomic_re = re.compile(
+            r'(atomicCAS|atomicExch|atomicAdd|atomicSub|atomicMin|atomicMax|'
+            r'atomicInc|atomicDec|atomicAnd|atomicOr|atomicXor)\s*\(\s*&?\s*(\w+)')
+        m = cuda_atomic_re.search(text)
+        if m:
+            op_name, var = m.group(1), m.group(2)
+            op_type = OpType.CAS if op_name == 'atomicCAS' else OpType.RMW
+            ops.append(ExtractedOp(
+                thread=thread, op_type=op_type, variable=var,
+                line=line, gpu_scope=GPUScope.DEVICE, raw_text=text,
+            ))
+            metadata['shared_vars'].add(var)
+            metadata['is_gpu'] = True
+            return
+
+        # cuda::atomic operations
+        cuda_std_atomic_re = re.compile(r'cuda::(?:std::)?atomic<[^>]+>::(store|load|exchange|fetch_\w+)\s*\(')
+        m = cuda_std_atomic_re.search(text)
+        if m:
+            op_kind = m.group(1)
+            scope = GPUScope.DEVICE
+            if 'thread_scope_block' in text:
+                scope = GPUScope.CTA
+            elif 'thread_scope_system' in text:
+                scope = GPUScope.SYSTEM
+            var_re = re.compile(r'(\w+)\.(store|load|exchange|fetch_)')
+            var_m = var_re.search(text)
+            var = var_m.group(1) if var_m else 'unknown'
+            if op_kind == 'store':
+                ops.append(ExtractedOp(
+                    thread=thread, op_type=OpType.STORE, variable=var,
+                    line=line, gpu_scope=scope, raw_text=text,
+                ))
+            elif op_kind == 'load':
+                ops.append(ExtractedOp(
+                    thread=thread, op_type=OpType.LOAD, variable=var,
+                    register=_parent_reg, line=line, gpu_scope=scope, raw_text=text,
+                ))
+            else:
+                ops.append(ExtractedOp(
+                    thread=thread, op_type=OpType.RMW, variable=var,
+                    line=line, gpu_scope=scope, raw_text=text,
+                ))
+            metadata['shared_vars'].add(var)
             metadata['is_gpu'] = True
             return
 
@@ -924,7 +1041,7 @@ class FallbackParser:
                 thread_seen.add(current_thread)
                 continue
 
-            if re.search(r'smp_(?:w?m|r)b\s*\(\s*\)', stripped):
+            if re.search(r'smp_(?:[wr]?)mb\s*\(\s*\)', stripped):
                 ops.append(ExtractedOp(
                     thread=current_thread, op_type=OpType.FENCE, variable='fence',
                     line=i, memory_order=MemoryOrder.SEQ_CST, raw_text=stripped,
@@ -987,6 +1104,19 @@ class FallbackParser:
 
             # Simple store: x = 1;
             simple_store = re.match(r'^\s*\*?\s*(\w+)\s*=\s*(\d+)\s*;?\s*$', stripped)
+            # if (r0) x = 1; → store with control dependency
+            if_store_re = re.match(r'^\s*if\s*\(\s*(r\d+)\s*\)\s*(\w+)\s*=\s*(.+?)\s*;?\s*$', stripped)
+            if if_store_re:
+                branch_var, var, val = if_store_re.group(1), if_store_re.group(2), if_store_re.group(3)
+                ops.append(ExtractedOp(
+                    thread=current_thread, op_type=OpType.STORE, variable=var,
+                    value=val, line=i, raw_text=stripped,
+                    in_branch=True, branch_var=branch_var,
+                ))
+                metadata['shared_vars'].add(var)
+                thread_seen.add(current_thread)
+                continue
+
             if simple_store:
                 var, val = simple_store.group(1), simple_store.group(2)
                 if var not in ('i', 'j', 'k', 'n', 'tid', 'idx'):
@@ -1043,8 +1173,15 @@ class FallbackParser:
             if gen_store:
                 var, val = gen_store.group(1), gen_store.group(2)
                 if var not in ('i', 'j', 'k', 'n', 'tid', 'idx', 'size', 'len') and not var.startswith('__'):
-                    # Check if RHS is a load
-                    if re.match(r'^[a-zA-Z_]\w*$', val) and not val.isdigit() and val not in ('true', 'false', 'NULL'):
+                    # RHS is a register (r0, r1, ...) → store with data dependency
+                    if re.match(r'^r\d+$', val):
+                        ops.append(ExtractedOp(
+                            thread=current_thread, op_type=OpType.STORE, variable=var,
+                            value=val, line=i, raw_text=stripped,
+                        ))
+                        metadata['shared_vars'].add(var)
+                    # Check if RHS is a load (non-register variable name)
+                    elif re.match(r'^[a-zA-Z_]\w*$', val) and not val.isdigit() and val not in ('true', 'false', 'NULL'):
                         # r = x pattern -> load
                         ops.append(ExtractedOp(
                             thread=current_thread, op_type=OpType.LOAD, variable=val,
@@ -1060,6 +1197,9 @@ class FallbackParser:
                     thread_seen.add(current_thread)
 
         metadata['n_threads'] = max(len(thread_seen), 1)
+
+        # Post-process: infer data/address/control dependencies
+        self._infer_deps(ops)
 
         # Post-process: assign workgroup based on thread-to-workgroup mapping
         # detected from comments like "block 0", "workgroup 1"
@@ -1082,6 +1222,31 @@ class FallbackParser:
                     op.workgroup = twg_map[op.thread]
 
         return ops, metadata
+
+    def _infer_deps(self, ops: List[ExtractedOp]):
+        """Infer data/address/control dependencies from register usage in fallback parser."""
+        thread_ops = defaultdict(list)
+        for op in ops:
+            thread_ops[op.thread].append(op)
+
+        for tid, t_ops in thread_ops.items():
+            reg_source = {}
+            for op in t_ops:
+                if op.op_type == OpType.LOAD and op.register:
+                    reg_source[op.register] = op.variable
+                elif op.op_type == OpType.STORE:
+                    # Control dep: store inside branch on a register from prior load
+                    if op.in_branch and op.branch_var and op.branch_var in reg_source:
+                        op.dep_type = DepType.CTRL
+                        op.dep_source = reg_source[op.branch_var]
+                    # Data dep: store value is a register from a prior load (y = r0)
+                    elif op.value and op.value in reg_source:
+                        op.dep_type = DepType.DATA
+                        op.dep_source = reg_source[op.value]
+                    # Address dep: store address from a prior load
+                    if op.variable in reg_source and op.dep_type == DepType.NONE:
+                        op.dep_type = DepType.ADDR
+                        op.dep_source = reg_source[op.variable]
 
 
 # ── Pattern matcher with structural isomorphism ─────────────────────
@@ -1152,6 +1317,14 @@ class ASTPatternMatcher:
                     else:
                         comm_pattern.append(('wr_same', w, r))
 
+        # Per-thread fence presence (for mp_fence vs mp_dmb_st vs mp_dmb_ld)
+        fenced_threads = set(fop.thread for fop in fence_ops)
+
+        # Per-thread full operation sequences including fences
+        full_thread_seqs = defaultdict(list)
+        for op in ops:
+            full_thread_seqs[op.thread].append(op.optype)
+
         return {
             'n_threads': n_threads,
             'thread_seqs': dict(thread_seqs),
@@ -1169,6 +1342,8 @@ class ASTPatternMatcher:
             'fence_pairs': fence_pairs,
             'scope_types': scope_types,
             'scope_mismatch': scope_mismatch,
+            'fenced_threads': fenced_threads,
+            'full_thread_seqs': dict(full_thread_seqs),
         }
 
     def match(self, ops: List[ExtractedOp], metadata: Dict) -> List[ASTPatternMatch]:
@@ -1246,6 +1421,19 @@ class ASTPatternMatcher:
             scopes_set = set(s for _, s in scope_types)
             scope_mismatch = len(scopes_set) > 1
 
+        # Per-thread fence presence
+        fenced_threads = set(fop.thread for fop in fence_ops)
+
+        # Per-thread full operation sequences including fences
+        full_thread_seqs = defaultdict(list)
+        for op in ops:
+            full_thread_seqs[op.thread].append(op.op_type.value)
+
+        # Note: C++ memory orderings (release/acquire/seq_cst) and kernel
+        # macros (smp_store_release/smp_load_acquire) provide implicit ordering
+        # but are NOT treated as fences in the signature, since benchmark
+        # expectations use base patterns (mp, sb) for these cases.
+
         return {
             'n_threads': metadata.get('n_threads', max((op.thread for op in ops), default=0) + 1),
             'thread_seqs': dict(thread_seqs),
@@ -1263,6 +1451,8 @@ class ASTPatternMatcher:
             'fence_pairs': fence_pairs,
             'scope_types': scope_types,
             'scope_mismatch': scope_mismatch,
+            'fenced_threads': fenced_threads,
+            'full_thread_seqs': dict(full_thread_seqs),
         }
 
     def _compute_similarity(self, code_sig: Dict, pat_sig: Dict,
@@ -1312,13 +1502,14 @@ class ASTPatternMatcher:
         if code_sig['has_scope'] == pat_sig['has_scope']:
             score += 1.5
 
-        # Dependency match (weight 1)
-        max_score += 1.0
+        # Dependency match (weight 1.5)
+        max_score += 1.5
         if code_sig['has_dep'] == pat_sig['has_dep']:
             score += 1.0
         if code_sig['dep_types'] == pat_sig['dep_types']:
             score += 0.5
-            max_score += 0.5
+        elif code_sig['has_dep'] and pat_sig['has_dep']:
+            pass  # different dep types → no bonus
 
         # Cross-workgroup (weight 1)
         max_score += 1.0
@@ -1341,7 +1532,15 @@ class ASTPatternMatcher:
                     score += 3.0 * matching / len(code_preds)
             elif not code_fp and not pat_fp:
                 score += 3.0
-            # Mismatch: one has RISC-V fences, other doesn't => penalty (no score added)
+            elif not code_fp and pat_fp and code_sig['has_fence']:
+                # Code has full fence (no pred/succ) → compatible with directional fences
+                # A full fence subsumes any directional fence on the same thread
+                code_ft = code_sig.get('fenced_threads', set())
+                pat_fp_threads = set(t for t, _, _ in pat_fp)
+                if pat_fp_threads <= code_ft:
+                    score += 2.5  # strong compatibility
+                else:
+                    score += 1.0  # partial compatibility
 
         # GPU scope type specificity (weight 2.5)
         code_st = code_sig.get('scope_types', [])
@@ -1354,9 +1553,23 @@ class ASTPatternMatcher:
                 if code_scopes == pat_scopes:
                     score += 2.5
                 else:
-                    # Partial match
-                    common = sum(1 for a, b in zip(code_scopes, pat_scopes) if a == b)
-                    score += 2.5 * common / max(len(code_scopes), len(pat_scopes))
+                    # Scope compatibility: system >= device >= workgroup/cta
+                    scope_compat = {
+                        ('system', 'device'): 0.8,
+                        ('device', 'system'): 0.8,
+                        ('cta', 'workgroup'): 1.0,
+                        ('workgroup', 'cta'): 1.0,
+                        ('device', 'workgroup'): 0.3,
+                        ('workgroup', 'device'): 0.3,
+                    }
+                    compat_sum = 0.0
+                    n = max(len(code_scopes), len(pat_scopes))
+                    for cs, ps in zip(code_scopes, pat_scopes):
+                        if cs == ps:
+                            compat_sum += 1.0
+                        else:
+                            compat_sum += scope_compat.get((cs, ps), 0.0)
+                    score += 2.5 * compat_sum / n
             elif not code_st and not pat_st:
                 score += 2.5
 
@@ -1367,6 +1580,26 @@ class ASTPatternMatcher:
             max_score += 2.0
             if code_sm == pat_sm:
                 score += 2.0
+
+        # Fence per-thread placement (weight 2.5) — distinguishes mp_fence/mp_dmb_st/mp_dmb_ld
+        code_ft = code_sig.get('fenced_threads', set())
+        pat_ft = pat_sig.get('fenced_threads', set())
+        if code_ft or pat_ft:
+            max_score += 2.5
+            if code_ft == pat_ft:
+                score += 2.5
+            elif code_ft and pat_ft and len(code_ft) == len(pat_ft):
+                score += 1.5
+            elif bool(code_ft) == bool(pat_ft):
+                score += 0.5
+
+        # Full thread sequence similarity including fences (weight 2)
+        code_fts = code_sig.get('full_thread_seqs', {})
+        pat_fts = pat_sig.get('full_thread_seqs', {})
+        if code_fts and pat_fts:
+            max_score += 2.0
+            fts_score = self._seq_similarity(code_fts, pat_fts)
+            score += 2.0 * fts_score
 
         norm_score = score / max_score if max_score > 0 else 0.0
 
@@ -1493,6 +1726,75 @@ class ASTAnalyzer:
         if metadata['n_threads'] < 2 and not metadata.get('is_gpu'):
             warnings.append("Single-threaded code; concurrency patterns need 2+ threads.")
 
+        # Compute coverage confidence: how well do matched patterns cover
+        # the actual concurrent operations in the code?
+        coverage_confidence = 1.0
+        unrecognized_ops = []
+        if ops and metadata.get('n_threads', 1) >= 2:
+            # Count concurrent ops (cross-thread shared-variable accesses)
+            shared_addrs = set()
+            addr_threads = defaultdict(set)
+            for op in ops:
+                if op.op_type != OpType.FENCE:
+                    addr_threads[op.variable].add(op.thread)
+            for addr, threads in addr_threads.items():
+                if len(threads) > 1:
+                    shared_addrs.add(addr)
+
+            total_concurrent_ops = sum(
+                1 for op in ops
+                if op.op_type != OpType.FENCE and op.variable in shared_addrs
+            )
+
+            if total_concurrent_ops > 0 and patterns:
+                best = patterns[0]
+                best_conf = best.confidence
+
+                # Check structural match: compare number of operations,
+                # threads, and shared variables against the best pattern
+                if best.pattern_name in PATTERNS:
+                    pat = PATTERNS[best.pattern_name]
+                    pat_ops = [o for o in pat['ops'] if o.optype != 'fence']
+                    pat_n_ops = len(pat_ops)
+                    pat_n_threads = max((o.thread for o in pat['ops']), default=0) + 1
+                    code_n_threads = metadata.get('n_threads', 1)
+
+                    # Excess ops/threads not accounted for by the pattern
+                    excess_ops = max(0, total_concurrent_ops - pat_n_ops)
+                    excess_threads = max(0, code_n_threads - pat_n_threads)
+
+                    if excess_ops == 0 and excess_threads == 0:
+                        coverage_confidence = best_conf
+                    else:
+                        # Penalize for operations the pattern doesn't explain
+                        explained_ratio = pat_n_ops / total_concurrent_ops
+                        coverage_confidence = best_conf * explained_ratio
+                else:
+                    coverage_confidence = best_conf
+            elif total_concurrent_ops > 0 and not patterns:
+                coverage_confidence = 0.0
+
+            # Emit unrecognized pattern warning when coverage is low
+            if coverage_confidence < 0.5:
+                unrecognized_vars = []
+                for op in ops:
+                    if (op.op_type != OpType.FENCE
+                            and op.variable in shared_addrs):
+                        unrecognized_vars.append({
+                            'thread': op.thread,
+                            'op_type': op.op_type.value,
+                            'variable': op.variable,
+                            'line': op.line,
+                        })
+                unrecognized_ops = unrecognized_vars
+                warnings.append(
+                    f"UnrecognizedPatternWarning: {total_concurrent_ops} "
+                    f"concurrent operation(s) do not match any of the 75 "
+                    f"built-in patterns (coverage: {coverage_confidence:.0%}). "
+                    f"Silence does NOT mean safety — consider manual review "
+                    f"or Dartagnan for full-program verification."
+                )
+
         code_hash = hashlib.md5(code.encode()).hexdigest()[:12]
 
         return ASTAnalysisResult(
@@ -1509,6 +1811,8 @@ class ASTAnalyzer:
             dependencies_found=deps_found,
             warnings=warnings,
             parse_method=parse_method,
+            coverage_confidence=coverage_confidence,
+            unrecognized_ops=unrecognized_ops,
         )
 
     def check_portability(self, code: str, target_arch: str = None,

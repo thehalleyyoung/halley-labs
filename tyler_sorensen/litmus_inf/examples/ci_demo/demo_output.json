@@ -1,0 +1,131 @@
+{
+  "demo": "CI/CD Integration Demo",
+  "source_file": "concurrent_queue.c",
+  "source_arch": "x86",
+  "target_arch": "arm",
+  "elapsed_ms": 20.9,
+  "total_patterns_checked": 10,
+  "unsafe_count": 5,
+  "safe_count": 5,
+  "results": [
+    {
+      "pattern": "cowr",
+      "confidence": 0.7238095238095239,
+      "match_type": "structural",
+      "target_arch": "arm",
+      "safe": false,
+      "fence_fix": null,
+      "file": "concurrent_queue.c",
+      "start_line": 4
+    },
+    {
+      "pattern": "corw",
+      "confidence": 0.6571428571428571,
+      "match_type": "structural",
+      "target_arch": "arm",
+      "safe": true,
+      "fence_fix": null,
+      "file": "concurrent_queue.c",
+      "start_line": 4
+    },
+    {
+      "pattern": "amoswap",
+      "confidence": 0.6095238095238096,
+      "match_type": "structural",
+      "target_arch": "arm",
+      "safe": true,
+      "fence_fix": null,
+      "file": "concurrent_queue.c",
+      "start_line": 4
+    },
+    {
+      "pattern": "cowr_fence",
+      "confidence": 0.5829787234042554,
+      "match_type": "heuristic",
+      "target_arch": "arm",
+      "safe": false,
+      "fence_fix": null,
+      "file": "concurrent_queue.c",
+      "start_line": 4
+    },
+    {
+      "pattern": "gpu_coherence_wr",
+      "confidence": 0.5714285714285714,
+      "match_type": "heuristic",
+      "target_arch": "arm",
+      "safe": true,
+      "fence_fix": null,
+      "file": "concurrent_queue.c",
+      "start_line": 4
+    },
+    {
+      "pattern": "gpu_coherence_wr",
+      "confidence": 0.7585034013605442,
+      "match_type": "structural",
+      "target_arch": "arm",
+      "safe": true,
+      "fence_fix": null,
+      "file": "concurrent_queue.c",
+      "start_line": 67
+    },
+    {
+      "pattern": "amoswap",
+      "confidence": 0.6095238095238096,
+      "match_type": "structural",
+      "target_arch": "arm",
+      "safe": true,
+      "fence_fix": null,
+      "file": "concurrent_queue.c",
+      "start_line": 67
+    },
+    {
+      "pattern": "mp_rfi",
+      "confidence": 0.5857142857142857,
+      "match_type": "heuristic",
+      "target_arch": "arm",
+      "safe": false,
+      "fence_fix": "dmb ish (T0); dmb ishld (T1)",
+      "file": "concurrent_queue.c",
+      "start_line": 67
+    },
+    {
+      "pattern": "sb_rfi",
+      "confidence": 0.5857142857142857,
+      "match_type": "heuristic",
+      "target_arch": "arm",
+      "safe": false,
+      "fence_fix": "dmb ish (T0); dmb ish (T1)",
+      "file": "concurrent_queue.c",
+      "start_line": 67
+    },
+    {
+      "pattern": "mp",
+      "confidence": 0.5619047619047619,
+      "match_type": "heuristic",
+      "target_arch": "arm",
+      "safe": false,
+      "fence_fix": "dmb ishst (T0); dmb ishld (T1)",
+      "file": "concurrent_queue.c",
+      "start_line": 67
+    }
+  ],
+  "coverage": [
+    {
+      "start_line": 4,
+      "coverage_confidence": 1.0,
+      "warnings": []
+    },
+    {
+      "start_line": 67,
+      "coverage_confidence": 1.0,
+      "warnings": []
+    }
+  ],
+  "ci_exit_code": 1,
+  "github_action_config": {
+    "workflow_file": ".github/workflows/litmus-check.yml",
+    "trigger": "pull_request (on C/C++/CUDA file changes)",
+    "command": "litmus-check --target arm --json src/",
+    "artifacts": "litmus-results.json"
+  }
+}

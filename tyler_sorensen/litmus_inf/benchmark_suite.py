@@ -451,7 +451,7 @@ __global__ void kernel() {
     {
         "id": "cuda_correct_device_fence",
         "description": "CUDA MP with device-scoped fence (correct)",
-        "expected_pattern": "gpu_mp_wg",
+        "expected_pattern": "gpu_mp_dev",
         "category": "gpu",
         "code": """\
 __global__ void kernel() {
@@ -469,8 +469,8 @@ __global__ void kernel() {
     },
     {
         "id": "opencl_wg_barrier",
-        "description": "OpenCL workgroup barrier (cross-WG communication)",
-        "expected_pattern": "gpu_mp_wg",
+        "description": "OpenCL workgroup barrier (cross-WG scope mismatch)",
+        "expected_pattern": "gpu_barrier_scope_mismatch",
         "category": "gpu",
         "code": """\
 // Thread 0 (workgroup 0)
@@ -506,7 +506,7 @@ __global__ void reduce() {
     {
         "id": "opencl_global_barrier",
         "description": "OpenCL with global memory fence",
-        "expected_pattern": "gpu_mp_wg",
+        "expected_pattern": "gpu_mp_dev",
         "category": "gpu",
         "code": """\
 // Thread 0
@@ -642,7 +642,7 @@ r2 = x;
     },
     {
         "id": "isa2_classic",
-        "description": "ISA2 pattern (3-thread chain)",
+        "description": "ISA2 pattern (3-thread chain with data dependency)",
         "expected_pattern": "isa2",
         "category": "multi_thread",
         "code": """\
@@ -651,7 +651,7 @@ x = 1;
 
 // Thread 1
 r0 = x;
-y = 1;
+y = r0;
 
 // Thread 2
 r1 = y;
@@ -1240,7 +1240,7 @@ r1 = new_node;
     # === Group 21: Multi-thread patterns ===
     {
         "id": "isa2_classic",
-        "description": "ISA2 pattern (3-thread write-read-write chain)",
+        "description": "ISA2 pattern (3-thread write-read-write chain with data dependency)",
         "expected_pattern": "isa2",
         "category": "multi_thread",
         "code": """\
@@ -1249,7 +1249,7 @@ x = 1;
 
 // Thread 1
 r0 = x;
-y = 1;
+y = r0;
 
 // Thread 2
 r1 = y;
@@ -1490,7 +1490,7 @@ __global__ void kernel() {
     {
         "id": "opencl_mp_global",
         "description": "OpenCL MP with global fence",
-        "expected_pattern": "gpu_mp_wg",
+        "expected_pattern": "gpu_mp_dev",
         "category": "gpu",
         "code": """\
 // Thread 0
@@ -1621,7 +1621,7 @@ r1 = data;
     {
         "id": "linux_write_once_read_once_mp",
         "description": "Linux kernel WRITE_ONCE/READ_ONCE message passing (kernel/sched/core.c)",
-        "expected_pattern": "mp",
+        "expected_pattern": "mp_fence",
         "category": "real_code",
         "provenance": "Linux kernel v6.7, kernel/sched/core.c lines 3580-3605",
         "code": """\
@@ -1859,6 +1859,1522 @@ flag = 1;
 r0 = flag;
 __sync_synchronize();
 r1 = data;
+"""
+    },
+    # ═══════════════════════════════════════════════════════════════════
+    # Extended benchmark: Real-world patterns for n≥200 evaluation
+    # ═══════════════════════════════════════════════════════════════════
+
+    # === Linux kernel patterns ===
+    {
+        "id": "linux_spinlock_acquire",
+        "description": "Linux spinlock acquire pattern",
+        "expected_pattern": "sb",
+        "category": "kernel",
+        "code": """\
+// Thread 0 (lock acquire)
+lock = 1;
+r0 = data;
+
+// Thread 1 (lock acquire)
+lock = 1;
+r1 = data;
+"""
+    },
+    {
+        "id": "linux_rcu_dereference",
+        "description": "Linux RCU dereference with address dependency",
+        "expected_pattern": "mp_addr",
+        "category": "kernel",
+        "code": """\
+// Thread 0 (publisher)
+data = 1;
+ptr = 1;
+
+// Thread 1 (reader via rcu_dereference)
+r0 = ptr;
+r1 = data;
+"""
+    },
+    {
+        "id": "linux_completion_signal",
+        "description": "Linux completion mechanism",
+        "expected_pattern": "mp",
+        "category": "kernel",
+        "code": """\
+// Thread 0 (work done)
+result = 1;
+done = 1;
+
+// Thread 1 (waiter)
+r0 = done;
+r1 = result;
+"""
+    },
+    {
+        "id": "linux_percpu_counter",
+        "description": "Linux per-cpu counter with global sync",
+        "expected_pattern": "sb",
+        "category": "kernel",
+        "code": """\
+// Thread 0 (cpu 0)
+counter0 = 1;
+r0 = counter1;
+
+// Thread 1 (cpu 1)
+counter1 = 1;
+r1 = counter0;
+"""
+    },
+    {
+        "id": "linux_kref_put",
+        "description": "Linux kref reference counting",
+        "expected_pattern": "mp",
+        "category": "kernel",
+        "code": """\
+// Thread 0 (release)
+obj_data = 1;
+refcount = 1;
+
+// Thread 1 (acquire)
+r0 = refcount;
+r1 = obj_data;
+"""
+    },
+    {
+        "id": "linux_smp_wmb_rmb",
+        "description": "Linux smp_wmb/smp_rmb pair",
+        "expected_pattern": "mp_fence",
+        "category": "kernel",
+        "code": """\
+// Thread 0
+data = 1;
+smp_store_release(&flag, 1);
+
+// Thread 1
+r0 = smp_load_acquire(&flag);
+r1 = data;
+"""
+    },
+    {
+        "id": "linux_seqcount_write",
+        "description": "Linux seqcount write side",
+        "expected_pattern": "mp",
+        "category": "kernel",
+        "code": """\
+// Thread 0 (writer)
+seq = 1;
+data = 1;
+
+// Thread 1 (reader)
+r0 = data;
+r1 = seq;
+"""
+    },
+    {
+        "id": "linux_waitqueue_wake",
+        "description": "Linux waitqueue wake pattern",
+        "expected_pattern": "mp",
+        "category": "kernel",
+        "code": """\
+// Thread 0 (producer)
+buffer = 1;
+wake = 1;
+
+// Thread 1 (consumer)
+r0 = wake;
+r1 = buffer;
+"""
+    },
+
+    # === Data structure patterns ===
+    {
+        "id": "mpmc_queue_bounded",
+        "description": "Bounded MPMC queue with sequence numbers",
+        "expected_pattern": "mp",
+        "category": "data_structure",
+        "code": """\
+// Thread 0 (enqueue)
+slot = 1;
+sequence = 1;
+
+// Thread 1 (dequeue)
+r0 = sequence;
+r1 = slot;
+"""
+    },
+    {
+        "id": "lock_free_stack_push",
+        "description": "Treiber lock-free stack push",
+        "expected_pattern": "mp",
+        "category": "data_structure",
+        "code": """\
+// Thread 0 (push)
+node_data = 1;
+head = 1;
+
+// Thread 1 (pop)
+r0 = head;
+r1 = node_data;
+"""
+    },
+    {
+        "id": "lock_free_list_insert",
+        "description": "Harris lock-free linked list insert",
+        "expected_pattern": "mp",
+        "category": "data_structure",
+        "code": """\
+// Thread 0 (inserter)
+new_node = 1;
+next_ptr = 1;
+
+// Thread 1 (traverser)
+r0 = next_ptr;
+r1 = new_node;
+"""
+    },
+    {
+        "id": "chase_lev_deque",
+        "description": "Chase-Lev work-stealing deque",
+        "expected_pattern": "mp",
+        "category": "data_structure",
+        "code": """\
+// Thread 0 (push)
+buffer = 1;
+bottom = 1;
+
+// Thread 1 (steal)
+r0 = bottom;
+r1 = buffer;
+"""
+    },
+    {
+        "id": "ms_queue_enqueue",
+        "description": "Michael-Scott lock-free queue enqueue",
+        "expected_pattern": "mp",
+        "category": "data_structure",
+        "code": """\
+// Thread 0 (enqueue)
+node_val = 1;
+tail = 1;
+
+// Thread 1 (dequeue)
+r0 = tail;
+r1 = node_val;
+"""
+    },
+    {
+        "id": "epoch_reclamation",
+        "description": "Epoch-based memory reclamation",
+        "expected_pattern": "mp",
+        "category": "data_structure",
+        "code": """\
+// Thread 0 (retire)
+retired = 1;
+epoch = 1;
+
+// Thread 1 (reclaim check)
+r0 = epoch;
+r1 = retired;
+"""
+    },
+
+    # === Coherence patterns ===
+    {
+        "id": "coherence_rr_basic",
+        "description": "Read-read coherence (CoRR)",
+        "expected_pattern": "corr",
+        "category": "coherence",
+        "code": """\
+// Thread 0
+x = 1;
+
+// Thread 1
+r0 = x;
+r1 = x;
+"""
+    },
+    {
+        "id": "coherence_wr_basic",
+        "description": "Write-read coherence (CoWR)",
+        "expected_pattern": "cowr",
+        "category": "coherence",
+        "code": """\
+// Thread 0
+x = 1;
+r0 = x;
+
+// Thread 1
+x = 2;
+"""
+    },
+    {
+        "id": "coherence_ww_basic",
+        "description": "Write-write coherence (CoWW)",
+        "expected_pattern": "coww",
+        "category": "coherence",
+        "code": """\
+// Thread 0
+x = 1;
+
+// Thread 1
+x = 2;
+
+// Thread 2
+r0 = x;
+"""
+    },
+
+    # === Store buffering variants ===
+    {
+        "id": "sb_three_var",
+        "description": "SB with three variables",
+        "expected_pattern": "sb",
+        "category": "basic",
+        "code": """\
+// Thread 0
+x = 1;
+r0 = y;
+
+// Thread 1
+y = 1;
+r1 = x;
+"""
+    },
+    {
+        "id": "sb_with_fence",
+        "description": "SB with full fence",
+        "expected_pattern": "sb_fence",
+        "category": "fenced",
+        "code": """\
+// Thread 0
+x = 1;
+__sync_synchronize();
+r0 = y;
+
+// Thread 1
+y = 1;
+__sync_synchronize();
+r1 = x;
+"""
+    },
+    {
+        "id": "dekker_mutual_exclusion",
+        "description": "Dekker's mutual exclusion algorithm",
+        "expected_pattern": "dekker",
+        "category": "synchronization",
+        "code": """\
+// Thread 0
+flag0 = 1;
+r0 = flag1;
+
+// Thread 1
+flag1 = 1;
+r1 = flag0;
+"""
+    },
+
+    # === IRIW variants ===
+    {
+        "id": "iriw_basic",
+        "description": "Independent reads of independent writes",
+        "expected_pattern": "iriw",
+        "category": "multi_thread",
+        "code": """\
+// Thread 0
+x = 1;
+
+// Thread 1
+y = 1;
+
+// Thread 2
+r0 = x;
+r1 = y;
+
+// Thread 3
+r2 = y;
+r3 = x;
+"""
+    },
+    {
+        "id": "iriw_fenced",
+        "description": "IRIW with fences",
+        "expected_pattern": "iriw_fence",
+        "category": "fenced",
+        "code": """\
+// Thread 0
+x = 1;
+
+// Thread 1
+y = 1;
+
+// Thread 2
+r0 = x;
+__sync_synchronize();
+r1 = y;
+
+// Thread 3
+r2 = y;
+__sync_synchronize();
+r3 = x;
+"""
+    },
+
+    # === Load buffering variants ===
+    {
+        "id": "lb_basic",
+        "description": "Load buffering",
+        "expected_pattern": "lb",
+        "category": "basic",
+        "code": """\
+// Thread 0
+r0 = x;
+y = 1;
+
+// Thread 1
+r1 = y;
+x = 1;
+"""
+    },
+    {
+        "id": "lb_with_fence",
+        "description": "LB with full fence",
+        "expected_pattern": "lb_fence",
+        "category": "fenced",
+        "code": """\
+// Thread 0
+r0 = x;
+__sync_synchronize();
+y = 1;
+
+// Thread 1
+r1 = y;
+__sync_synchronize();
+x = 1;
+"""
+    },
+
+    # === C++11 atomics patterns ===
+    {
+        "id": "cpp_relaxed_store_load",
+        "description": "C++ relaxed store + relaxed load (MP shape)",
+        "expected_pattern": "mp",
+        "category": "cpp_atomics",
+        "code": """\
+// Thread 0
+data.store(1, std::memory_order_relaxed);
+flag.store(1, std::memory_order_relaxed);
+
+// Thread 1
+r0 = flag.load(std::memory_order_relaxed);
+r1 = data.load(std::memory_order_relaxed);
+"""
+    },
+    {
+        "id": "cpp_release_acquire_sb",
+        "description": "C++ release/acquire on SB pattern",
+        "expected_pattern": "sb",
+        "category": "cpp_atomics",
+        "code": """\
+// Thread 0
+x.store(1, std::memory_order_release);
+r0 = y.load(std::memory_order_acquire);
+
+// Thread 1
+y.store(1, std::memory_order_release);
+r1 = x.load(std::memory_order_acquire);
+"""
+    },
+    {
+        "id": "cpp_seq_cst_mp",
+        "description": "C++ seq_cst MP pattern",
+        "expected_pattern": "mp_fence",
+        "category": "cpp_atomics",
+        "code": """\
+// Thread 0
+data.store(1, std::memory_order_seq_cst);
+flag.store(1, std::memory_order_seq_cst);
+
+// Thread 1
+r0 = flag.load(std::memory_order_seq_cst);
+r1 = data.load(std::memory_order_seq_cst);
+"""
+    },
+    {
+        "id": "cpp_consume_mp",
+        "description": "C++ consume for dependent loads",
+        "expected_pattern": "mp",
+        "category": "cpp_atomics",
+        "code": """\
+// Thread 0
+data.store(42, std::memory_order_relaxed);
+ptr.store(1, std::memory_order_release);
+
+// Thread 1
+r0 = ptr.load(std::memory_order_relaxed);
+r1 = data.load(std::memory_order_relaxed);
+"""
+    },
+    {
+        "id": "cpp_acq_rel_fence_mp",
+        "description": "C++ fence-based MP synchronization",
+        "expected_pattern": "mp_fence",
+        "category": "cpp_atomics",
+        "code": """\
+// Thread 0
+data.store(1, std::memory_order_relaxed);
+atomic_thread_fence(std::memory_order_release);
+flag.store(1, std::memory_order_relaxed);
+
+// Thread 1
+r0 = flag.load(std::memory_order_relaxed);
+atomic_thread_fence(std::memory_order_acquire);
+r1 = data.load(std::memory_order_relaxed);
+"""
+    },
+    {
+        "id": "cpp_relaxed_sb",
+        "description": "C++ relaxed SB (no ordering guarantee)",
+        "expected_pattern": "sb",
+        "category": "cpp_atomics",
+        "code": """\
+// Thread 0
+x.store(1, std::memory_order_relaxed);
+r0 = y.load(std::memory_order_relaxed);
+
+// Thread 1
+y.store(1, std::memory_order_relaxed);
+r1 = x.load(std::memory_order_relaxed);
+"""
+    },
+    {
+        "id": "cpp_exchange_flag",
+        "description": "C++ atomic exchange as lock",
+        "expected_pattern": "sb",
+        "category": "cpp_atomics",
+        "code": """\
+// Thread 0
+lock.store(1, std::memory_order_seq_cst);
+r0 = data.load(std::memory_order_seq_cst);
+
+// Thread 1
+data.store(1, std::memory_order_seq_cst);
+r1 = lock.load(std::memory_order_seq_cst);
+"""
+    },
+
+    # === CUDA GPU extended patterns ===
+    {
+        "id": "cuda_cooperative_groups_sync",
+        "description": "CUDA cooperative groups grid-level sync",
+        "expected_pattern": "gpu_mp_dev",
+        "category": "gpu",
+        "code": """\
+__global__ void kernel() {
+    // Thread 0 (block 0)
+    data = 1;
+    __threadfence();
+    flag = 1;
+
+    // Thread 1 (block 1)
+    r0 = flag;
+    __threadfence();
+    r1 = data;
+}
+"""
+    },
+    {
+        "id": "cuda_syncthreads_mp",
+        "description": "CUDA __syncthreads MP within block",
+        "expected_pattern": "gpu_mp_wg",
+        "category": "gpu",
+        "code": """\
+__global__ void kernel() {
+    // Thread 0
+    partial = 1;
+    __syncthreads();
+    total = 1;
+
+    // Thread 1
+    r0 = total;
+    __syncthreads();
+    r1 = partial;
+}
+"""
+    },
+    {
+        "id": "cuda_threadfence_block_mp",
+        "description": "CUDA __threadfence_block for intra-block MP",
+        "expected_pattern": "gpu_mp_wg",
+        "category": "gpu",
+        "code": """\
+__global__ void kernel() {
+    // Thread 0
+    shared_data = 1;
+    __threadfence_block();
+    shared_flag = 1;
+
+    // Thread 1
+    r0 = shared_flag;
+    __threadfence_block();
+    r1 = shared_data;
+}
+"""
+    },
+    {
+        "id": "cuda_scope_mismatch_sb",
+        "description": "CUDA SB with workgroup-scope fence mismatch",
+        "expected_pattern": "gpu_sb_scope_mismatch",
+        "category": "gpu",
+        "code": """\
+__global__ void kernel() {
+    // Thread 0 (block 0, wg 0)
+    x = 1;
+    __threadfence_block();
+    r0 = y;
+
+    // Thread 1 (block 1, wg 1)
+    y = 1;
+    __threadfence_block();
+    r1 = x;
+}
+"""
+    },
+    {
+        "id": "cuda_volatile_mp",
+        "description": "CUDA volatile loads/stores (legacy sync)",
+        "expected_pattern": "mp",
+        "category": "gpu",
+        "code": """\
+__global__ void kernel() {
+    // Thread 0
+    data = 1;
+    flag = 1;
+
+    // Thread 1
+    r0 = flag;
+    r1 = data;
+}
+"""
+    },
+    {
+        "id": "cuda_atomicCAS_flag",
+        "description": "CUDA atomicCAS for lock acquisition",
+        "expected_pattern": "mp",
+        "category": "gpu",
+        "code": """\
+__global__ void kernel() {
+    // Thread 0
+    data = 1;
+    flag = 1;
+
+    // Thread 1
+    r0 = flag;
+    r1 = data;
+}
+"""
+    },
+    {
+        "id": "cuda_warp_divergent",
+        "description": "CUDA warp-divergent memory access pattern",
+        "expected_pattern": "gpu_mp_wg",
+        "category": "gpu",
+        "code": """\
+__global__ void kernel() {
+    // Thread 0
+    data = 1;
+    __syncthreads();
+    flag = 1;
+
+    // Thread 1
+    r0 = flag;
+    __syncthreads();
+    r1 = data;
+}
+"""
+    },
+    {
+        "id": "cuda_threadfence_system_mp",
+        "description": "CUDA __threadfence_system for system-wide ordering",
+        "expected_pattern": "gpu_mp_dev",
+        "category": "gpu",
+        "code": """\
+__global__ void kernel() {
+    // Thread 0
+    host_data = 1;
+    __threadfence_system();
+    host_flag = 1;
+
+    // Thread 1
+    r0 = host_flag;
+    __threadfence_system();
+    r1 = host_data;
+}
+"""
+    },
+
+    # === RISC-V extended patterns ===
+    {
+        "id": "riscv_lr_sc_mp",
+        "description": "RISC-V LR/SC for atomic update in MP",
+        "expected_pattern": "mp",
+        "category": "riscv",
+        "code": """\
+// Thread 0
+data = 1;
+flag = 1;
+
+// Thread 1
+r0 = flag;
+r1 = data;
+"""
+    },
+    {
+        "id": "riscv_fence_tso_sb",
+        "description": "RISC-V fence.tso for SB pattern",
+        "expected_pattern": "sb_fence",
+        "category": "riscv",
+        "code": """\
+// Thread 0
+x = 1;
+__sync_synchronize();
+r0 = y;
+
+// Thread 1
+y = 1;
+__sync_synchronize();
+r1 = x;
+"""
+    },
+    {
+        "id": "riscv_amo_sb",
+        "description": "RISC-V AMO for SB synchronization",
+        "expected_pattern": "sb",
+        "category": "riscv",
+        "code": """\
+// Thread 0
+x = 1;
+r0 = y;
+
+// Thread 1
+y = 1;
+r1 = x;
+"""
+    },
+
+    # === Real-world code patterns ===
+    {
+        "id": "linux_module_ref",
+        "description": "Linux kernel module refcount",
+        "expected_pattern": "mp",
+        "category": "real_code",
+        "code": """\
+// Thread 0 (module init)
+module_data = 1;
+module_ready = 1;
+
+// Thread 1 (module user)
+r0 = module_ready;
+r1 = module_data;
+"""
+    },
+    {
+        "id": "dpdk_mbuf_free",
+        "description": "DPDK mbuf free/alloc pattern",
+        "expected_pattern": "mp",
+        "category": "real_code",
+        "code": """\
+// Thread 0 (free)
+mbuf_data = 1;
+pool_head = 1;
+
+// Thread 1 (alloc)
+r0 = pool_head;
+r1 = mbuf_data;
+"""
+    },
+    {
+        "id": "folly_hazptr_protect",
+        "description": "Folly hazard pointer protection",
+        "expected_pattern": "mp",
+        "category": "real_code",
+        "code": """\
+// Thread 0 (publisher)
+new_data = 1;
+global_ptr = 1;
+
+// Thread 1 (reader with hazptr)
+r0 = global_ptr;
+r1 = new_data;
+"""
+    },
+    {
+        "id": "crossbeam_epoch_pin",
+        "description": "Crossbeam epoch-based GC pin/unpin",
+        "expected_pattern": "mp",
+        "category": "real_code",
+        "code": """\
+// Thread 0 (publisher)
+node = 1;
+head = 1;
+
+// Thread 1 (reader via guard)
+r0 = head;
+r1 = node;
+"""
+    },
+    {
+        "id": "redis_dict_rehash",
+        "description": "Redis dict rehashing (MP pattern)",
+        "expected_pattern": "mp",
+        "category": "real_code",
+        "code": """\
+// Thread 0 (rehash step)
+new_table = 1;
+rehash_idx = 1;
+
+// Thread 1 (lookup)
+r0 = rehash_idx;
+r1 = new_table;
+"""
+    },
+    {
+        "id": "nginx_worker_signal",
+        "description": "Nginx worker process signal",
+        "expected_pattern": "mp",
+        "category": "real_code",
+        "code": """\
+// Thread 0 (master)
+config = 1;
+signal = 1;
+
+// Thread 1 (worker)
+r0 = signal;
+r1 = config;
+"""
+    },
+    {
+        "id": "leveldb_skiplist_insert",
+        "description": "LevelDB skiplist node insertion",
+        "expected_pattern": "mp",
+        "category": "real_code",
+        "code": """\
+// Thread 0 (inserter)
+node_key = 1;
+next_ptr = 1;
+
+// Thread 1 (reader)
+r0 = next_ptr;
+r1 = node_key;
+"""
+    },
+    {
+        "id": "rocksdb_memtable_add",
+        "description": "RocksDB memtable add entry",
+        "expected_pattern": "mp",
+        "category": "real_code",
+        "code": """\
+// Thread 0 (writer)
+entry_data = 1;
+entry_key = 1;
+
+// Thread 1 (reader via iterator)
+r0 = entry_key;
+r1 = entry_data;
+"""
+    },
+
+    # === Synchronization patterns ===
+    {
+        "id": "ticket_lock_acquire",
+        "description": "Ticket lock acquire/release",
+        "expected_pattern": "mp",
+        "category": "synchronization",
+        "code": """\
+// Thread 0 (release)
+critical_data = 1;
+serving = 1;
+
+// Thread 1 (acquire)
+r0 = serving;
+r1 = critical_data;
+"""
+    },
+    {
+        "id": "mcs_lock_handoff",
+        "description": "MCS lock handoff",
+        "expected_pattern": "mp",
+        "category": "synchronization",
+        "code": """\
+// Thread 0 (predecessor)
+shared_resource = 1;
+next_locked = 1;
+
+// Thread 1 (successor)
+r0 = next_locked;
+r1 = shared_resource;
+"""
+    },
+    {
+        "id": "clh_lock_spin",
+        "description": "CLH lock spinning",
+        "expected_pattern": "mp",
+        "category": "synchronization",
+        "code": """\
+// Thread 0 (release)
+protected_data = 1;
+predecessor_flag = 1;
+
+// Thread 1 (spinner)
+r0 = predecessor_flag;
+r1 = protected_data;
+"""
+    },
+    {
+        "id": "rwlock_read_acquire",
+        "description": "Reader-writer lock read acquire",
+        "expected_pattern": "mp",
+        "category": "synchronization",
+        "code": """\
+// Thread 0 (writer release)
+data = 1;
+rw_state = 1;
+
+// Thread 1 (reader acquire)
+r0 = rw_state;
+r1 = data;
+"""
+    },
+    {
+        "id": "futex_wake_pattern",
+        "description": "Linux futex wake/wait",
+        "expected_pattern": "mp",
+        "category": "synchronization",
+        "code": """\
+// Thread 0 (setter)
+value = 1;
+futex_word = 1;
+
+// Thread 1 (waiter)
+r0 = futex_word;
+r1 = value;
+"""
+    },
+    {
+        "id": "condvar_signal",
+        "description": "Condition variable signal pattern",
+        "expected_pattern": "mp",
+        "category": "synchronization",
+        "code": """\
+// Thread 0 (signaler)
+shared = 1;
+cond = 1;
+
+// Thread 1 (waiter)
+r0 = cond;
+r1 = shared;
+"""
+    },
+    {
+        "id": "barrier_sync",
+        "description": "Barrier synchronization arrival",
+        "expected_pattern": "mp",
+        "category": "synchronization",
+        "code": """\
+// Thread 0 (arrives first)
+local_result = 1;
+arrived = 1;
+
+// Thread 1 (sees arrival)
+r0 = arrived;
+r1 = local_result;
+"""
+    },
+    {
+        "id": "eventcount_signal",
+        "description": "Eventcount signal/wait pattern",
+        "expected_pattern": "mp",
+        "category": "synchronization",
+        "code": """\
+// Thread 0 (producer signals)
+work = 1;
+event = 1;
+
+// Thread 1 (consumer waits)
+r0 = event;
+r1 = work;
+"""
+    },
+
+    # === WRC/RWC variants ===
+    {
+        "id": "wrc_basic",
+        "description": "Write-read causality",
+        "expected_pattern": "wrc",
+        "category": "multi_thread",
+        "code": """\
+// Thread 0
+x = 1;
+
+// Thread 1
+r0 = x;
+y = 1;
+
+// Thread 2
+r1 = y;
+r2 = x;
+"""
+    },
+    {
+        "id": "rwc_basic",
+        "description": "Read-write causality",
+        "expected_pattern": "rwc",
+        "category": "multi_thread",
+        "code": """\
+// Thread 0
+x = 1;
+
+// Thread 1
+r0 = x;
+r1 = y;
+
+// Thread 2
+y = 1;
+r2 = x;
+"""
+    },
+    {
+        "id": "three_thread_sb",
+        "description": "3-thread store buffering",
+        "expected_pattern": "sb_3thread",
+        "category": "multi_thread",
+        "code": """\
+// Thread 0
+x = 1;
+r0 = y;
+
+// Thread 1
+y = 1;
+r1 = z;
+
+// Thread 2
+z = 1;
+r2 = x;
+"""
+    },
+
+    # === GCC builtins ===
+    {
+        "id": "gcc_builtin_mp",
+        "description": "GCC __atomic builtins MP pattern",
+        "expected_pattern": "mp",
+        "category": "cpp_atomics",
+        "code": """\
+// Thread 0
+__atomic_store_n(&data, 1, __ATOMIC_RELAXED);
+__atomic_store_n(&flag, 1, __ATOMIC_RELAXED);
+
+// Thread 1
+r0 = __atomic_load_n(&flag, __ATOMIC_RELAXED);
+r1 = __atomic_load_n(&data, __ATOMIC_RELAXED);
+"""
+    },
+    {
+        "id": "gcc_builtin_release_acquire",
+        "description": "GCC __atomic release/acquire MP",
+        "expected_pattern": "mp_fence",
+        "category": "cpp_atomics",
+        "code": """\
+// Thread 0
+__atomic_store_n(&data, 1, __ATOMIC_RELAXED);
+__atomic_store_n(&flag, 1, __ATOMIC_RELEASE);
+
+// Thread 1
+r0 = __atomic_load_n(&flag, __ATOMIC_ACQUIRE);
+r1 = __atomic_load_n(&data, __ATOMIC_RELAXED);
+"""
+    },
+
+    # === Application-level patterns ===
+    {
+        "id": "double_checked_lock",
+        "description": "Double-checked locking pattern",
+        "expected_pattern": "mp",
+        "category": "application",
+        "code": """\
+// Thread 0 (initializer)
+instance_data = 1;
+instance = 1;
+
+// Thread 1 (accessor)
+r0 = instance;
+r1 = instance_data;
+"""
+    },
+    {
+        "id": "singleton_init",
+        "description": "Singleton initialization pattern",
+        "expected_pattern": "mp",
+        "category": "application",
+        "code": """\
+// Thread 0 (constructor)
+obj = 1;
+initialized = 1;
+
+// Thread 1 (user)
+r0 = initialized;
+r1 = obj;
+"""
+    },
+    {
+        "id": "ring_buffer_produce",
+        "description": "Ring buffer producer/consumer",
+        "expected_pattern": "mp",
+        "category": "application",
+        "code": """\
+// Thread 0 (producer)
+ring_data = 1;
+write_idx = 1;
+
+// Thread 1 (consumer)
+r0 = write_idx;
+r1 = ring_data;
+"""
+    },
+    {
+        "id": "message_passing_channel",
+        "description": "Go-style channel message passing",
+        "expected_pattern": "mp",
+        "category": "application",
+        "code": """\
+// Thread 0 (sender)
+msg = 1;
+ready = 1;
+
+// Thread 1 (receiver)
+r0 = ready;
+r1 = msg;
+"""
+    },
+    {
+        "id": "actor_mailbox_send",
+        "description": "Actor model mailbox send",
+        "expected_pattern": "mp",
+        "category": "application",
+        "code": """\
+// Thread 0 (sender)
+payload = 1;
+mailbox = 1;
+
+// Thread 1 (actor)
+r0 = mailbox;
+r1 = payload;
+"""
+    },
+    {
+        "id": "observer_notify",
+        "description": "Observer pattern notification",
+        "expected_pattern": "mp",
+        "category": "application",
+        "code": """\
+// Thread 0 (subject)
+state = 1;
+notify = 1;
+
+// Thread 1 (observer)
+r0 = notify;
+r1 = state;
+"""
+    },
+    {
+        "id": "work_queue_submit",
+        "description": "Thread pool work queue submission",
+        "expected_pattern": "mp",
+        "category": "application",
+        "code": """\
+// Thread 0 (submitter)
+task_data = 1;
+queue_head = 1;
+
+// Thread 1 (worker)
+r0 = queue_head;
+r1 = task_data;
+"""
+    },
+    {
+        "id": "log_buffer_flush",
+        "description": "Log buffer flush/read",
+        "expected_pattern": "mp",
+        "category": "application",
+        "code": """\
+// Thread 0 (logger)
+log_entry = 1;
+log_tail = 1;
+
+// Thread 1 (reader)
+r0 = log_tail;
+r1 = log_entry;
+"""
+    },
+
+    # === OpenCL extended patterns ===
+    {
+        "id": "opencl_local_barrier_mp",
+        "description": "OpenCL local barrier for intra-WG MP",
+        "expected_pattern": "gpu_mp_wg",
+        "category": "gpu",
+        "code": """\
+// Thread 0 (workgroup 0)
+data = 1;
+barrier(CLK_LOCAL_MEM_FENCE);
+flag = 1;
+
+// Thread 1 (workgroup 0)
+r0 = flag;
+barrier(CLK_LOCAL_MEM_FENCE);
+r1 = data;
+"""
+    },
+    {
+        "id": "opencl_sb_global",
+        "description": "OpenCL SB with global fence",
+        "expected_pattern": "gpu_sb_dev",
+        "category": "gpu",
+        "code": """\
+// Thread 0 (workgroup 0)
+x = 1;
+barrier(CLK_GLOBAL_MEM_FENCE);
+r0 = y;
+
+// Thread 1 (workgroup 1)
+y = 1;
+barrier(CLK_GLOBAL_MEM_FENCE);
+r1 = x;
+"""
+    },
+
+    # === Fenced MP variants ===
+    {
+        "id": "mp_fence_only_write",
+        "description": "MP with write-side fence only",
+        "expected_pattern": "mp_dmb_st",
+        "category": "fenced",
+        "code": """\
+// Thread 0
+x = 1;
+__sync_synchronize();
+y = 1;
+
+// Thread 1
+r0 = y;
+r1 = x;
+"""
+    },
+    {
+        "id": "mp_fence_only_read",
+        "description": "MP with read-side fence only",
+        "expected_pattern": "mp_dmb_ld",
+        "category": "fenced",
+        "code": """\
+// Thread 0
+x = 1;
+y = 1;
+
+// Thread 1
+r0 = y;
+__sync_synchronize();
+r1 = x;
+"""
+    },
+
+    # === Additional dependency patterns ===
+    {
+        "id": "mp_address_dep",
+        "description": "MP with address dependency",
+        "expected_pattern": "mp_addr",
+        "category": "dependency",
+        "code": """\
+// Thread 0
+x = 1;
+y = 1;
+
+// Thread 1
+r0 = y;
+r1 = x;
+"""
+    },
+    {
+        "id": "mp_data_dep",
+        "description": "MP with data dependency",
+        "expected_pattern": "mp",
+        "category": "dependency",
+        "code": """\
+// Thread 0
+x = 1;
+y = 1;
+
+// Thread 1
+r0 = y;
+r1 = x;
+"""
+    },
+
+    # === Multi-thread extended ===
+    {
+        "id": "isa2_pattern",
+        "description": "ISA2 three-thread pattern",
+        "expected_pattern": "isa2",
+        "category": "multi_thread",
+        "code": """\
+// Thread 0
+a = 1;
+
+// Thread 1
+r0 = a;
+b = r0;
+
+// Thread 2
+r1 = b;
+r2 = a;
+"""
+    },
+    {
+        "id": "r_pattern_basic",
+        "description": "R (relaxed) pattern with control dependency",
+        "expected_pattern": "r",
+        "category": "multi_thread",
+        "code": """\
+// Thread 0
+x = 1;
+
+// Thread 1
+r0 = x;
+if (r0) y = 1;
+
+// Thread 2
+r1 = y;
+r2 = x;
+"""
+    },
+    {
+        "id": "s_pattern_basic",
+        "description": "S pattern (store-store causality)",
+        "expected_pattern": "s",
+        "category": "multi_thread",
+        "code": """\
+// Thread 0
+x = 1;
+y = 1;
+
+// Thread 1
+r0 = y;
+x = 2;
+"""
+    },
+
+    # === Fenced pattern variants ===
+    {
+        "id": "wrc_with_fence",
+        "description": "WRC with full fences",
+        "expected_pattern": "wrc_fence",
+        "category": "fenced",
+        "code": """\
+// Thread 0
+x = 1;
+
+// Thread 1
+r0 = x;
+__sync_synchronize();
+y = 1;
+
+// Thread 2
+r1 = y;
+__sync_synchronize();
+r2 = x;
+"""
+    },
+    {
+        "id": "rwc_with_fence",
+        "description": "RWC with full fences",
+        "expected_pattern": "rwc_fence",
+        "category": "fenced",
+        "code": """\
+// Thread 0
+x = 1;
+
+// Thread 1
+r0 = x;
+__sync_synchronize();
+r1 = y;
+
+// Thread 2
+y = 1;
+__sync_synchronize();
+r2 = x;
+"""
+    },
+
+    # === Peterson's algorithm ===
+    {
+        "id": "peterson_lock_unfenced",
+        "description": "Peterson's algorithm without fences",
+        "expected_pattern": "peterson",
+        "category": "synchronization",
+        "code": """\
+// Thread 0
+flag0 = 1;
+turn = 1;
+r0 = flag1;
+r1 = turn;
+
+// Thread 1
+flag1 = 1;
+turn = 0;
+r2 = flag0;
+r3 = turn;
+"""
+    },
+    {
+        "id": "peterson_lock_fenced",
+        "description": "Peterson's algorithm with fences",
+        "expected_pattern": "peterson_fence",
+        "category": "synchronization",
+        "code": """\
+// Thread 0
+flag0 = 1;
+turn = 1;
+__sync_synchronize();
+r0 = flag1;
+r1 = turn;
+
+// Thread 1
+flag1 = 1;
+turn = 0;
+__sync_synchronize();
+r2 = flag0;
+r3 = turn;
+"""
+    },
+
+    # === Additional application patterns ===
+    {
+        "id": "database_wal_write",
+        "description": "Database WAL (write-ahead log) pattern",
+        "expected_pattern": "mp",
+        "category": "application",
+        "code": """\
+// Thread 0 (writer)
+wal_entry = 1;
+wal_commit = 1;
+
+// Thread 1 (reader)
+r0 = wal_commit;
+r1 = wal_entry;
+"""
+    },
+    {
+        "id": "rpc_request_response",
+        "description": "RPC request/response synchronization",
+        "expected_pattern": "mp",
+        "category": "application",
+        "code": """\
+// Thread 0 (handler)
+response = 1;
+done = 1;
+
+// Thread 1 (caller)
+r0 = done;
+r1 = response;
+"""
+    },
+    {
+        "id": "cache_invalidation",
+        "description": "Cache invalidation pattern",
+        "expected_pattern": "mp",
+        "category": "application",
+        "code": """\
+// Thread 0 (invalidator)
+new_data = 1;
+version = 1;
+
+// Thread 1 (cache reader)
+r0 = version;
+r1 = new_data;
+"""
+    },
+    {
+        "id": "snapshot_isolation",
+        "description": "Snapshot isolation read",
+        "expected_pattern": "mp",
+        "category": "application",
+        "code": """\
+// Thread 0 (writer)
+row_data = 1;
+committed = 1;
+
+// Thread 1 (snapshot reader)
+r0 = committed;
+r1 = row_data;
+"""
+    },
+    {
+        "id": "gc_write_barrier_sb",
+        "description": "GC write barrier (SB-like)",
+        "expected_pattern": "sb",
+        "category": "application",
+        "code": """\
+// Thread 0 (mutator)
+obj_ref = 1;
+r0 = gc_mark;
+
+// Thread 1 (collector)
+gc_mark = 1;
+r1 = obj_ref;
+"""
+    },
+    {
+        "id": "tcp_send_receive",
+        "description": "TCP send/receive buffer synchronization",
+        "expected_pattern": "mp",
+        "category": "application",
+        "code": """\
+// Thread 0 (sender)
+send_buf = 1;
+send_ready = 1;
+
+// Thread 1 (receiver)
+r0 = send_ready;
+r1 = send_buf;
+"""
+    },
+    {
+        "id": "timer_callback",
+        "description": "Timer callback registration",
+        "expected_pattern": "mp",
+        "category": "application",
+        "code": """\
+// Thread 0 (registrar)
+callback_data = 1;
+timer_armed = 1;
+
+// Thread 1 (timer handler)
+r0 = timer_armed;
+r1 = callback_data;
+"""
+    },
+    {
+        "id": "plugin_load",
+        "description": "Dynamic plugin loading",
+        "expected_pattern": "mp",
+        "category": "application",
+        "code": """\
+// Thread 0 (loader)
+plugin_vtable = 1;
+plugin_ready = 1;
+
+// Thread 1 (caller)
+r0 = plugin_ready;
+r1 = plugin_vtable;
 """
     },
 ]

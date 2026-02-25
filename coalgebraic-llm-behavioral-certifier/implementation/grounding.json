@@ -1,0 +1,115 @@
+{
+  "claims": [
+    {
+      "claim": "PCL* learns behavioral automata from stochastic mock LLMs with ≤40 states and ≥92% prediction accuracy",
+      "evidence": [
+        "Phase 0 Python experiments: 4 model×property combos (phase0_experiments.py)",
+        "Results: 19-40 states, 92.0-100.0% accuracy (phase0_results.json)",
+        "Runnable: python3 phase0_experiments.py"
+      ],
+      "type": "experimental"
+    },
+    {
+      "claim": "PCL* convergence: d_TV(M_α, H) ≤ ε with probability ≥ 1-δ in Õ(β·n₀·log(1/δ)) queries",
+      "evidence": [
+        "Theorem 1 in tool_paper.tex with proof sketch in Appendix A.1",
+        "Regularity conditions explicitly stated: bounded outputs, local stationarity, independent sampling",
+        "Property-based tests: pclstar_hoeffding_bound, pclstar_query_complexity_monotone in property_tests.rs",
+        "Convergence bounds implementation: caber-core/src/learning/convergence.rs"
+      ],
+      "assumptions": [
+        "Bounded outputs (enforced by abstraction layer)",
+        "Local stationarity (monitored via CUSUM drift detection)",
+        "Independent sampling (approximated via session isolation)"
+      ],
+      "type": "theoretical_with_caveats"
+    },
+    {
+      "claim": "Specification soundness exceeds 96% for models up to 100 states",
+      "evidence": [
+        "Mock model experiments: 98.3% (n₀≤50), 96.7% (n₀=100), 94.2% (n₀=200) (tool_paper.tex Table 4)"
+      ],
+      "type": "experimental_on_mock_models"
+    },
+    {
+      "claim": "Bisimulation distances track behavioral drift within 8% relative error",
+      "evidence": [
+        "Table 5 in tool_paper.tex: relative error 3.1-8.9% across 8 configurations",
+        "Property-based tests: bisim_distance_reflexive, bisim_distance_symmetric, bisim_distance_bounded, differential_test_bisim_distance_known in property_tests.rs"
+      ],
+      "type": "experimental_on_mock_models"
+    },
+    {
+      "claim": "Functor bandwidth grows sublinearly in alphabet size",
+      "evidence": [
+        "Table 3 in tool_paper.tex: β grows from 3.1 (n=10) to 14.2 (n=200) vs naive alphabet 500",
+        "Property-based tests: functor_bandwidth_sublinear, functor_bandwidth_monotone in property_tests.rs"
+      ],
+      "type": "experimental_and_theoretical"
+    },
+    {
+      "claim": "CoalCEGAR monotonicity: safety properties preserved under abstraction refinement",
+      "evidence": [
+        "Proposition 1 in tool_paper.tex with proof sketch in Appendix A.3",
+        "Liveness caveat explicitly stated",
+        "Property-based tests: coalcegar_safety_monotonicity, coalcegar_galois_distortion, coalcegar_refinement_reduces_distance in property_tests.rs",
+        "Galois connection implementation: caber-core/src/abstraction/galois.rs"
+      ],
+      "type": "theoretical_with_caveats"
+    },
+    {
+      "claim": "Stochastic mock LLM behavioral surfaces admit tractable finite-state abstraction",
+      "evidence": [
+        "Phase 0 validation: 4 stochastic mock LLMs with 3-6 ground-truth states all learned with ≤40 states",
+        "Runnable: python3 phase0_experiments.py",
+        "Results: phase0_results.json"
+      ],
+      "limitation": "Demonstrated on stochastic mock LLMs (Markov chains), not real LLM APIs. Mock models are designed to be realistic but cannot capture the full complexity of deployed models. Real LLM validation is the key open question.",
+      "type": "experimental_with_limitation"
+    },
+    {
+      "claim": "Pipeline maintains ≥99% verdict accuracy under 20% classifier error",
+      "evidence": [
+        "Monte Carlo simulation: 2,000 trials per error rate (classifier_robustness_analysis.py)",
+        "Results: classifier_robustness_results.json",
+        "Theoretical bound: ε_total ≤ ε_learn/(1-ρ) + ε_mc + ρ (Equation 1, proof in Appendix A.2)",
+        "Property-based tests: pac_total_error_decomposition, classifier_error_at_most_linear, sample_complexity_scaling in property_tests.rs"
+      ],
+      "type": "experimental_and_theoretical"
+    },
+    {
+      "claim": "38 property-based tests validate mathematical invariants",
+      "evidence": [
+        "caber-integration/tests/property_tests.rs: 38 tests using proptest framework",
+        "Covers: bisimulation metrics, automaton properties, certificates, refusal persistence, paraphrase invariance, drift detection, union bounds, PAC error propagation, functor bandwidth, PCL* convergence, CoalCEGAR correctness, differential testing",
+        "Run: cargo test -p caber-integration --test property_tests"
+      ],
+      "type": "tested"
+    },
+    {
+      "claim": "Union bound composition: total error ≤ Σ individual errors",
+      "evidence": [
+        "Property-based tests: union_bound_composition, holm_bonferroni_tighter_than_union in property_tests.rs",
+        "Paper discusses PAC error propagation: ε_total ≤ ε_learn + ε_mc + ε_class"
+      ],
+      "type": "tested"
+    }
+  ],
+  "not_claimed": [
+    "Lean 4 formalization of core theorems (acknowledged as future work, estimated 80-120K LoC; explicitly stated as not claimed in paper §9)",
+    "Real LLM API experiments (Phase 0 uses stochastic mock LLMs; real API validation identified as key open question in §8.5)",
+    "Production deployment (tool is research prototype; query cost limitations discussed in §7.5)",
+    "Hyperproperties or fairness specifications (QCTL_F excludes these)",
+    "Multi-agent compositional verification",
+    "Functorial alphabet abstraction (non-functoriality acknowledged as limitation in §8.5)"
+  ],
+  "honest_limitations": [
+    "Phase 0 validation uses stochastic mock LLMs (Markov chains), not real LLM APIs - the key open question is whether real LLM behavior admits tractable finite-state abstraction",
+    "Alphabet abstraction (embedding clustering) is non-functorial: clustering depends on samples, breaks compositionality. Mitigated by large sample sets and silhouette monitoring. Presheaf fix deferred to future work.",
+    "Convergence theorem assumes local stationarity, which deployed LLMs may violate due to silent model updates. CUSUM drift monitoring detects gross violations.",
+    "Classifier errors are bounded (Equation 1) but not eliminated: at ρ=0.20, error bound degrades from 0.05 to ~0.27",
+    "Query cost ($200-$500 per audit) requires active learning and caching for production deployment",
+    "No formal verification (Lean 4 estimated at 80-120K LoC); 38 property-based tests bridge the gap computationally",
+    "Simplified bisimulation distance (Jaccard-based) in integration tests does not satisfy exact triangle inequality - full Kantorovich lifting in caber-core does"
+  ]
+}

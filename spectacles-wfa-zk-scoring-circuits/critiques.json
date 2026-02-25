@@ -1,0 +1,86 @@
+{
+  "synthesis": {
+    "overall_assessment": "Spectacles presents a genuinely novel architecture unifying WFA-based metric decomposition, STARK zero-knowledge proofs, and PSI-based contamination detection into cryptographic evaluation certificates. The core algebraic insight—that standard NLP metrics decompose into weighted finite automata over specific semirings with decidable equivalence—is sound and original. However, critical verification gaps (Hopcroft minimization, Lean-Rust semantic bridge, circuit-specification equivalence) and practical feasibility concerns (117-142K LoC scale, ecosystem coordination, semi-honest security model) prevent a strong accept. The work is best understood as a well-founded research agenda rather than a complete system.",
+    "consensus_strengths": [
+      "The WFA decomposition of NLP metrics over semirings with decidable equivalence via Schützenberger's theorem is a genuine theoretical contribution that provides specification-level rather than implementation-level correctness guarantees",
+      "The two-tier compilation strategy (algebraic embedding for counting/Boolean semirings, gadget-assisted for tropical semiring) reflects a real algebraic obstruction and is handled with appropriate mathematical precision",
+      "The threat model decomposition (A1→G1, A2→G3, A3→G2) creates clean separation of verification concerns and enables incremental formal verification of independent protocol components",
+      "The coalgebraic bisimulation approach for WFA equivalence is categorically correct and compositional, providing the right foundation for modular verification of composed metric computations",
+      "The PSI-based contamination certification provides a qualitative improvement over heuristic contamination detection methods by offering cryptographic guarantees of training-test separation"
+    ],
+    "consensus_weaknesses": [
+      "The Lean-Rust semantic gap is the most critical unresolved issue: Lean proofs certify abstract WFA properties while STARK circuits operate on concrete Rust-compiled computations, with only differential testing bridging the gap",
+      "The semi-honest security assumption contradicts the adversarial threat model, as actively malicious evaluators could submit fabricated outputs and receive valid contamination certificates",
+      "Hopcroft minimization is classified as should-prove but is essential for wfa_equiv tactic soundness—without verified minimization, the canonical form computation may be unsound",
+      "The engineering scale (117-142K LoC across Lean/Rust/TLA+ in 12 months) is comparable to production database engines and appears optimistic by 3-5× based on analogous verified systems projects",
+      "The EvalSpec DSL lacks formal denotational semantics, making it impossible to state or prove compilation correctness with respect to a mathematical specification"
+    ],
+    "divergent_opinions": [
+      "Yuan Cheng emphasizes that PSI approximate matching is uncharacterized (false positive rates under paraphrasing), while other reviewers accept the exact-match PSI as a reasonable starting point",
+      "Lila Zhang views the KleeneSemiring typeclass omission of full Kozen axioms as a structural concern affecting provable equivalences, while Joseph Chang considers the minimal axiomatization sufficient for the target metrics",
+      "Sara Roy foregrounds ecosystem coordination and user study absence as primary concerns, while the formal methods reviewers (Sinha, Chang) focus on proof obligation completeness—reflecting a genuine tension between practical impact and formal rigor priorities"
+    ],
+    "credibility_assessment": "The mathematical foundations are credible and well-grounded in established theory (Schützenberger 1961, Rutten 2000, coalgebraic bisimulation). The 800 LoC Lean pilot demonstrates genuine formalization competence. However, the gap between the pilot formalization and the projected 117-142K LoC system is enormous, and the must-prove obligations (circuit-specification equivalence, semiring homomorphism injectivity) that would close the end-to-end verification story remain unaddressed. The differential testing (100K pairs) provides reasonable empirical confidence but cannot substitute for the formal guarantees the paper claims.",
+    "practical_impact_assessment": "High potential impact if realized: contamination-certified evaluation would fundamentally change how the ML community trusts benchmark results. However, practical deployment requires ecosystem coordination (benchmark platforms adopting EvalSpec and certificate verification), which faces significant organizational and incentive barriers. The laptop-CPU feasibility claim is encouraging but unvalidated with end-to-end benchmarks. The most likely near-term impact is the WFA metric decomposition framework and KleeneSemiring typeclass, which are independently useful contributions to formal methods infrastructure.",
+    "best_paper_award_path": "To reach best paper status, the authors must: (1) close the Hopcroft minimization proof gap, elevating it to must-prove with a complete Lean formalization; (2) provide a formal specification of proof-carrying certificates including verifier semantics; (3) demonstrate a prototype integration with at least one benchmark platform (e.g., HELM or LM-Eval-Harness); (4) address the semi-honest to malicious security upgrade with explicit cryptographic reductions; (5) provide end-to-end benchmarks showing concrete circuit sizes, proof generation times, and verification times for all seven metrics.",
+    "aggregate_score": 7.0,
+    "recommendation": "Weak Accept. The theoretical foundations are strong and the problem is important, but the verification gaps and practical feasibility concerns prevent a strong accept. The paper would benefit from a revised framing that clearly distinguishes the completed contributions (WFA metric decomposition, KleeneSemiring typeclass, decidability characterization) from the aspirational architecture (end-to-end certified evaluation pipeline)."
+  },
+  "reviews": {
+    "yuan_cheng": {
+      "score": 7,
+      "key_points": [
+        "PSI false positive rate under approximate matching (paraphrasing, truncation) is uncharacterized, degrading the contamination guarantee to exact-duplicate detection",
+        "BLEU smoothing variants (add-epsilon, add-1, NIST geometric, exponential decay) break WFA specification equivalence—the formalization fixes one variant without justification",
+        "Cross-phase probabilistic soundness composition (STARK × PSI × commit-then-reveal) is missing, preventing certificate consumers from computing a single confidence level",
+        "pass@k arithmetization via lookup tables scales as O(n_max × k_max) Plookup gates, potentially dominating circuit constraint counts without provided benchmarks",
+        "Differential testing 100K pairs lacks confidence intervals—Clopper-Pearson bound gives ~3×10^{-5} defect rate upper bound at 95% confidence, which should be stated explicitly"
+      ],
+      "recommendation": "Weak Accept"
+    },
+    "aniruddha_sinha": {
+      "score": 7,
+      "key_points": [
+        "Hopcroft minimization correctness is deferred to should-prove but is critical for wfa_equiv tactic soundness—equivalent to trusting state-space reduction without verified bisimulation quotient",
+        "Transducer composition state-space explosion (O(m×n) for ROUGE-L LCS computation) may make certain metrics computationally infeasible in STARK circuits",
+        "TLA+ model covers only semi-honest adversaries despite the threat model positing active adversaries who inflate scores and substitute outputs",
+        "PSI protocol liveness and fairness properties are unverified—no TLA+ specification exists for the multi-round contamination detection protocol",
+        "CEGAR-style refinement of the Lean-Rust semantic gap is a well-known technique conspicuously absent from the verification strategy"
+      ],
+      "recommendation": "Weak Accept"
+    },
+    "lila_zhang": {
+      "score": 7,
+      "key_points": [
+        "Coalgebraic bisimulation is the categorically correct equivalence notion for WFA over semirings, providing automatic compatibility with semiring homomorphisms needed for Tier 1 embedding",
+        "KleeneSemiring typeclass omits full Conway/Kozen induction axioms, potentially preventing proofs of WFA equivalences that hold in full Kleene algebra",
+        "EvalSpec DSL lacks denotational semantics, making compilation correctness unstatable—needs a semantics mapping terms to functions over weighted languages",
+        "The algebraic boundary between Tier 1 and Tier 2 is under-theorized: the characterization of which semirings admit injective homomorphisms into F_p is known but unstated",
+        "End-to-end functor composition (EvalSpec → WFA → circuit → proof) is unverified—individual morphisms are checked but their composition may introduce semantic gaps"
+      ],
+      "recommendation": "Weak Accept"
+    },
+    "sara_roy": {
+      "score": 7,
+      "key_points": [
+        "Engineering scale of 117-142K LoC across Lean/Rust/TLA+ in 12 months is optimistic by 3-5× based on comparable verified systems projects like seL4",
+        "Lean-Rust semantic gap means formal guarantees apply to abstract WFA specifications but not to the concrete STARK circuits, with only differential testing bridging the gap",
+        "Ecosystem coordination with benchmark platforms (HELM, LM-Eval-Harness, OpenCompass) requires adoption of EvalSpec DSL, PSI protocol integration, and STARK verification—incentive structures are unanalyzed",
+        "Semi-honest PSI security allows malicious evaluators to submit fabricated outputs and receive valid contamination certificates, contradicting the stated threat model",
+        "No user study, benchmark platform integration prototype, or API design for certificate generation/verification despite claims of practical evaluation impact"
+      ],
+      "recommendation": "Weak Accept"
+    },
+    "joseph_s_chang": {
+      "score": 7,
+      "key_points": [
+        "Must-prove/should-prove stratification is methodologically sound verification engineering that correctly allocates formal effort to trust-critical components",
+        "Hopcroft minimization should be must-prove: unsound minimization means wfa_equiv could produce false positives (attesting wrong scores) or false negatives (rejecting valid metrics)",
+        "Proof-carrying certificate design lacks formal specification—no verification condition generator or explicit verifier semantics, preventing certificate interoperability",
+        "STARK circuit-specification equivalence is the hardest must-prove obligation and has no formalization strategy beyond future work",
+        "No formal bridge between Lean proofs (abstract WFA properties) and STARK proofs (concrete circuit properties)—the certificate should bundle both but no such mechanism is proposed"
+      ],
+      "recommendation": "Weak Accept"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+C mp_3thread_fence
+
+{ int x=0; int y=0; }
+
+P0(
+  int* x
+) {
+  WRITE_ONCE(*x, 1);
+}
+
+P1(
+  int* y
+) {
+  smp_mb();
+  WRITE_ONCE(*y, 1);
+}
+
+P2(
+  int* x, int* y
+) {
+  int r0 = READ_ONCE(*y);
+  smp_mb();
+  int r1 = READ_ONCE(*x);
+}
+
+exists (2:r0=1 /\ 2:r1=0)

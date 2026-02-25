@@ -1,0 +1,241 @@
+{
+  "comparison": {
+    "dartagnan": {
+      "tool": "Dartagnan (Dat3M)",
+      "url": "https://github.com/hernanponcedeleon/Dat3M",
+      "description": "Dartagnan is a bounded model checker for concurrent C/C++ programs under various weak memory models (TSO, ARM, POWER, RISC-V, Linux kernel, C11/RC11).  It operates on full LLVM bitcode programs via Boogie/Z3 and can verify reachability and state assertions.  It includes a portability analysis mode (Porthos) that checks whether a program that is safe under one memory model is also safe under a weaker model.",
+      "approach": "Full-program bounded model checking via LLVM \u2192 Boogie \u2192 SMT",
+      "language": "Java (tool), C/C++ (input programs)",
+      "memory_models": [
+        "TSO",
+        "PSO",
+        "RMO",
+        "ARM8",
+        "Power",
+        "RISC-V (IMM)",
+        "Linux Kernel (LKMM)",
+        "C11/RC11"
+      ],
+      "key_features": [
+        "Full-program verification (loops, pointers, function calls)",
+        "Portability analysis (Porthos) between any two models",
+        "LLVM-level analysis (handles compiler optimizations)",
+        "Witness generation for violations",
+        "Supports bounded and unbounded verification"
+      ],
+      "limitations": [
+        "Requires compilation to LLVM bitcode",
+        "Seconds to minutes per program (SMT solver dependent)",
+        "No GPU/scoped memory model support",
+        "No automatic fence recommendation",
+        "No pattern-based quick diagnostics"
+      ]
+    },
+    "litmus_inf": {
+      "tool": "LITMUS\u221e",
+      "approach": "Pattern-based portability checking with exhaustive enumeration",
+      "language": "Python (tool), C/C++/CUDA (input code)",
+      "memory_models": [
+        "x86-TSO",
+        "SPARC-PSO",
+        "ARMv8",
+        "RISC-V RVWMO",
+        "OpenCL (WG/Device)",
+        "Vulkan (WG/Device)",
+        "PTX (CTA/GPU)"
+      ],
+      "key_features": [
+        "Sub-millisecond per-pattern analysis",
+        "AST-based code \u2192 pattern matching (96.6% accuracy)",
+        "Per-thread minimal fence recommendations",
+        "GPU scoped synchronization and scope mismatch detection",
+        "Z3 fence certificates (55 UNSAT + 40 SAT)",
+        "Custom model DSL for user-defined architectures",
+        "Coverage confidence warnings for unrecognized patterns"
+      ],
+      "limitations": [
+        "Operates on 75 fixed litmus patterns, not arbitrary programs",
+        "No loop/pointer/function-call analysis",
+        "GPU models are a single parameterized model (6 instantiations)",
+        "Pattern-level safety does not compose to program-level safety",
+        "Fence costs are analytical, not hardware-measured"
+      ]
+    },
+    "table": [
+      {
+        "dimension": "Approach",
+        "dartagnan": "Full-program BMC (LLVM \u2192 Boogie \u2192 Z3)",
+        "litmus_inf": "Pattern-based enumeration + AST matching"
+      },
+      {
+        "dimension": "Input",
+        "dartagnan": "C/C++ programs (compiled to LLVM bitcode)",
+        "litmus_inf": "C/C++/CUDA source code snippets"
+      },
+      {
+        "dimension": "Analysis scope",
+        "dartagnan": "Whole programs with loops, pointers, functions",
+        "litmus_inf": "75 litmus test patterns (fixed library)"
+      },
+      {
+        "dimension": "Speed",
+        "dartagnan": "Seconds to minutes per program",
+        "litmus_inf": "<1ms per pattern, <200ms for all 750 pairs"
+      },
+      {
+        "dimension": "CPU models",
+        "dartagnan": "8+ (TSO, PSO, RMO, ARM8, Power, RISC-V, LKMM, C11)",
+        "litmus_inf": "4 independent (x86-TSO, SPARC-PSO, ARMv8, RVWMO) + DSL"
+      },
+      {
+        "dimension": "GPU support",
+        "dartagnan": "No",
+        "litmus_inf": "Yes \u2014 1 parameterized model, 6 scope instantiations"
+      },
+      {
+        "dimension": "Portability analysis",
+        "dartagnan": "Yes (Porthos: reachability under weaker model)",
+        "litmus_inf": "Yes (built-in cross-model portability matrix)"
+      },
+      {
+        "dimension": "Fence recommendations",
+        "dartagnan": "No (reports violations, not fixes)",
+        "litmus_inf": "Yes \u2014 per-thread minimal fence insertions"
+      },
+      {
+        "dimension": "Formal guarantees",
+        "dartagnan": "Bounded verification (sound for bound k)",
+        "litmus_inf": "Exhaustive for finite litmus tests (RF\u00d7CO completeness)"
+      },
+      {
+        "dimension": "Machine-checked proofs",
+        "dartagnan": "Verification witnesses",
+        "litmus_inf": "95 Z3 fence certificates (55 UNSAT + 40 SAT)"
+      },
+      {
+        "dimension": "CI/CD integration",
+        "dartagnan": "Possible but slow (seconds per file)",
+        "litmus_inf": "Built-in GitHub Action, pip install, <1s per file"
+      },
+      {
+        "dimension": "Best suited for",
+        "dartagnan": "Deep verification of specific concurrent algorithms",
+        "litmus_inf": "Fast CI/CD portability screening across architectures"
+      }
+    ]
+  },
+  "litmus_inf_timing": {
+    "tool": "LITMUS\u221e",
+    "benchmark": "75 patterns \u00d7 10 configurations = 750 pairs",
+    "timings": {
+      "2+2w": 8.82,
+      "2+2w_fence": 14.4,
+      "3sb": 75.7,
+      "3sb_fence": 110.62,
+      "amoswap": 2.18,
+      "corr": 2.36,
+      "corw": 0.63,
+      "cowr": 0.67,
+      "cowr_fence": 0.95,
+      "coww": 0.93,
+      "coww_fence": 1.02,
+      "dekker": 3.81,
+      "dekker_fence": 3.85,
+      "gpu_2plus2w_xwg": 6.74,
+      "gpu_3_wg_barrier": 6.31,
+      "gpu_barrier_scope_mismatch": 1.14,
+      "gpu_coherence_rr_xwg": 2.16,
+      "gpu_coherence_wr": 0.82,
+      "gpu_iriw_dev": 16.08,
+      "gpu_iriw_scope_mismatch": 15.34,
+      "gpu_iriw_wg": 10.76,
+      "gpu_lb_wg": 1.14,
+      "gpu_mp_dev": 1.09,
+      "gpu_mp_scope_mismatch_dev": 1.35,
+      "gpu_mp_wg": 1.21,
+      "gpu_release_acquire": 1.2,
+      "gpu_rwc_dev": 2.95,
+      "gpu_sb_dev": 1.17,
+      "gpu_sb_scope_mismatch": 1.42,
+      "gpu_sb_wg": 1.11,
+      "gpu_wrc_dev": 2.97,
+      "iriw": 8.66,
+      "iriw_fence": 10.23,
+      "isa2": 2.61,
+      "isa2_fence": 2.95,
+      "lb": 1.02,
+      "lb_data": 0.99,
+      "lb_data_fence": 1.13,
+      "lb_fence": 1.64,
+      "lb_fence_rw": 1.95,
+      "mp": 1.54,
+      "mp_3thread": 1.74,
+      "mp_3thread_fence": 1.83,
+      "mp_addr": 0.95,
+      "mp_addr_fence": 1.79,
+      "mp_co": 6.75,
+      "mp_co_fence": 6.81,
+      "mp_data": 1.96,
+      "mp_data_fence": 2.75,
+      "mp_dmb_ld": 1.36,
+      "mp_dmb_st": 1.05,
+      "mp_fence": 1.05,
+      "mp_fence_wr": 1.06,
+      "mp_fence_ww_rr": 1.28,
+      "mp_rfi": 1.66,
+      "mp_rfi_fence": 2.09,
+      "peterson": 22.42,
+      "peterson_fence": 30.54,
+      "r": 5.2,
+      "r_fence": 4.26,
+      "rwc": 19.66,
+      "rwc_fence": 6.41,
+      "s": 0.99,
+      "s_fence": 1.32,
+      "sb": 3.4,
+      "sb_3thread": 9.29,
+      "sb_3thread_fence": 8.98,
+      "sb_fence": 1.39,
+      "sb_fence_wr": 1.49,
+      "sb_rfi": 1.95,
+      "sb_rfi_fence": 1.86,
+      "wrc": 17.4,
+      "wrc_addr": 2.37,
+      "wrc_addr_fence": 3.36,
+      "wrc_fence": 6.56
+    },
+    "total_ms": 516.9,
+    "per_pair_ms": 0.689,
+    "total_pairs": 750,
+    "unsafe_pairs": 342,
+    "safe_pairs": 408
+  },
+  "key_differentiators": [
+    {
+      "advantage": "LITMUS\u221e",
+      "dimension": "Speed",
+      "detail": "LITMUS\u221e analyzes all 750 pairs in 517ms (0.689ms/pair). Dartagnan typically takes seconds to minutes per program."
+    },
+    {
+      "advantage": "LITMUS\u221e",
+      "dimension": "GPU support",
+      "detail": "LITMUS\u221e supports GPU scoped synchronization (OpenCL, Vulkan, PTX) with scope mismatch detection. Dartagnan does not model GPU memory models."
+    },
+    {
+      "advantage": "LITMUS\u221e",
+      "dimension": "Fence recommendations",
+      "detail": "LITMUS\u221e provides per-thread minimal fence insertions. Dartagnan reports violations but not fixes."
+    },
+    {
+      "advantage": "Dartagnan",
+      "dimension": "Program scope",
+      "detail": "Dartagnan verifies full programs with loops, pointers, and function calls. LITMUS\u221e operates on 75 fixed patterns."
+    },
+    {
+      "advantage": "Dartagnan",
+      "dimension": "Model coverage",
+      "detail": "Dartagnan supports 8+ CPU memory models including LKMM and C11/RC11. LITMUS\u221e has 4 built-in CPU models + DSL."
+    }
+  ],
+  "complementary_usage": "LITMUS\u221e and Dartagnan are complementary tools. Use LITMUS\u221e as a fast first-pass CI/CD filter (<1ms/pattern) to flag potential portability issues, then use Dartagnan for deep verification of flagged code sections. LITMUS\u221e exports .litmus files compatible with Dartagnan's input format for seamless handoff."
+}

@@ -11,7 +11,7 @@ from portcheck import check_portability, PATTERNS, ARCHITECTURES, verify_test, r
 results = check_portability("mp", target_arch="arm")
 # Returns: [PortabilityResult(pattern="mp", safe=False, fence="dmb ishst (T0); dmb ishld (T1)")]
 
-# Full analysis (570 pairs)
+# Full analysis (750 pairs)
 for pat in sorted(PATTERNS):
     for arch in ARCHITECTURES:
         result = check_portability(pat, target_arch=arch)
@@ -29,6 +29,14 @@ from ast_analyzer import ast_analyze_code, ast_check_portability, ASTAnalyzer
 # Analyze code (returns ASTAnalysisResult)
 result = ast_analyze_code(code, language="auto")
 print(result.patterns_found)  # [ASTPatternMatch(pattern_name="mp", confidence=0.95)]
+
+# Coverage confidence: how much of the code is explained by matched patterns
+print(result.coverage_confidence)  # 0.85 (85% of concurrent ops matched)
+
+# Unrecognized pattern warning (emitted when coverage_confidence < 0.5)
+if result.coverage_confidence < 0.5:
+    print(f"WARNING: Low coverage ({result.coverage_confidence:.0%})")
+    print(f"Unrecognized ops: {result.unrecognized_ops}")
 
 # Full pipeline: code → pattern → portability check
 bugs = ast_check_portability(code, target_arch="arm")
@@ -60,43 +68,6 @@ print(result["safe"])  # False
 diffs = get_registry().compare_models("POWER", "ARM")
 ```
 
-### differential_testing — Cross-Validation
-
-```python
-from differential_testing import run_all_differential_tests
-
-results = run_all_differential_tests()
-# Runs 2,778 automated checks: monotonicity, fence soundness, determinism,
-# custom model cross-validation (39/39), litmus round-trip — all passing
-```
-
-### statistical_analysis — Confidence Intervals
-
-```python
-from statistical_analysis import run_full_statistical_analysis
-
-stats = run_full_statistical_analysis()
-# Wilson CIs for accuracy, bootstrap CIs for fence costs, timing characterization
-```
-
-### herd7_validation — herd7 Agreement
-
-```python
-from herd7_validation import validate_against_herd7
-
-results = validate_against_herd7()
-# 50/50 agreement with .cat specs, Wilson CI [92.9%, 100%]
-```
-
-### herd7_export — Litmus File Export
-
-```python
-from herd7_export import export_all_litmus
-
-exported, errors = export_all_litmus("litmus_files/")
-# Exports 57 .litmus files for herd7 validation
-```
-
 ### smt_validation — Z3-Based Formal Validation
 
 ```python
@@ -112,7 +83,7 @@ print(f"Agreement: {report['agree']}/{report['total_checks']}")
 classification = classify_all_unsafe_pairs()
 print(f"Fence-sufficient: {classification['fence_sufficient']}")
 
-# Prove fence sufficiency
+# Prove fence sufficiency for a specific pair
 proof = prove_fence_sufficiency_smt("mp", "ARM")
 print(proof['fence_sufficient'])  # True
 
@@ -125,39 +96,54 @@ synth = run_litmus_synthesis()
 print(synth['total_synthesized'])  # 5
 ```
 
-### statistical_analysis — Confidence Intervals & Power Analysis
+### differential_testing — Cross-Validation
+
+```python
+from differential_testing import run_all_differential_tests
+
+results = run_all_differential_tests()
+# Runs 3,642 automated checks: monotonicity (450), fence soundness (60),
+# custom model (57), litmus round-trip (75), determinism (3,000)
+```
+
+### statistical_analysis — Confidence Intervals & Power
 
 ```python
 from statistical_analysis import (run_full_statistical_analysis, wilson_ci,
-                                   bootstrap_ci, clopper_pearson_ci,
-                                   power_analysis, analyze_power)
+                                   bootstrap_ci, clopper_pearson_ci)
 
 stats = run_full_statistical_analysis()
 # Wilson CIs, bootstrap CIs, Clopper-Pearson exact CIs, power analysis
 
 # Exact binomial CI (conservative)
-p, lo, hi = clopper_pearson_ci(96, 96)  # [0.970, 1.000]
-
-# Power analysis
-power = power_analysis(96, 1.0, 0.95)  # >99% power to detect <95%
+p, lo, hi = clopper_pearson_ci(196, 203)  # Exact-match CI
 ```
 
-### mismatch_analysis — DSL Mismatch Root Cause Analysis
+### herd7_validation — herd7 Agreement
 
 ```python
-from mismatch_analysis import run_full_analysis
+from herd7_validation import validate_against_herd7
 
-results = run_full_analysis()
-# Chi-squared test, McNemar's test, confusion matrix, discrimination power
+results = validate_against_herd7()
+# 228/228 agreement with .cat specs, Wilson CI [98.3%, 100%]
 ```
 
-### completeness_analysis — Pattern Portfolio Analysis
+### herd7_export — Litmus File Export
 
 ```python
-from completeness_analysis import run_completeness_analysis
+from herd7_export import export_all_litmus
 
-results = run_completeness_analysis()
-# Boundary coverage (9/9), minimal discriminating set, information theory
+exported, errors = export_all_litmus("litmus_files/")
+# Exports 57 .litmus files for herd7 validation
+```
+
+### false_negative_analysis — Safety Classification
+
+```python
+from false_negative_analysis import run_false_negative_analysis
+
+results = run_false_negative_analysis()
+# Classifies 7 non-exact-match cases: 4 SAFE, 3 NEUTRAL, 0 UNSAFE
 ```
 
 ### benchmark_suite — Code Analyzer Evaluation
@@ -165,9 +151,22 @@ results = run_completeness_analysis()
 ```python
 from benchmark_suite import run_benchmark, BENCHMARK_SNIPPETS
 
-# 96 real-world snippets
+# 203 real-world snippets across 16 categories
 results, summary = run_benchmark(analyzer.analyze)
-print(summary["top3_accuracy"])  # 1.0
+print(summary["exact_accuracy"])   # 0.966
+print(summary["top3_accuracy"])    # 0.980
+```
+
+### ci_integration — CI/CD Helpers
+
+```python
+from ci_integration import generate_github_actions, generate_precommit_hook
+
+# Generate GitHub Actions workflow YAML
+yaml = generate_github_actions(target_arch="arm")
+
+# Generate pre-commit hook
+hook = generate_precommit_hook(target_arch="arm")
 ```
 
 ## CLI Usage
@@ -187,17 +186,21 @@ python3 portcheck.py --diff arm riscv
 
 # JSON output
 python3 portcheck.py --analyze-all --json
+
+# litmus-check CLI (after pip install)
+litmus-check --target arm src/
+litmus-check --target arm --fail-on-unsafe src/
 ```
 
 ## Key Data Types
 
-| Type | Description |
-|------|-------------|
-| `LitmusTest` | Test with name, threads, addresses, ops, forbidden outcome |
-| `MemOp` | Memory operation (store/load/fence) with thread, addr, scope |
-| `PortabilityResult` | Result with pattern, arch, safe, fence recommendation |
-| `ASTAnalysisResult` | Code analysis result with matched patterns, ops, warnings |
-| `ASTPatternMatch` | Matched pattern with name, confidence, match type |
+| Type | Fields |
+|------|--------|
+| `LitmusTest` | name, threads, addresses, ops, forbidden outcome |
+| `MemOp` | store/load/fence with thread, addr, scope |
+| `PortabilityResult` | pattern, arch, safe, fence recommendation |
+| `ASTAnalysisResult` | patterns_found, ops, warnings, **coverage_confidence**, **unrecognized_ops** |
+| `ASTPatternMatch` | pattern_name, confidence, match_type |
 
 ## Supported Architectures
 
@@ -210,3 +213,6 @@ python3 portcheck.py --analyze-all --json
 | OpenCL WG/Dev | `opencl_wg`, `opencl_dev` |
 | Vulkan WG/Dev | `vulkan_wg`, `vulkan_dev` |
 | PTX CTA/GPU | `ptx_cta`, `ptx_gpu` |
+
+**Note:** The 6 GPU configurations are instantiations of a single parameterized
+model differing only in scope level. The independent model count is 5 (4 CPU + 1 GPU).

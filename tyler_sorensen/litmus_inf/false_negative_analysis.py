@@ -2,7 +2,7 @@
 """
 False-negative analysis for LITMUS∞ AST-based code analyzer.
 
-Classifies each of the 18 near-miss cases (top-3 but not exact match) as:
+Classifies ALL non-exact-match cases as:
 - SAFE (conservative): predicted pattern is at least as strict as expected
   → tool would flag potential issue, no real bug missed
 - NEUTRAL: predicted and expected patterns have identical portability profiles
@@ -11,7 +11,7 @@ Classifies each of the 18 near-miss cases (top-3 but not exact match) as:
   → tool might fail to flag an actual portability bug
 
 This analysis directly addresses the reviewer concern about whether the
-81.2% exact-match accuracy hides false negatives that could miss real bugs.
+96.6% exact-match accuracy hides false negatives that could miss real bugs.
 """
 
 import json
@@ -87,16 +87,20 @@ def classify_near_miss(expected_pat, predicted_pat):
 
 
 def run_false_negative_analysis():
-    """Analyze all 18 near-miss cases from the benchmark."""
+    """Analyze all non-exact-match cases from the benchmark."""
     print("=" * 70)
     print("LITMUS∞ False-Negative Analysis")
-    print("81.2% Exact-Match Accuracy — Classification of 18 Near-Miss Cases")
+    print("Classification of All Non-Exact-Match Cases")
     print("=" * 70)
     print()
 
     # Load benchmark results
     bench_path = os.path.join(os.path.dirname(__file__),
                               'paper_results_v4/ast_benchmark_results.json')
+    if not os.path.exists(bench_path):
+        # Fall back to expanded_benchmark.json
+        bench_path = os.path.join(os.path.dirname(__file__),
+                                  'paper_results_v4/expanded_benchmark.json')
     if not os.path.exists(bench_path):
         print("ERROR: benchmark results not found")
         return None
@@ -105,7 +109,7 @@ def run_false_negative_analysis():
         data = json.load(f)
 
     near_misses = [r for r in data['results']
-                   if not r['exact_match'] and r['top3_match']]
+                   if not r['exact_match']]
 
     safe_count = 0
     neutral_count = 0
