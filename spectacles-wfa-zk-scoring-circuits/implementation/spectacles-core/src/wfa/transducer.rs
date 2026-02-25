@@ -3640,11 +3640,11 @@ mod tests {
         fn one() -> Self {
             TestWeight(1.0)
         }
-        fn add(a: &Self, b: &Self) -> Self {
-            TestWeight(a.0 + b.0)
+        fn add(&self, other: &Self) -> Self {
+            TestWeight(self.0 + other.0)
         }
-        fn mul(a: &Self, b: &Self) -> Self {
-            TestWeight(a.0 * b.0)
+        fn mul(&self, other: &Self) -> Self {
+            TestWeight(self.0 * other.0)
         }
         fn is_zero(&self) -> bool {
             self.0 == 0.0

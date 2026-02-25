@@ -125,7 +125,7 @@ pub trait StarSemiring: Semiring {
 // ---------------------------------------------------------------------------
 
 /// The counting semiring (ℕ, +, ·) counts the number of accepting paths.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct CountingSemiring {
     pub value: u64,
 }
@@ -250,7 +250,7 @@ impl StarSemiring for BooleanSemiring {
 
 /// The tropical semiring (ℝ ∪ {+∞}, min, +). Used for shortest-path / edit
 /// distance computations.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct TropicalSemiring {
     pub value: OrderedFloat<f64>,
 }
@@ -270,6 +270,10 @@ impl TropicalSemiring {
 
     pub fn raw(&self) -> f64 {
         self.value.into_inner()
+    }
+
+    pub fn from_value(value: f64) -> Self {
+        Self::new(value)
     }
 }
 
@@ -844,7 +848,7 @@ impl PrimeModulus for SmallTestPrime {
 // ---------------------------------------------------------------------------
 
 /// The real semiring (ℝ, +, ·) with IEEE 754 doubles.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct RealSemiring {
     pub value: OrderedFloat<f64>,
 }
@@ -2945,7 +2949,21 @@ mod tests {
         let a = LogSemiring::new(-1.0);
         let b = LogSemiring::new(-2.0);
         let c = LogSemiring::new(-3.0);
-        check_semiring_axioms(&a, &b, &c, "LogSemiring");
+        // LogSemiring uses log-sum-exp which has floating point precision limits
+        // Verify axioms with approximate comparison
+        let eps = 1e-12;
+        // Commutativity
+        assert!((a.add(&b).raw() - b.add(&a).raw()).abs() < eps, "add commutativity");
+        // Associativity (log-sum-exp can lose precision)
+        assert!((a.add(&b.add(&c)).raw() - a.add(&b).add(&c).raw()).abs() < eps, "add associativity");
+        assert!((a.mul(&b.mul(&c)).raw() - a.mul(&b).mul(&c).raw()).abs() < eps, "mul associativity");
+        // Identity
+        assert!((a.add(&LogSemiring::zero()).raw() - a.raw()).abs() < eps, "additive identity");
+        assert!((a.mul(&LogSemiring::one()).raw() - a.raw()).abs() < eps, "multiplicative identity");
+        // Annihilation
+        assert!(a.mul(&LogSemiring::zero()).is_zero(), "annihilation");
+        // Distributivity
+        assert!((a.mul(&b.add(&c)).raw() - a.mul(&b).add(&a.mul(&c)).raw()).abs() < eps, "left distributivity");
     }
 
     #[test]

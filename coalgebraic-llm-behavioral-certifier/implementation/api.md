@@ -7,11 +7,16 @@
 > `Certificate`, `ObservationTable`, and property-checking functions that
 > are fully implemented and tested (38 property-based tests passing).
 > The Python evaluation harness includes standalone implementations of
-> Phase 0 experiments (`phase0_experiments.py`) and classifier robustness
-> analysis (`classifier_robustness_analysis.py`).
+> Phase 0 experiments (`phase0_experiments.py`), Phase B experiments
+> (`phase_b_experiments.py` — real LLM validation, PDFA baseline,
+> state scaling), and classifier robustness analysis.
+> Python LLM client classes (`OpenAIClient`, `AnthropicClient`,
+> `HuggingFaceClient`) exist in the codebase; `OpenAIClient` has been
+> exercised against `gpt-4.1-nano` in Phase B real LLM experiments.
+> `MockClient` is used in Phase 0 experiments.
 >
-> **Not implemented**: Lean 4 formalization, real LLM API integration
-> (mock LLMs only), multi-agent composition, live monitoring.
+> **Not implemented**: Lean 4 formalization, frontier LLM validation
+> (only gpt-4.1-nano tested), multi-agent composition, live monitoring.
 
 Comprehensive API documentation for the CABER (Coalgebraic Behavioral Auditing of
 Foundation Models via Sublinear Probing) framework. This document covers all public

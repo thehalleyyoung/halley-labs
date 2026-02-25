@@ -1,218 +1,491 @@
-# LITMUS∞ API Reference
+# LITMUS∞ — API Reference
 
-## Core Modules
+## CLI: `litmus-check`
 
-### portcheck — Portability Engine
+The primary user-facing tool. Scans C/C++/CUDA files for concurrency
+patterns and checks portability.
 
-```python
-from portcheck import check_portability, PATTERNS, ARCHITECTURES, verify_test, recommend_fence, LitmusTest
-
-# Check a single pattern against an architecture
-results = check_portability("mp", target_arch="arm")
-# Returns: [PortabilityResult(pattern="mp", safe=False, fence="dmb ishst (T0); dmb ishld (T1)")]
-
-# Full analysis (750 pairs)
-for pat in sorted(PATTERNS):
-    for arch in ARCHITECTURES:
-        result = check_portability(pat, target_arch=arch)
-
-# Low-level: verify a test against a model
-lt = LitmusTest(name="mp", n_threads=2, addresses=["x","y"], ops=PATTERNS["mp"]["ops"], forbidden=PATTERNS["mp"]["forbidden"])
-allowed, witness = verify_test(lt, ARCHITECTURES["arm"])
+```bash
+litmus-check --target arm src/           # scan directory
+litmus-check --target arm myfile.c       # single file
+litmus-check --target arm --stdin        # read from stdin
+litmus-check --target arm --json src/    # JSON output for CI
 ```
 
-### ast_analyzer — AST-Based Code Analysis
+**Flags:**
+| Flag | Description |
+|------|-------------|
+| `--target`, `-t` | Target architecture (required): x86, sparc, arm, riscv, opencl_wg, etc. |
+| `--source`, `-s` | Source architecture (default: x86) |
+| `--stdin` | Read code from stdin |
+| `--json` | Output JSON |
+| `--verbose`, `-v` | Show safe patterns too |
+| `--no-color` | Disable ANSI colors |
+
+---
+
+## Core: Pattern-Based Checking
+
+### `check_portability(pattern_name, source_arch='x86', target_arch=None) → List[PortabilityResult]`
+
+Check whether a litmus test pattern is safe to port between architectures.
 
 ```python
-from ast_analyzer import ast_analyze_code, ast_check_portability, ASTAnalyzer
+from portcheck import check_portability
 
-# Analyze code (returns ASTAnalysisResult)
-result = ast_analyze_code(code, language="auto")
-print(result.patterns_found)  # [ASTPatternMatch(pattern_name="mp", confidence=0.95)]
+result = check_portability("mp", target_arch="arm")
+print(result[0].safe)                  # False
+print(result[0].fence_recommendation)  # "dmb ishst (T0); dmb ishld (T1)"
+```
 
-# Coverage confidence: how much of the code is explained by matched patterns
-print(result.coverage_confidence)  # 0.85 (85% of concurrent ops matched)
+**Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `pattern_name` | `str` | Litmus test name (75 built-in) |
+| `source_arch` | `str` | Source architecture (default `"x86"`) |
+| `target_arch` | `str` or `None` | Target architecture. `None` = all (4 CPU + 6 GPU scope instantiations). |
 
-# Unrecognized pattern warning (emitted when coverage_confidence < 0.5)
-if result.coverage_confidence < 0.5:
-    print(f"WARNING: Low coverage ({result.coverage_confidence:.0%})")
-    print(f"Unrecognized ops: {result.unrecognized_ops}")
+**Returns:** `List[PortabilityResult]` with fields: `safe`, `fence_recommendation`, `compression_ratio`.
 
-# Full pipeline: code → pattern → portability check
+---
+
+## AST-Based Code Analysis
+
+### `ast_analyze_code(code, language='auto') → ASTAnalysisResult`
+
+Analyze concurrent code using tree-sitter AST parsing (C/C++/CUDA) with regex fallback.
+
+```python
+from ast_analyzer import ast_analyze_code
+
+result = ast_analyze_code("""
+// Thread 0
+data.store(42, std::memory_order_relaxed);
+flag.store(1, std::memory_order_release);
+// Thread 1
+int r0 = flag.load(std::memory_order_acquire);
+int r1 = data.load(std::memory_order_relaxed);
+""", language="cpp")
+
+print(result.patterns_found[0].pattern_name)  # "mp"
+print(result.parse_method)                     # "ast"
+print(result.memory_orders_used)               # {"relaxed", "release", "acquire"}
+```
+
+**Returns:** `ASTAnalysisResult` with fields:
+| Field | Type | Description |
+|-------|------|-------------|
+| `patterns_found` | `List[ASTPatternMatch]` | Matched patterns with confidence |
+| `extracted_ops` | `List[ExtractedOp]` | Extracted memory operations |
+| `n_threads` | `int` | Number of threads detected |
+| `parse_method` | `str` | `"ast"` or `"fallback_regex"` |
+| `memory_orders_used` | `Set[str]` | Memory orderings found |
+| `dependencies_found` | `List[Dict]` | Inferred data/address/control deps |
+| `is_gpu` | `bool` | Whether GPU code detected |
+
+### `ast_check_portability(code, target_arch=None, language='auto') → List[Dict]`
+
+Full pipeline: AST parse → match patterns → check portability.
+
+```python
+from ast_analyzer import ast_check_portability
+
 bugs = ast_check_portability(code, target_arch="arm")
-
-# Custom analyzer instance
-analyzer = ASTAnalyzer()
-analysis = analyzer.analyze(code, language="cpp")
+for bug in bugs:
+    print(f"{bug['pattern']}: safe={bug['safe']}, fix={bug['fence_fix']}")
 ```
 
-### model_dsl — Custom Memory Models
+---
+
+## Custom Memory Model DSL
+
+### `register_model(dsl_text) → CustomModel`
+
+Register a custom memory model from DSL text.
 
 ```python
-from model_dsl import register_model, check_custom, get_registry
+from model_dsl import register_model, check_custom
 
-# Define and register a model
-register_model('''model POWER {
+register_model("""
+model POWER {
     relaxes W->R, W->W, R->R, R->W
     preserves deps
     not multi-copy-atomic
     fence hwsync (cost=8) { orders W->R, W->W, R->R, R->W }
     fence lwsync (cost=4) { orders W->W, R->R, R->W }
-}''')
+    fence isync  (cost=2) { orders R->R }
+}
+""")
 
-# Check pattern against custom model
 result = check_custom("mp", "POWER")
-print(result["safe"])  # False
-
-# Compare two models
-diffs = get_registry().compare_models("POWER", "ARM")
+print(result)  # {'pattern': 'mp', 'model': 'POWER', 'safe': False, ...}
 ```
 
-### smt_validation — Z3-Based Formal Validation
+### `check_custom(pattern, model_name) → Dict`
 
-```python
-from smt_validation import (cross_validate_smt, prove_fence_sufficiency_smt,
-                            classify_all_unsafe_pairs, synthesize_litmus_test_smt,
-                            run_litmus_synthesis)
+Check a pattern against a registered model.
 
-# Cross-validate all CPU results (228/228 agreement)
-report = cross_validate_smt()
-print(f"Agreement: {report['agree']}/{report['total_checks']}")
+### `get_registry().compare_models(model_a, model_b) → List[Dict]`
 
-# Classify ALL unsafe pairs (55 UNSAT + 40 SAT + 6 partial)
-classification = classify_all_unsafe_pairs()
-print(f"Fence-sufficient: {classification['fence_sufficient']}")
+Find discriminating patterns between two models.
 
-# Prove fence sufficiency for a specific pair
-proof = prove_fence_sufficiency_smt("mp", "ARM")
-print(proof['fence_sufficient'])  # True
+### `list_models() → List[str]`
 
-# Synthesize NEW litmus tests from scratch
-result = synthesize_litmus_test_smt('TSO', 'ARM')
-# result['tests'][0] independently rediscovers the MP pattern
+List all available models (built-in + custom).
 
-# Full synthesis across all model pairs (5 tests synthesized)
-synth = run_litmus_synthesis()
-print(synth['total_synthesized'])  # 5
+### DSL Syntax
+
+```
+model <Name> [extends <Parent>] {
+    [description "<text>"]
+    relaxes <pair> [, <pair>]*       # W->R, W->W, R->R, R->W
+    [preserves deps]                  # dependency preservation
+    [not multi-copy-atomic]           # multi-copy atomicity
+    [scope <level>]                   # workgroup, device
+    fence <name> [(cost=<N>)] {       # fence type definition
+        orders <pair> [, <pair>]*
+    }
+}
 ```
 
-### differential_testing — Cross-Validation
+---
+
+## Differential Testing
+
+### `run_all_differential_tests() → Dict`
+
+Run all automated cross-validation checks.
 
 ```python
 from differential_testing import run_all_differential_tests
 
 results = run_all_differential_tests()
-# Runs 3,642 automated checks: monotonicity (450), fence soundness (60),
-# custom model (57), litmus round-trip (75), determinism (3,000)
+# results keys: monotonicity (450), fence_soundness (60), determinism (3000),
+#               custom_model (57), litmus_roundtrip (75)
 ```
 
-### statistical_analysis — Confidence Intervals & Power
+**Test categories:**
+| Category | Checks | Description |
+|----------|--------|-------------|
+| **Meaningful semantic checks** | **642** | |
+| Monotonicity | 450 | Stricter model ⊆ weaker model |
+| Fence soundness | 60 | Adding fences never makes safe → unsafe |
+| Custom model | 57 | DSL vs built-in cross-validation (57/57 agree) |
+| Litmus round-trip | 75 | Export → re-import consistency |
+| **Trivial stability checks** | **3,000** | |
+| Determinism | 3,000 | Same input → same output (5 runs) |
+
+---
+
+## Severity Classification
+
+### `classify_all_unsafe_pairs() → Dict`
+
+Classify all 342 unsafe (pattern, architecture) pairs by severity.
 
 ```python
-from statistical_analysis import (run_full_statistical_analysis, wilson_ci,
-                                   bootstrap_ci, clopper_pearson_ci)
+from severity_classification import classify_all_unsafe_pairs
 
-stats = run_full_statistical_analysis()
-# Wilson CIs, bootstrap CIs, Clopper-Pearson exact CIs, power analysis
-
-# Exact binomial CI (conservative)
-p, lo, hi = clopper_pearson_ci(196, 203)  # Exact-match CI
+report = classify_all_unsafe_pairs()
+print(report['severity_counts'])
+# {'data_race': 228, 'security_vulnerability': 44, 'benign': 70}
+print(f"Z3 certified: {report['z3_certified']}")  # 342
 ```
 
-### herd7_validation — herd7 Agreement
+**Severity levels:**
+| Severity | Description | Example |
+|----------|-------------|---------|
+| `data_race` | Stale/inconsistent reads | MP on ARM, SB on RISC-V |
+| `security_vulnerability` | Broken mutual exclusion or scope mismatch | Dekker on ARM, GPU scope bug |
+| `benign` | Coherence artifact, no data integrity impact | CoWR on ARM, 2+2W on TSO |
+
+---
+
+## DSL-to-.cat Formal Correspondence
+
+### `validate_all_models() → Dict`
+
+Validate DSL model definitions against .cat reference specifications for TSO, ARM, and RISC-V.
+
+```python
+from dsl_cat_correspondence import validate_all_models
+
+report = validate_all_models()
+print(f"Overall: {report['total_agree']}/{report['total_checks']} ({report['overall_agreement_rate']}%)")
+# 170/171 (99.4%), Wilson CI [96.8%, 99.9%]
+for model, data in report['per_model'].items():
+    print(f"  {model}: {data['agree']}/{data['total']} ({data['agreement_rate']}%)")
+```
+
+---
+
+## SMT-Based Formal Validation
+
+### `cross_validate_all_750_smt() → Dict`
+
+Generate Z3 certificates for ALL 750 (pattern, architecture) pairs.
+
+```python
+from smt_validation import cross_validate_all_750_smt
+
+report = cross_validate_all_750_smt()
+print(f"Certified: {report['certified']}/{report['total_pairs']}")
+# 750/750 (100%), Wilson CI [99.5%, 100%]
+print(f"UNSAT (safe): {report['cert_safe_unsat']}")    # 408
+print(f"SAT (unsafe): {report['cert_unsafe_sat']}")     # 342
+```
+
+### `cross_validate_smt() → Dict`
+
+Cross-validate all CPU results using independent Z3 SMT encoding.
+
+```python
+from smt_validation import cross_validate_smt
+
+report = cross_validate_smt()
+print(f"Agreement: {report['agree']}/{report['total_checks']}")
+# 228/228, Wilson CI [98.3%, 100%]
+```
+
+### `classify_all_unsafe_pairs() → Dict`
+
+Classify all unsafe CPU pairs into fence-sufficient, inherently observable, or partial fence.
+
+```python
+from smt_validation import classify_all_unsafe_pairs
+
+results = classify_all_unsafe_pairs()
+print(f"Fence-sufficient: {len(results['fence_sufficient'])}")   # 55
+print(f"Inherently observable: {len(results['inherently_observable'])}")  # 40
+print(f"Partial fence: {len(results['partial_fence'])}")          # 6
+```
+
+**Returns:** `Dict` with keys:
+| Key | Type | Description |
+|-----|------|-------------|
+| `fence_sufficient` | `List[Dict]` | Pairs where fences make the forbidden outcome UNSAT |
+| `inherently_observable` | `List[Dict]` | Pairs where forbidden outcome persists despite fences |
+| `partial_fence` | `List[Dict]` | Pairs with insufficient partial fences |
+
+### `generate_discriminating_litmus_test(model_a, model_b) → Dict`
+
+Generate an SMT-based litmus test that discriminates two memory models.
+
+```python
+from smt_validation import generate_discriminating_litmus_test
+
+disc = generate_discriminating_litmus_test('ARM', 'RISC-V')
+print(disc['discriminating_pattern'])  # Pattern that differs between models
+```
+
+### `generate_all_model_discriminators() → Dict`
+
+Find the minimal set of patterns that discriminates all model pairs.
+
+```python
+from smt_validation import generate_all_model_discriminators
+
+result = generate_all_model_discriminators()
+print(result['minimal_discriminating_set'])  # ['isa2', 'mp_addr']
+print(result['coverage'])                     # '5/6 pairs'
+```
+
+### `prove_fence_sufficiency_smt(pattern, model) → Dict`
+
+Prove fence sufficiency via SMT (unfenced=sat, fenced=unsat).
+
+```python
+from smt_validation import prove_fence_sufficiency_smt
+
+proof = prove_fence_sufficiency_smt("mp", "ARM")
+print(proof['fence_sufficient'])  # True (unfenced=sat, fenced=unsat)
+```
+
+### `run_full_statistical_analysis() → Dict`
+
+Compute Wilson CIs, bootstrap CIs, and variance estimates for all metrics.
+
+```python
+from statistical_analysis import run_full_statistical_analysis
+
+stats = run_full_statistical_analysis()
+# Returns: accuracy CIs, fence cost distributions, timing characterization
+```
+
+---
+
+## herd7 Validation
+
+### `validate_against_herd7() → Dict`
+
+Validate all results against herd7 expected outcomes with CIs.
 
 ```python
 from herd7_validation import validate_against_herd7
 
 results = validate_against_herd7()
-# 228/228 agreement with .cat specs, Wilson CI [98.3%, 100%]
+print(f"Agreement: {results['agreements']}/{results['total_checks']}")
+# 228/228, Wilson CI [98.3%, 100%]
 ```
 
-### herd7_export — Litmus File Export
+### `export_all_litmus(output_dir, fmt='C') → (List[str], List[Tuple])`
 
-```python
-from herd7_export import export_all_litmus
+Export all 75 patterns as .litmus files.
 
-exported, errors = export_all_litmus("litmus_files/")
-# Exports 57 .litmus files for herd7 validation
-```
+---
 
-### false_negative_analysis — Safety Classification
+## False-Negative Analysis
+
+### `run_false_negative_analysis() → Dict`
+
+Classify all 7 non-exact-match benchmark cases to verify zero false negatives.
 
 ```python
 from false_negative_analysis import run_false_negative_analysis
 
 results = run_false_negative_analysis()
-# Classifies 7 non-exact-match cases: 4 SAFE, 3 NEUTRAL, 0 UNSAFE
+print(f"SAFE: {results['safe_conservative']}")     # 4
+print(f"NEUTRAL: {results['neutral_identical']}") # 3
+print(f"UNSAFE: {results['unsafe_missed']}")   # 0
+# Zero false negatives: 100% effective safety rate
 ```
 
-### benchmark_suite — Code Analyzer Evaluation
+**Returns:** `Dict` with keys:
+| Key | Type | Description |
+|-----|------|-------------|
+| `classifications` | `List[Dict]` | Per-snippet classification with reasoning |
+| `safe_count` | `int` | Conservative mismatches (safe, not bugs) |
+| `neutral_count` | `int` | Identical portability profiles (harmless) |
+| `unsafe_count` | `int` | Actual false negatives (should be 0) |
+
+---
+
+## Mismatch Analysis
+
+### `run_full_analysis() → Dict`
+
+Statistical analysis of DSL cross-validation mismatches.
 
 ```python
-from benchmark_suite import run_benchmark, BENCHMARK_SNIPPETS
+from mismatch_analysis import run_full_analysis
 
-# 203 real-world snippets across 16 categories
-results, summary = run_benchmark(analyzer.analyze)
-print(summary["exact_accuracy"])   # 0.966
-print(summary["top3_accuracy"])    # 0.980
+results = run_full_analysis()
+# Includes: confusion matrix, chi-squared test, McNemar's test,
+# root cause taxonomy, pattern discrimination power
 ```
 
-### ci_integration — CI/CD Helpers
+---
+
+## Completeness Analysis
+
+### `run_completeness_analysis() → Dict`
+
+Analyze pattern portfolio completeness and discrimination power.
 
 ```python
-from ci_integration import generate_github_actions, generate_precommit_hook
+from completeness_analysis import run_completeness_analysis
 
-# Generate GitHub Actions workflow YAML
-yaml = generate_github_actions(target_arch="arm")
-
-# Generate pre-commit hook
-hook = generate_precommit_hook(target_arch="arm")
+results = run_completeness_analysis()
+# Includes: boundary coverage (9/9), information theory,
+# minimal discriminating set, structural coverage
 ```
 
-## CLI Usage
+---
 
-```bash
-# Single pattern check
-python3 portcheck.py --pattern mp --target arm
+## SMT-Based Litmus Test Synthesis
 
-# Full portability analysis
-python3 portcheck.py --analyze-all
+### `synthesize_litmus_test_smt(model_a, model_b, n_threads=2, n_ops_per_thread=2, n_addresses=2) → Dict`
 
-# GPU scope mismatch detection
-python3 portcheck.py --scope-mismatch
+Synthesize NEW litmus tests from scratch that discriminate two memory models.
 
-# Model diff
-python3 portcheck.py --diff arm riscv
+```python
+from smt_validation import synthesize_litmus_test_smt
 
-# JSON output
-python3 portcheck.py --analyze-all --json
-
-# litmus-check CLI (after pip install)
-litmus-check --target arm src/
-litmus-check --target arm --fail-on-unsafe src/
+result = synthesize_litmus_test_smt('TSO', 'ARM')
+# result['synthesized'] == True
+# result['tests'][0]['test_description'] == ['Thread 0: St x=1 ; St y=1', 'Thread 1: Ld y ; Ld x']
+# Independently rediscovers the classic MP pattern!
 ```
 
-## Key Data Types
+### `run_litmus_synthesis() → Dict`
 
-| Type | Fields |
-|------|--------|
-| `LitmusTest` | name, threads, addresses, ops, forbidden outcome |
-| `MemOp` | store/load/fence with thread, addr, scope |
-| `PortabilityResult` | pattern, arch, safe, fence recommendation |
-| `ASTAnalysisResult` | patterns_found, ops, warnings, **coverage_confidence**, **unrecognized_ops** |
-| `ASTPatternMatch` | pattern_name, confidence, match_type |
+Run synthesis across all model pairs.
+
+---
+
+## Statistical Power Analysis
+
+### `analyze_power(results) → Dict`
+
+Post-hoc power analysis with Clopper-Pearson exact CIs.
+
+```python
+from statistical_analysis import analyze_power
+power = analyze_power(benchmark_results)
+# power['top3_match']['power_vs_95pct'] == 1.0  (>99% power)
+# power['exact_match']['clopper_pearson_95ci'] == [0.725, 0.891]
+```
+
+### `clopper_pearson_ci(successes, total, alpha=0.05) → Tuple`
+
+Conservative exact binomial confidence interval.
+
+### `power_analysis(n, observed_rate, null_rate, alpha=0.05) → float`
+
+Post-hoc statistical power for binomial proportion test.
+
+---
+
+## Portability Engine API
+
+### `analyze_all_patterns() → Dict`
+Full 750-pair analysis.
+
+### `diff_architectures(arch1, arch2) → List`
+Find discriminating patterns between two architectures.
+
+### `detect_scope_mismatches() → Tuple[List, List]`
+Detect GPU scope mismatch patterns. Returns (critical, warnings).
+
+---
+
+## API Layer (api.py)
+
+### `find_fence_bugs(code, architecture) → List[FenceBug]`
+
+Detect fence insufficiency and scope mismatch bugs.
+
+### `minimize_fences(code, target_arch) → OptimizedCode`
+
+Compute per-thread minimal fences with cost savings.
+
+### `compare_architectures(test, archs) → ArchComparisonTable`
+
+Compare behavior across multiple architectures.
+
+### `validate_gpu_kernel(kernel, scope) → ValidationResult`
+
+Validate GPU kernel scope correctness.
+
+---
+
+## Built-in Litmus Tests
+
+75 built-in patterns across categories:
+
+| Category | Count | Examples |
+|----------|-------|---------|
+| Basic ordering | 9 | MP, SB, LB, IRIW, WRC |
+| Fenced | 28 | MP+fence, SB+fence, IRIW+fence, ISA2+fence, Dekker+fence |
+| Asymmetric fence | 6 | MP+fence_wr, SB+fence_wr |
+| GPU scope | 18 | gpu_mp_wg, gpu_sb_dev |
+| Dependency | 6 | MP+data, LB+data, WRC+addr |
+| Coherence | 4 | CoRR, CoWR, CoWW, CoRW |
+| Multi-thread | 5 | ISA2, R, S, 3SB |
+| Mutex | 2 | Dekker, Peterson |
 
 ## Supported Architectures
 
-| Name | Key |
-|------|-----|
-| x86/TSO | `x86` |
-| SPARC/PSO | `sparc` |
-| ARM/ARMv8 | `arm` |
-| RISC-V/RVWMO | `riscv` |
-| OpenCL WG/Dev | `opencl_wg`, `opencl_dev` |
-| Vulkan WG/Dev | `vulkan_wg`, `vulkan_dev` |
-| PTX CTA/GPU | `ptx_cta`, `ptx_gpu` |
+Built-in: `x86`, `sparc`, `arm`, `riscv`, `opencl_wg`, `opencl_dev`, `vulkan_wg`, `vulkan_dev`, `ptx_cta`, `ptx_gpu`
 
-**Note:** The 6 GPU configurations are instantiations of a single parameterized
-model differing only in scope level. The independent model count is 5 (4 CPU + 1 GPU).
+Custom (via DSL): unlimited

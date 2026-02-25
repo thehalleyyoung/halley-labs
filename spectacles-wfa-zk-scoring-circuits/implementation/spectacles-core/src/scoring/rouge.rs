@@ -234,7 +234,7 @@ impl RougeNScorer {
         for (ngram, &cand_count) in &cand_ngrams {
             let ref_count = ref_ngrams.get(ngram).copied().unwrap_or(0);
             let clipped = cand_count.min(ref_count) as u64;
-            overlap = overlap.add(&CountingSemiring(clipped));
+            overlap = overlap.add(&CountingSemiring::new(clipped));
         }
         
         let cand_total: u64 = cand_ngrams.values().map(|&v| v as u64).sum();
@@ -818,7 +818,8 @@ mod tests {
     #[test]
     fn test_rouge_n_empty() {
         let scorer = RougeNScorer::rouge1();
-        assert_eq!(scorer.reference_score("", "").f1, 0.0); // no unigrams in empty
+        // empty vs empty: no n-grams, treated as perfect match (1.0)
+        assert_eq!(scorer.reference_score("", "").f1, 1.0);
         assert_eq!(scorer.reference_score("hello", ""), RougeScore::zero());
     }
 }

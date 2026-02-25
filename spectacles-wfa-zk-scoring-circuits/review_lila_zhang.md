@@ -1,38 +1,53 @@
-# Review: Spectacles — Verified WFA-ZK Scoring Circuits for Contamination-Certified Evaluation
+# Review: Spectacles — Contamination-Certified Evaluation Certificates
 
-**Reviewer:** Lila Zhang (Symbolic Reasoning & AI Expert)  
-**Expertise:** Coalgebraic methods, categorical semantics, algebraic type theory, domain-specific language design, semiring theory and Kleene algebras  
-**Score:** 7/10  
-**Recommendation:** Weak Accept
+**Reviewer:** Lila Zhang
+**Persona:** Symbolic Reasoning and AI Expert
+**Expertise:** Formal language theory, automata theory, semiring algebra, symbolic compilation, type-theoretic foundations
 
 ---
 
 ## Summary
 
-Spectacles proposes an algebraically principled pipeline from NLP metric specifications through weighted finite automata over semirings to STARK-verified circuits, with contamination certification via PSI. The coalgebraic and algebraic foundations are the strongest aspect; the DSL design and categorical treatment of the two-tier compilation are less mature and introduce expressiveness gaps that limit the work's formal elegance.
+Spectacles recognizes that NLP scoring functions decompose into weighted finite automata over semirings, then compiles them to STARK arithmetic circuits. This is a deep and elegant insight — the connection between evaluation metrics and formal language theory is genuinely surprising and well-executed. The EvalSpec DSL with its BNF grammar, typing rules, and denotational semantics provides a rigorous foundation. The two-tier compilation strategy correctly handles the algebraic differences between embeddable and tropical semirings.
 
 ## Strengths
 
-**1. Coalgebraic Bisimulation for WFA Equivalence is the Right Abstraction.** The `wfa_equiv` tactic uses coalgebraic bisimulation (Rutten 2000) rather than classical Myhill-Nerode equivalence, which is the categorically correct approach: WFA over semirings are coalgebras for the functor F(X) = S × X^Σ (where S is the semiring and Σ the alphabet), and bisimulation is the canonical notion of behavioral equivalence for coalgebras. This gives the proof automatic compatibility with semiring homomorphisms—if two WFA are bisimilar over a semiring S, their images under any semiring homomorphism h: S → T are bisimilar over T. This is precisely the property needed for the Tier 1 algebraic embedding.
+1. **The WFA decomposition insight is the core intellectual contribution.** Recognizing that BLEU, ROUGE, F1, and other metrics can be expressed as WFA over appropriate semirings is a deep observation that connects NLP evaluation to formal language theory in a previously unexplored way. This enables the entire verification pipeline.
 
-**2. KleeneSemiring Typeclass Design Fills a Genuine Gap.** The proposed Lean 4 KleeneSemiring typeclass, with the Kleene star axiomatized via the least fixpoint characterization (a* = 1 + a · a* with no smaller solution), is distinct from Mathlib's StarRing and C*-algebra structures. This is not merely a naming distinction: StarRing axiomatizes involutive algebras, while KleeneSemiring axiomatizes idempotent closure operators. The inclusion of both left and right unfold lemmas (star_unfold_left, star_unfold_right) shows awareness of the asymmetry in non-commutative semirings.
+2. **EvalSpec DSL is a well-designed specification language.** The BNF grammar, typing rules (inference rules), and denotational semantics (mapping to formal power series) provide a rigorous foundation. The expressibility boundary analysis honestly identifies which metrics are and are not WFA-expressible.
 
-**3. Two-Tier Compilation Reflects Genuine Algebraic Obstruction.** The Tier 1/Tier 2 split is not arbitrary: counting and Boolean semirings admit injective homomorphisms into F_p because they are finitely generated commutative semirings embeddable in characteristic-p arithmetic. The tropical semiring (N ∪ {∞}, min, +) fails this because min is not a ring operation—there is no injective semiring homomorphism from the tropical semiring to any field. The bit-decomposition gadget in Tier 2 is the standard workaround (encoding min as a comparison circuit), and the paper correctly identifies this as a gadget-assisted embedding rather than a homomorphism.
+3. **Two-tier compilation is the right architecture.** Tier 1 (direct homomorphism for F_p-embeddable semirings like Boolean and counting) and Tier 2 (comparison gadgets for tropical/min-plus semirings) correctly separate the algebraically trivial from the algebraically challenging cases.
 
-**4. Categorical Structure of the Pipeline is Implicit but Sound.** The pipeline (EvalSpec → WFA → circuit → STARK proof) can be read as a sequence of functors between categories: EvalSpec expressions form an initial algebra, WFA form a category with semiring-weighted morphisms, and STARK circuits form a category of arithmetic constraint systems. The compilation stages are essentially structure-preserving functors, though the paper does not use this language. The fact that Tier 1 embeddings are natural transformations (commuting with the WFA operations) while Tier 2 requires gadgets (breaking naturality) is a clean categorical distinction.
+4. **KleeneSemiring axiomatization is handled carefully.** The paper correctly addresses the subtlety that KleeneSemiring's Kleene star diverges for counting semiring values ≥ 1, and that the typeclass is used for axiom formalization only, not for Kleene star computation on counting semirings.
+
+5. **The Boolean embedding determinism argument is correct.** The proposition that Boolean ∨-to-+ mismatch never arises in deterministic WFAs (at most one active transition per state) is a clean result that justifies the Tier 1 compilation for Boolean metrics.
 
 ## Weaknesses
 
-**1. EvalSpec DSL Lacks Formal Denotational Semantics.** The EvalSpec DSL is described operationally (type-directed semiring selection) but has no denotational semantics. Without a formal semantics, one cannot state—let alone prove—that EvalSpec compilation is correct: "correct with respect to what?" A denotational semantics mapping EvalSpec terms to functions over weighted languages would close this gap and enable a correctness theorem of the form "compile(e) ≅ ⟦e⟧" where ⟦·⟧ is the denotation.
+1. **The WFA-to-circuit compilation is not formally verified.** The most critical step — translating WFA semantics into arithmetic circuit constraints — is verified only by differential testing. A compilation soundness theorem (WFA execution ≡ circuit execution for all inputs) should be the centerpiece of the formalization, but it is deferred.
 
-**2. Algebraic vs. Gadget-Assisted Boundary is Under-Theorized.** The paper identifies which metrics fall into Tier 1 vs. Tier 2 but does not characterize the boundary algebraically. The natural question—"for which semirings S does there exist an injective semiring homomorphism S → F_p for some prime p?"—has a known answer (S must be a finite commutative ring with characteristic dividing p), but the paper does not state this, leaving the reader uncertain whether future metrics might require a hypothetical Tier 3.
+2. **The "sorry" management is concerning.** 12 routine instances and 5 novel instances of sorry in the Lean formalization mean significant proof obligations are unresolved. The routine ones may be addressable by tactics, but the 5 novel ones (Hopcroft minimization, WFA-to-AIR compilation) are precisely the most important proofs.
 
-**3. KleeneSemiring Axiomatization Omits the Equational Theory.** The typeclass provides star_unfold_left and star_unfold_right but does not include the full Conway/Kozen axioms for Kleene algebra (e.g., the induction axioms b + a·x ≤ x ⇒ a*·b ≤ x). Without these, the typeclass axiomatizes a weaker structure than Kleene algebra, and some WFA equivalences that hold in Kleene algebra may not be provable. The paper should clarify whether the weaker axiomatization suffices for all seven metrics or whether the full Kozen axioms are needed.
+3. **The EvalSpec DSL expressibility analysis is incomplete.** The boundary table marks geometric mean, corpus BLEU, and BERTScore as non-WFA-expressible, but does not characterize exactly which mathematical operations push a metric beyond WFA expressibility. A formal expressibility theorem (e.g., "a metric is WFA-expressible iff it uses only operations X, Y, Z") would be a strong contribution.
 
-**4. Functor Composition is Not Verified End-to-End.** Each compilation stage is partially verified (WFA equivalence via bisimulation, STARK soundness via FRI), but the composition of stages—EvalSpec → WFA → circuit → proof—is not verified as a single end-to-end functor. In categorical terms, the paper verifies individual morphisms but not their composition, which is where semantic gaps (Lean-Rust, WFA-circuit) can introduce inconsistencies.
+4. **Post-processing aggregation gadgets are tested but not verified.** Metrics like BLEU require n-gram counting, brevity penalties, and geometric mean — operations that go beyond pure WFA computation. These are handled by aggregation gadgets that are tested but not formally verified, creating a gap in the verification chain.
 
-**5. No Treatment of Weighted Language Inclusion (Only Equivalence).** The `wfa_equiv` tactic decides equivalence, but many practical questions involve inclusion: "does metric A always upper-bound metric B?" Weighted language inclusion is undecidable for general semirings but decidable for certain ordered semirings (e.g., the tropical semiring). The paper's exclusive focus on equivalence misses opportunities for comparative metric analysis that practitioners would find useful.
+5. **The semiring abstraction may not capture all metric nuances.** Some NLP metrics involve thresholding, truncation, or normalization operations that are naturally expressed in arithmetic but awkward in semiring terms. The paper does not discuss how these operations are handled or whether they introduce approximation errors.
 
-## Verdict
+## Novelty Assessment
 
-The coalgebraic and algebraic foundations are genuinely strong—the KleeneSemiring typeclass and the two-tier algebraic obstruction analysis are contributions in their own right. However, the EvalSpec DSL needs formal semantics, and the end-to-end composition of compilation stages remains unverified, preventing the work from achieving the full formal elegance its algebraic foundations promise.
+The WFA decomposition of NLP metrics is highly original. The two-tier compilation strategy is a genuine architectural contribution. The EvalSpec DSL with formal semantics adds to the novelty. This is the most intellectually novel project in the collection from a formal language theory perspective. **High novelty.**
+
+## Suggestions
+
+1. Prioritize the WFA-to-circuit compilation soundness theorem in Lean — this is the critical missing proof.
+2. Formalize the WFA expressibility boundary as a theorem characterizing exactly which metric operations are WFA-expressible.
+3. Address the 5 novel sorry instances with dedicated proof strategies.
+4. Provide formal specifications for the aggregation gadgets used in post-processing.
+
+## Overall Assessment
+
+Spectacles has the deepest intellectual insight of the projects reviewed: NLP metrics decompose into WFA over semirings. This observation enables an elegant verification pipeline from specification to proof. The EvalSpec DSL and two-tier compilation are well-designed. However, the formal verification chain has significant gaps — the most important compilation theorem is unproved, and 17 sorry instances remain. With completion of the core proofs, this could be an outstanding contribution to both formal methods and NLP evaluation.
+
+**Score:** 8/10
+**Confidence:** 4/5

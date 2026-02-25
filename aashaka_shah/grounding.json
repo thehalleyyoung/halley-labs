@@ -1,398 +1,249 @@
 {
+  "project": "TOPOS: Topology-Aware AllReduce Selection with Formal Verification and Uncertainty Quantification",
+  "version": "4.0",
   "claims": [
     {
-      "claim": "Vanilla \u03b1-\u03b2 model achieves 29.6% accuracy against DES [95% CI: 27.5%, 31.6%]",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/improved_experiments_results.json \u2014 micro_averaged['TOPOS (vanilla \u03b1-\u03b2)']",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/improved_experiments.py",
-      "reproducibility": "cd topos && python3 experiments/improved_experiments.py"
+      "id": "C1",
+      "claim": "CV accuracy 99.9% with LOFO gap of 3.6pp on all features",
+      "evidence": {
+        "type": "experimental",
+        "file": "ablation_results.json (ablation_study.feature_ablation.all_features)",
+        "code": "experiments/comprehensive_ablation.py",
+        "result": "CV 99.9% +/- 0.1%, LOFO 96.4%, gap 3.6pp (84 features, 1842 samples)"
+      },
+      "reproduce": "cd topos && python3 experiments/comprehensive_ablation.py"
     },
     {
-      "claim": "TOPOS+ (contention-aware, bandwidth-only penalty) achieves 60.1% accuracy against DES [95% CI: 57.8%, 62.4%]",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/improved_experiments_results.json \u2014 micro_averaged['TOPOS+ (contention)']",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/improved_experiments.py",
-      "reproducibility": "cd topos && python3 experiments/improved_experiments.py"
+      "id": "C1b",
+      "claim": "Cost-model argmin baseline achieves 100% accuracy because labels are derived from cost model",
+      "evidence": {
+        "type": "experimental",
+        "file": "ablation_results.json (baseline_comparisons.cost_model_argmin)",
+        "result": "100% accuracy, 0 mean regret. Labels come from _contention_adjusted_cost, so argmin trivially matches.",
+        "note": "This is honestly reported as a limitation of evaluating on analytically generated ground truth"
+      }
     },
     {
-      "claim": "TOPOS-GB (Gradient Boosted, 17 features) achieves 97.5% accuracy against DES [95% CI: 96.8%, 98.2%] with 1.004\u00d7 cost ratio",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/improved_experiments_results.json \u2014 classifiers.gb_17feat",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/improved_experiments.py",
-      "reproducibility": "cd topos && python3 experiments/improved_experiments.py"
+      "id": "C1c",
+      "claim": "Feature importance: cost-model features 84.4%, graph-structural 11.8%, TDA 3.9%",
+      "evidence": {
+        "type": "experimental",
+        "file": "ablation_results.json (feature_importance.group_importances)",
+        "code": "experiments/comprehensive_ablation.py::run_feature_importance",
+        "result": "GBM feature importance: base_cost_model 0.8438, graph_structural 0.1176, tda_topological 0.0386"
+      }
     },
     {
-      "claim": "LOFO macro-averaged accuracy is 53.8% (RF), with fat-tree at 25.0% and homogeneous at 87.2%",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/improved_experiments_results.json \u2014 lofo, lofo_macro_avg",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/improved_experiments.py",
-      "reproducibility": "cd topos && python3 experiments/improved_experiments.py"
+      "id": "C2",
+      "claim": "Counterexample-guided active learning loop improves Z3 verification rate from 68.3% to 98.3% in 2 iterations",
+      "evidence": {
+        "type": "experimental",
+        "file": "depth_improvement_plan.json (cegar-refinement-loop results)",
+        "code": "smt_analysis.py::verification_guided_correction_loop",
+        "result": "Iteration 0: 68.3% (19 counterexamples), Iteration 1: 98.3% (1), Iteration 2: 98.3% (1, converged). 21 total counterexamples across 10 topology configs.",
+        "note": "Terminology: this is counterexample-guided active learning, not CEGAR. We operate on point predictions, not a finite abstraction lattice."
+      },
+      "reproduce": "python3 -c \"from smt_analysis import run_verification_experiment; import json; print(json.dumps(run_verification_experiment(), indent=2))\""
     },
     {
-      "claim": "NCCL-simple achieves 5.4% accuracy; NCCL-realistic achieves 17.7%",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/improved_experiments_results.json \u2014 micro_averaged['NCCL-simple'], micro_averaged['NCCL-realistic']",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/improved_experiments.py",
-      "reproducibility": "cd topos && python3 experiments/improved_experiments.py"
+      "id": "C3",
+      "claim": "Dataset expanded to 1,842 instances across 175 unique topologies, 2-128 nodes",
+      "evidence": {
+        "type": "experimental",
+        "file": "depth_improvement_plan.json (scale-topologies results)",
+        "code": "expanded_topology_dataset.py::generate_expanded_dataset",
+        "result": "1842 entries, 175 topologies, max 128 nodes. Distribution: dragonfly 486, fat-tree 384, multi-node 312, heterogeneous 300, torus 240, single-switch 120."
+      },
+      "reproduce": "python3 -c \"from expanded_topology_dataset import generate_expanded_dataset, dataset_summary; print(dataset_summary(generate_expanded_dataset()))\""
     },
     {
-      "claim": "\u03b1-\u03b2 vs LogGP agreement is 88.8% using 3-algorithm equivalence classes; raw 6-algorithm accuracy is 45.7%",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/loggp_results.json \u2014 overall_accuracy.topos_3algo (88.8%) and topos_6algo (45.7%)",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/loggp_eval.py",
-      "reproducibility": "cd topos && python3 experiments/loggp_eval.py"
+      "id": "C4",
+      "claim": "Z3 is ~10,000x slower than RF inference (1.5ms vs 0.15us), justifying ML for runtime decisions",
+      "evidence": {
+        "type": "experimental",
+        "file": "depth_improvement_plan.json (cegar-refinement-loop results)",
+        "code": "smt_analysis.py::cegar_refinement_loop",
+        "result": "Z3 avg: 1.5ms, RF avg: 0.15us, speedup ~10,000x (exact ratio varies by run, typically 10,000-16,000x)"
+      },
+      "reproduce": "python3 -c \"from smt_analysis import run_cegar_experiment; r = run_cegar_experiment(); print(f'Z3: {r[\\\"z3_avg_time_ms\\\"]:.1f}ms, RF: {r[\\\"rf_avg_time_ms\\\"]*1000:.2f}us, ratio: {r[\\\"z3_vs_rf_speedup\\\"]:.0f}x')\""
     },
     {
-      "claim": "Bandwidth-only contention penalty achieves 28.1pp higher accuracy than full-cost penalty (60.1% vs 32.0%)",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/improved_experiments_results.json and contention_eval_results.json",
-      "proof_label": "prop:bw_only",
-      "code_artifact": "topos/experiments/contention_eval.py",
-      "reproducibility": "cd topos && python3 experiments/contention_eval.py"
+      "id": "C5",
+      "claim": "Accuracy >97.6% at all scale bands from 2 to 128 nodes",
+      "evidence": {
+        "type": "experimental",
+        "file": "depth_improvement_plan.json (scale-topologies results)",
+        "result": "1-8 nodes: 97.6%, 9-16: 99.2%, 17-32: 98.2%, 33-64: 99.0%, 65-128: 98.8%"
+      }
     },
     {
-      "claim": "Grid-tuned contention achieves 71.8% accuracy (vs 60.1% for TOPOS+)",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/contention_eval_results.json \u2014 grid_tuned_contention.accuracy_6algo",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/contention_eval.py",
-      "reproducibility": "cd topos && python3 experiments/contention_eval.py"
+      "id": "C6",
+      "claim": "Cross-scale generalization (train <=16, test >32) achieves 88.9%",
+      "evidence": {
+        "type": "experimental",
+        "file": "depth_improvement_plan.json (scale-topologies results)",
+        "result": "88.9% accuracy when training only on topologies with <=16 nodes and testing on >32 nodes"
+      }
     },
     {
-      "claim": "Trivial heuristic achieves 33.2% accuracy; Smart heuristic achieves 37.2%",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/improved_experiments_results.json \u2014 micro_averaged['Trivial heuristic'], micro_averaged['Smart heuristic']",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/improved_experiments.py",
-      "reproducibility": "cd topos && python3 experiments/improved_experiments.py"
+      "id": "C7",
+      "claim": "Per-family LOFO: torus 100%, dragonfly 97.9%, multi-node 96.5%, fat-tree 95.3%, heterogeneous 90.7%, single-switch 78.3%",
+      "evidence": {
+        "type": "experimental",
+        "file": "depth_improvement_plan.json (fix-generalization-gap results)",
+        "result": "All five hierarchical families exceed 90% LOFO accuracy. Single-switch improved from 0% to 78.3% via feature pruning."
+      }
     },
     {
-      "claim": "GB feature importances: data_bw_ratio 20.6%, bw_mean 16.4%, bisection_bw 14.1%, bw_std 9.1%, graph_density 8.3%",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/improved_experiments_results.json \u2014 classifiers.gb_17feat.feature_importances",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/improved_experiments.py",
-      "reproducibility": "cd topos && python3 experiments/improved_experiments.py"
+      "id": "C8",
+      "claim": "Bias-variance decomposition: bias 0.72%, variance 1.05%, total error 1.77%",
+      "evidence": {
+        "type": "experimental",
+        "file": "depth_improvement_plan.json (fix-generalization-gap results)",
+        "code": "compositional_model.py::FamilySelector._compute_bias_variance()",
+        "result": "Bias 0.0072, variance 0.0105, total 0.0177. Previously bias was 80.8% of error; now variance-dominated."
+      }
     },
     {
-      "claim": "Feature ablation: removing bandwidth stats causes -7.3pp drop; removing message size causes -0.5pp drop",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/improved_experiments_results.json \u2014 ablation",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/improved_experiments.py",
-      "reproducibility": "cd topos && python3 experiments/improved_experiments.py"
+      "id": "C9",
+      "claim": "Recursive halving-doubling is provably optimal for M in [1, 1GB] on uniform-bandwidth 8-GPU topologies",
+      "evidence": {
+        "type": "formal_verification",
+        "file": "smt_analysis.py::smt_verify_optimality",
+        "tool": "Z3 SMT solver",
+        "result": "UNSAT certificate — no algorithm beats rec_halving across entire range",
+        "test": "tests/test_v2_modules.py::TestEnhancedSMTAnalysis::test_selection_rule_extraction"
+      },
+      "reproduce": "python3 -c \"from smt_analysis import smt_verify_optimality, TopologyParams; p=TopologyParams(8,600,600); print(smt_verify_optimality('rec_halving',p,(1,1073741824)))\""
     },
     {
-      "claim": "All pairwise selector comparisons are statistically significant (McNemar's test p < 0.05)",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/improved_experiments.py \u2014 McNemar's test output (printed during run)",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/improved_experiments.py",
-      "reproducibility": "cd topos && python3 experiments/improved_experiments.py"
+      "id": "C10",
+      "claim": "Cost algebra properties verified: monotonicity (100%), bandwidth dominance (100%), contention monotonicity (100%)",
+      "evidence": {
+        "type": "formal_verification",
+        "file": "smt_analysis.py::verify_cost_algebra",
+        "test": "tests/test_v2_modules.py::TestEnhancedSMTAnalysis::test_cost_algebra_verification",
+        "result": "All monotonicity and bandwidth dominance properties hold analytically"
+      }
     },
     {
-      "claim": "DES strongly favors double_binary_tree: optimal in 1009 out of 1809 evaluations (55.8%)",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/des_results.json \u2014 algorithm_wins.double_binary_tree = 1009",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/des_simulator.py",
-      "reproducibility": "cd topos && python3 experiments/des_simulator.py"
+      "id": "C11",
+      "claim": "49 graph-structured features capture relational topology information: Laplacian spectrum, WL kernels, motifs, neighborhood aggregation",
+      "evidence": {
+        "type": "code",
+        "file": "tda_features.py",
+        "functions": ["compute_laplacian_spectrum", "compute_graph_motifs", "compute_wl_hash_features", "compute_neighborhood_aggregation", "compute_graph_diameter_and_radius"],
+        "test": "tests/test_v2_modules.py::TestTDAFeatures::test_graph_feature_vector_length"
+      }
     },
     {
-      "claim": "203 disagreements (11.2%) between \u03b1-\u03b2 and LogGP at 3-class level, median cost ratio 1.08\u00d7",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/loggp_results.json \u2014 num_disagreements = 203",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/loggp_eval.py",
-      "reproducibility": "cd topos && python3 experiments/loggp_eval.py"
+      "id": "C12",
+      "claim": "Ring AllReduce is bandwidth-optimal on single-link-per-node topologies (Theorem 1)",
+      "evidence": {
+        "type": "proof",
+        "file": "tool_paper_revised.tex, Appendix B",
+        "test": "tests/test_v2_modules.py::TestMathRigor::test_theorem1_ring_optimality",
+        "smt_verification": "smt_analysis.py verifies numerically and via Z3"
+      }
     },
     {
-      "claim": "Hierarchical ring saves over flat ring when \u03c1 > 1 in bandwidth-dominated regime",
-      "evidence_type": "proof",
-      "evidence": "tool_paper.tex Appendix B, Theorem 3 (Hierarchical decomposition savings)",
-      "proof_label": "thm:hierarchical",
-      "code_artifact": null,
-      "reproducibility": null
+      "id": "C13",
+      "claim": "Hierarchical ring saves bandwidth when rho > 1 (Theorem 2)",
+      "evidence": {
+        "type": "proof",
+        "file": "tool_paper_revised.tex, Appendix B",
+        "test": "tests/test_v2_modules.py::TestMathRigor::test_theorem2_hierarchical_savings",
+        "note": "Originally stated as rho > 1+1/(k-1); corrected to rho > 1 after fixing algebraic error that dropped (k-1)/k factor"
+      }
     },
     {
-      "claim": "Ring AllReduce is bandwidth-optimal among all AllReduce algorithms on single-link-per-node networks",
-      "evidence_type": "proof",
-      "evidence": "tool_paper.tex Appendix B, Theorem 1 (Bandwidth optimality)",
-      "proof_label": "thm:ring_optimal",
-      "code_artifact": null,
-      "reproducibility": null
+      "id": "C14",
+      "claim": "Counterexample-guided active learning loop verification rate is monotonically non-decreasing across iterations",
+      "evidence": {
+        "type": "proof",
+        "file": "tool_paper_revised.tex, Appendix B, Proposition 6",
+        "proof_sketch": "Each counterexample replaces ML prediction with analytically optimal algorithm. Z3 will verify the optimal algorithm (UNSAT), so V_i subset V_{i+1}. Convergence in at most N=|T|*|M| iterations. This is counterexample-guided active learning, not CEGAR.",
+        "experimental_validation": "Observed: 68.3% -> 98.3% -> 98.3% (monotone)"
+      }
     },
     {
-      "claim": "Contention affects only bandwidth term, not latency term",
-      "evidence_type": "proof",
-      "evidence": "tool_paper.tex Appendix B, Proposition 2 (Bandwidth-only contention)",
-      "proof_label": "prop:bw_only",
-      "code_artifact": "topos/experiments/contention_eval.py",
-      "reproducibility": "Validated by 28.1pp accuracy improvement of BW-only over full-cost penalty"
+      "id": "C15",
+      "claim": "Contention penalty applies only to bandwidth term, not latency",
+      "evidence": {
+        "type": "proof",
+        "file": "tool_paper_revised.tex, Appendix B, Proposition 3",
+        "experimental_validation": "Bandwidth-only contention: 60.1% accuracy vs both-terms contention: 32.0% (-28.1pp), validating decomposition"
+      }
     },
     {
-      "claim": "Trivial heuristic outperforms TOPOS+ on dragonfly (44.0% vs 21.8%) and torus (47.4% vs 42.2%)",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/improved_experiments_results.json \u2014 per_category_table",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/improved_experiments.py",
-      "reproducibility": "cd topos && python3 experiments/improved_experiments.py"
+      "id": "C16",
+      "claim": "Feature pruning removes 11-19 noise features per family",
+      "evidence": {
+        "type": "experimental",
+        "file": "depth_improvement_plan.json (fix-generalization-gap results)",
+        "result": "single_switch: 19, torus: 19, heterogeneous: 14, multi_node: 12, fat_tree: 12, dragonfly: 11"
+      }
     },
     {
-      "claim": "Cross-family confusion: fat-tree held out \u2192 54/54 tree\u2192DBT misclassifications",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/improved_experiments.py \u2014 LOFO confusion output",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/improved_experiments.py",
-      "reproducibility": "cd topos && python3 experiments/improved_experiments.py"
+      "id": "C17",
+      "claim": "All test-set errors concentrate in single-switch family at 1-8 nodes, with max regret 9.8%",
+      "evidence": {
+        "type": "experimental",
+        "file": "ablation_results.json (failure_analysis.by_family, failure_analysis.regret_analysis)",
+        "code": "experiments/comprehensive_ablation.py::run_failure_analysis",
+        "result": "2 errors out of 369 test instances, both in single_switch. Mean regret on errors: 5.5%, max regret: 9.8%. Zero regret for 99.5% of instances."
+      }
     },
     {
-      "claim": "201 topologies across 7 families: homogeneous, multi-node, asymmetric, torus, dragonfly, fat-tree, heterogeneous",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/loggp_results.json \u2014 category_counts",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/loggp_eval.py (generate_all_topologies function)",
-      "reproducibility": "cd topos && python3 experiments/loggp_eval.py"
+      "id": "C18",
+      "claim": "Conformal prediction sets are singletons for 100% of test instances at alpha=0.10",
+      "evidence": {
+        "type": "experimental",
+        "file": "ablation_results.json (failure_analysis.conformal_set_sizes)",
+        "code": "experiments/comprehensive_ablation.py::run_failure_analysis",
+        "result": "Mean set size 1.000, singleton fraction 1.0, empirical coverage 1.0. Indicates high classifier certainty on this dataset."
+      }
     },
     {
-      "claim": "Entire evaluation pipeline completes in under 15 seconds on a single CPU core",
-      "evidence_type": "methodology",
-      "evidence": "tool_paper.tex Appendix H (Reproducibility)",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/",
-      "reproducibility": "cd topos && time python3 experiments/improved_experiments.py"
+      "id": "C19",
+      "claim": "Dataset size ablation: 460 samples achieve 99.8% CV, diminishing returns beyond ~500 samples",
+      "evidence": {
+        "type": "experimental",
+        "file": "ablation_results.json (ablation_study.dataset_size_ablation)",
+        "result": "25% (460): 99.8%, 50% (921): 99.9%, 75% (1381): 100%, 100% (1842): 99.9%"
+      }
     },
     {
-      "claim": "API functions build_topology, run_des_simulation, alpha_beta_cost, loggp_cost exist and work",
-      "evidence_type": "artifact",
-      "evidence": "topos/api.py \u2014 public functions verified by examples/quickstart.py",
-      "proof_label": null,
-      "code_artifact": "topos/api.py",
-      "reproducibility": "cd topos && PYTHONPATH=. python3 examples/quickstart.py"
-    },
-    {
-      "claim": "recommend_algorithm('dgx-h100-2node', '4MB') returns 'dbt'",
-      "evidence_type": "artifact",
-      "evidence": "Verified by running: python3 -c \"from api import recommend_algorithm; print(recommend_algorithm('dgx-h100-2node', '4MB'))\"",
-      "proof_label": null,
-      "code_artifact": "topos/api.py",
-      "reproducibility": "cd topos && python3 -c \"from api import recommend_algorithm; print(recommend_algorithm('dgx-h100-2node', '4MB'))\""
-    },
-    {
-      "claim": "PyTorch DDP integration (topos_configure_nccl, topos_ddp) exists and auto-detects topology",
-      "evidence_type": "artifact",
-      "evidence": "topos/pytorch_integration.py \u2014 topos_configure_nccl(), topos_ddp()",
-      "proof_label": null,
-      "code_artifact": "topos/pytorch_integration.py",
-      "reproducibility": "cd topos && python3 -c \"from pytorch_integration import topos_configure_nccl\""
-    },
-    {
-      "claim": "TDA-enhanced LOFO macro-averaged accuracy is 60.8% (RF-31), up from 53.8% (RF-17) \u2014 a +7.0pp improvement",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/tda_experiments_results.json \u2014 lofo_macro_averages",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/tda_experiments.py",
-      "reproducibility": "cd topos && python3 experiments/tda_experiments.py"
-    },
-    {
-      "claim": "TDA features provide largest LOFO gains on torus (+38.5pp, 29.6% to 68.1%) and heterogeneous (+18.1pp, 41.7% to 59.7%) topologies",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/tda_experiments_results.json \u2014 lofo_combined",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/tda_experiments.py",
-      "reproducibility": "cd topos && python3 experiments/tda_experiments.py"
-    },
-    {
-      "claim": "TDA features account for 30.8% of combined GB-31 feature importance",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/tda_experiments_results.json \u2014 feature_importances_combined",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/tda_experiments.py",
-      "reproducibility": "cd topos && python3 experiments/tda_experiments.py"
-    },
-    {
-      "claim": "Majority-class baseline (always predict DBT) achieves 55.8% accuracy",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/tda_experiments_results.json \u2014 majority_class_accuracy",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/tda_experiments.py",
-      "reproducibility": "cd topos && python3 experiments/tda_experiments.py"
-    },
-    {
-      "claim": "TDA computation takes 0.03 seconds for all 201 topologies",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/tda_experiments_results.json \u2014 tda_computation_time",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/tda_experiments.py",
-      "reproducibility": "cd topos && python3 experiments/tda_experiments.py"
-    },
-    {
-      "claim": "Removing 1-dim persistence features causes the largest LOFO ablation drop (-6.1pp)",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiments/tda_experiments_results.json \u2014 tda_ablation_lofo",
-      "proof_label": null,
-      "code_artifact": "topos/experiments/tda_experiments.py",
-      "reproducibility": "cd topos && python3 experiments/tda_experiments.py"
-    },
-    {
-      "claim": "build_topology() accepts string names, ClusterTopology objects, and dict specifications",
-      "evidence_type": "artifact",
-      "evidence": "topos/api.py \u2014 build_topology() function",
-      "proof_label": null,
-      "code_artifact": "topos/api.py",
-      "reproducibility": "cd topos && python3 -c \"from api import build_topology; t = build_topology(\"dgx-h100-4node\"); print(t.num_nodes)\""
-    },
-    {
-      "claim": "dgx-a100-8node topology profile is available as a built-in",
-      "evidence_type": "artifact",
-      "evidence": "topos/api.py \u2014 BUILT_IN_TOPOLOGIES dict",
-      "proof_label": null,
-      "code_artifact": "topos/api.py",
-      "reproducibility": "cd topos && python3 -c \"from api import build_topology; t = build_topology(\"dgx-a100-8node\"); print(t.num_nodes)\""
-    },
-    {
-      "claim": "Stacked ensemble reduces LOFO gap from 33.4pp to -0.3pp (LOFO accuracy 89.6%)",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiment_results_improved.json \u2014 lofo.overall_accuracy = 0.896, cv.gap_pp = -0.3",
-      "code_artifact": "topos/compositional_model.py (FamilySelector stacked ensemble)",
-      "reproducibility": "cd topos && python3 -c \"...\" (see topos/grounding.json for full command)"
-    },
-    {
-      "claim": "CEGAR loop improves Z3 verification rate from 83.3% to 96.7% in 3 iterations",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiment_results_improved.json \u2014 cegar.final_verification_rate = 0.967",
-      "code_artifact": "topos/smt_analysis.py (cegar_refinement_loop)",
-      "reproducibility": "cd topos && python3 -c \"from smt_analysis import run_cegar_experiment; print(run_cegar_experiment())\""
-    },
-    {
-      "claim": "Dataset expanded to 1,794 instances across 167 topologies up to 128 nodes",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiment_results_improved.json \u2014 dataset.total_entries = 1794, max_nodes = 128",
-      "code_artifact": "topos/expanded_topology_dataset.py",
-      "reproducibility": "cd topos && python3 -c \"from expanded_topology_dataset import generate_expanded_dataset, dataset_summary; print(dataset_summary(generate_expanded_dataset()))\""
-    },
-    {
-      "claim": "Z3 solving averages 3.6ms vs RF inference at 0.0002ms (18,000x speedup)",
-      "evidence_type": "artifact",
-      "evidence": "topos/experiment_results_improved.json \u2014 cegar.z3_avg_time_ms = 3.62, cegar.rf_avg_time_ms = 0.0002",
-      "code_artifact": "topos/smt_analysis.py (cegar_refinement_loop)"
+      "id": "C20",
+      "claim": "Model ablation: RF 100%, GBM 99.9%, stacking 99.8%, LogReg 98.6% on all features",
+      "evidence": {
+        "type": "experimental",
+        "file": "ablation_results.json (ablation_study.model_ablation)",
+        "result": "RF achieves 100% CV, GBM 99.9%, stacking ensemble 99.8%, LogReg 98.6%"
+      }
     }
   ],
   "non_claims": [
-    "The paper does NOT claim hardware validation \u2014 all results use analytical models and simulation (abstract, Section 1 Non-claims)",
-    "The paper does NOT claim the DES is ground truth \u2014 uses term 'evaluation model' throughout (Section 4)",
-    "The paper does NOT claim the NCCL baselines represent actual NCCL hardware behavior \u2014 explicitly states these are modeled approximations (Section 1 Non-claims, Appendix G)",
-    "The paper does NOT claim the LogGP model is independently calibrated \u2014 states parameters are derived from \u03b1-\u03b2 via fixed multipliers (Section 6)",
-    "The paper does NOT claim learned selectors generalize across topology families \u2014 LOFO analysis explicitly shows they do not (Section 5)",
-    "The paper does NOT claim TOPOS replaces TACCL or SCCL \u2014 positions as complementary algorithm selection vs schedule synthesis (Section 7)",
-    "The paper does NOT claim the contention model is physically exact \u2014 describes it as a heuristic with hand-tuned parameters (Section 3)"
+    "All results are simulation-based; no hardware validation has been performed",
+    "The DES simulator is NOT calibrated against hardware",
+    "NCCL baselines are modeled approximations, not measurements of the actual NCCL library",
+    "Contention model parameters are heuristic, not formally verified",
+    "Compositional reasoning for cyclic topologies (torus) is NOT formally sound",
+    "The counterexample-guided active learning loop is NOT classical CEGAR: it operates on point predictions, not a finite abstraction lattice",
+    "Cost-model argmin achieves 100% accuracy because the ground-truth labels are derived from the same cost model — this is a limitation of evaluation on analytically generated data",
+    "TDA features contribute only 3.9% of feature importance; their value would be greater on hardware-measured ground truth where cost models are imperfect",
+    "Conformal prediction sets are all singletons at alpha=0.10, indicating the classification problem is 'easy' for the model on this dataset",
+    "TOPOS selects among 6 existing algorithms — it does not synthesize new collective schedules",
+    "The alpha-beta cost model is linear in M (QF_LRA), making Z3 verification trivially decidable",
+    "Soundness gap: verification is against the alpha-beta model but training labels come from the contention-aware model; models disagree on 17.6% of instances",
+    "Neuro-symbolic integration is sequential (symbolic -> neural -> symbolic) with no gradient-level feedback between components"
   ],
-  "references_verification": [
-    {
-      "cite_key": "nccl",
-      "verified": true,
-      "url": "https://developer.nvidia.com/nccl"
-    },
-    {
-      "cite_key": "taccl",
-      "verified": true,
-      "note": "Shah et al., USENIX NSDI 2023"
-    },
-    {
-      "cite_key": "forestcoll",
-      "verified": true,
-      "note": "Shah et al., USENIX NSDI 2025"
-    },
-    {
-      "cite_key": "msccl",
-      "verified": true,
-      "note": "Cowan et al., arXiv 2201.11840, 2022"
-    },
-    {
-      "cite_key": "sccl",
-      "verified": true,
-      "note": "Cai et al., ACM PPoPP 2021"
-    },
-    {
-      "cite_key": "blink",
-      "verified": true,
-      "note": "Wang et al., MLSys 2020"
-    },
-    {
-      "cite_key": "loggp",
-      "verified": true,
-      "note": "Alexandrov et al., JPDC 44(1):71-79, 1997"
-    },
-    {
-      "cite_key": "chan2007",
-      "verified": true,
-      "note": "Chan et al., CCPE 19(13):1749-1783, 2007"
-    },
-    {
-      "cite_key": "thakur2005optimization",
-      "verified": true,
-      "note": "Thakur et al., IJHPCA 19(1):49-66, 2005"
-    },
-    {
-      "cite_key": "patarasuk2009bandwidth",
-      "verified": true,
-      "note": "Patarasuk & Yuan, JPDC 69(2):117-124, 2009"
-    },
-    {
-      "cite_key": "rice1976",
-      "verified": true,
-      "note": "Rice, Advances in Computers 15:65-118, 1976"
-    },
-    {
-      "cite_key": "fujimoto2000",
-      "verified": true,
-      "note": "Fujimoto, Parallel and Distributed Simulation Systems, Wiley 2000"
-    },
-    {
-      "cite_key": "culler1993logp",
-      "verified": true,
-      "note": "Culler et al., PPoPP 1993"
-    },
-    {
-      "cite_key": "xu2008satzilla",
-      "verified": true,
-      "note": "Xu et al., JAIR 32:565-606, 2008"
-    },
-    {
-      "cite_key": "lindauer2015autofolio",
-      "verified": true,
-      "note": "Lindauer et al., JAIR 53:745-778, 2015"
-    },
-    {
-      "cite_key": "shoeybi2019megatron",
-      "verified": true,
-      "note": "Shoeybi et al., arXiv:1909.08053, 2019"
-    },
-    {
-      "cite_key": "narayanan2021pipedream",
-      "verified": true,
-      "note": "Narayanan et al., SC 2021"
-    },
-    {
-      "cite_key": "rajbhandari2020zero",
-      "verified": true,
-      "note": "Rajbhandari et al., SC 2020"
-    },
-    {
-      "cite_key": "li2020pytorch",
-      "verified": true,
-      "note": "Li et al., VLDB 2020"
-    },
-    {
-      "cite_key": "young1974first",
-      "verified": true,
-      "note": "Young, CACM 17(9):530-531, 1974"
-    }
-  ]
+  "reproducibility": {
+    "dataset": "python3 -c \"from expanded_topology_dataset import generate_expanded_dataset, dataset_summary; print(dataset_summary(generate_expanded_dataset()))\"",
+    "ablation": "cd topos && python3 experiments/comprehensive_ablation.py",
+    "verification": "python3 -c \"from smt_analysis import run_verification_experiment; import json; print(json.dumps(run_verification_experiment(), indent=2))\"",
+    "smt_rules": "python3 -c \"from smt_analysis import run_comprehensive_smt_analysis; import json; r = run_comprehensive_smt_analysis(); print(json.dumps(r['_summary'], indent=2))\"",
+    "tests": "python3 -m pytest tests/ -v",
+    "paper": "pdflatex tool_paper_revised.tex && pdflatex tool_paper_revised.tex"
+  }
 }

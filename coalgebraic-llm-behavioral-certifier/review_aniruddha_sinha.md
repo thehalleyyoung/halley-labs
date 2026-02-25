@@ -1,36 +1,54 @@
 # Review: CABER — Coalgebraic Behavioral Auditing of Foundation Models
 
-**Reviewer:** Aniruddha Sinha (Model Checking & AI Applicant)  
-**Expertise:** Probabilistic model checking, CEGAR abstraction refinement, PRISM/Storm tool development, temporal logic expressiveness, counterexample-guided verification  
-**Score:** 7/10  
-**Recommendation:** Weak Accept
+**Reviewer:** Aniruddha Sinha
+**Persona:** Model Checking and AI Applicant
+**Expertise:** Temporal logic, model checking, CEGAR, state-space exploration, abstraction refinement, bisimulation
 
 ---
 
 ## Summary
 
-CABER introduces CoalCEGAR and QCTL_F as coalgebraic generalizations of classical CEGAR and temporal logic for auditing LLMs treated as black-box transition systems. The model checking integration is technically interesting but faces fundamental questions about scalability to learned automata with uncertain transition probabilities.
+CABER applies coalgebraic model checking to LLM behavioral verification, combining active learning (PCL*), counterexample-guided abstraction refinement (CoalCEGAR), and a temporal logic (QCTL_F) for specification and verification. The theoretical framework is substantially more sophisticated than TOPOS's CEGAR, with genuine abstraction lattice structure and Galois connections. However, the system has been validated only on mock Markov chains, the Lean 4 formalization is absent, and the 38 property-based tests — while valuable — cannot substitute for machine-checked proofs of the core theorems.
 
 ## Strengths
 
-**1. CoalCEGAR adapts CEGAR to quantitative settings with genuine novelty.** Classical CEGAR operates over Boolean abstractions with exact counterexamples; CoalCEGAR must handle quantitative Galois connections where the abstraction-concretization pair introduces bounded metric distortion rather than exact preservation. The Kantorovich-Lipschitz degradation bounds during refinement are a clean theoretical contribution. The key insight—that refinement should minimize the Kantorovich distance between the abstract and concrete behavioral functors rather than eliminating spurious counterexamples—represents a meaningful departure from the classical framework that could influence future work in quantitative verification.
+1. **CoalCEGAR has genuine CEGAR structure.** The abstraction lattice over (k, n, ε) triples with refinement operations is a proper CEGAR instantiation. The monotonicity proof for safety properties (Proposition 1) and finite-lattice termination argument (Remark 4.8) are correct and non-trivial. This is significantly more rigorous than TOPOS's mislabeled "CEGAR."
 
-**2. Polynomial-time model checking for QCTL_F is well-established.** The paper correctly identifies that restricting QCTL_F to finite-state coalgebras with rational transition probabilities yields a model checking problem solvable in polynomial time via linear programming over the Bellman equations for the quantitative fixed-point semantics. The reduction to a sequence of LP instances, one per modal depth, is elegant and practically implementable. The connection to PRISM's value iteration engine is natural and well-described.
+2. **QCTL_F is a well-chosen logic.** The graded satisfaction degrees in [0,1] are appropriate for probabilistic behavioral verification, and the alternation-free fragment being polynomial-time decidable is practically relevant. The specification templates (RefusalPersistence, SycophancyResistance, etc.) are well-motivated by real LLM safety concerns.
 
-**3. Principled integration with existing probabilistic model checkers.** Rather than building a verification engine from scratch, CABER translates the extracted automaton into PRISM's input format and lifts the quantitative semantics to Storm's sparse engine for larger state spaces. This pragmatic choice leverages decades of engineering investment in these tools and makes the approach immediately usable.
+3. **Kantorovich bisimulation distance is the right metric.** Using Kantorovich lifting for quantitative behavioral distance computation is theoretically sound and provides a metric that is compatible with the probabilistic semantics. The convergence properties are well-established in the coalgebra literature.
 
-**4. Specification templates bridge formal methods and practitioner needs.** The mapping from human-readable behavioral contracts (Refusal Persistence, Paraphrase Invariance) to QCTL_F formulae is well-designed. The template instantiation mechanism, where practitioners fill in domain-specific predicates while the temporal structure is fixed, is a practical contribution that could see adoption independent of the rest of the framework.
+4. **End-to-end error composition (Theorem 3) is carefully stated.** The sequential conditioning argument in the proof correctly handles dependencies between pipeline stages. The five-term additive bound is tight enough to be useful while being loose enough to be provable.
+
+5. **38 property-based tests cover meaningful invariants.** Tests for Hoeffding bounds, bandwidth monotonicity, Galois distortion, and PAC decomposition provide computational evidence for the mathematical claims.
 
 ## Weaknesses
 
-**1. State-space explosion is not adequately addressed for learned automata.** Classical CEGAR succeeds because the abstract model starts small and grows incrementally. In CABER, the PCL* algorithm may produce automata with hundreds of states even for moderate alphabet sizes, and each CEGAR refinement step potentially doubles the state space by splitting abstract states. The paper does not provide any symbolic encoding (BDDs, MTBDDs) or compositional reasoning strategy to manage this growth. For the claimed 60-80K LoC implementation, the absence of any discussion of symbolic model checking integration with CUDD or Sylvan is a significant gap.
+1. **No Lean 4 formalization.** The core theorems (PCL* convergence, bandwidth-sample bound, error composition) are paper proofs. While 38 property-based tests provide evidence, they cannot verify the proofs themselves — they verify specific instances, not the general theorems. For a paper that claims formal guarantees, this is a significant gap.
 
-**2. QCTL_F expressiveness relative to PCTL*/rPATL is unclear.** The paper claims QCTL_F subsumes PCTL by instantiating the functor appropriately, but the proof sketch is incomplete—specifically, the encoding of nested probabilistic operators P_{≥p}[φ U ψ] in the functor-parameterized modality is not shown to preserve the quantitative semantics exactly. Without this, it is unclear whether QCTL_F is strictly more expressive, equally expressive, or incomparable with PCTL* for the specific class of coalgebras arising from LLM behavioral extraction. A formal expressiveness comparison, ideally with separation examples, is needed.
+2. **Mock LLM validation is insufficient for the claims.** The stochastic mock LLMs are Markov chains with 3-6 states — precisely the systems that L*-based algorithms are designed to learn. The 92-100% accuracy on these models says nothing about the approach's viability on real LLMs, which are not finite-state Markov systems.
 
-**3. Counterexample interpretation is fundamentally different from classical CEGAR.** In classical CEGAR, a spurious counterexample is a concrete path that witnesses the violation in the abstract model but not in the concrete one, and refinement eliminates it. In the quantitative setting, counterexamples are graded—a property may hold to degree 0.7 in the abstract model and 0.8 in the concrete one. The paper does not adequately explain how the refinement oracle decides when to refine versus when to accept the approximation, nor does it provide formal termination guarantees for the quantitative refinement loop.
+3. **Alphabet abstraction is acknowledged as non-functorial.** The embedding-based clustering that maps LLM outputs to a finite alphabet does not preserve the coalgebraic functor structure. This means the entire theoretical framework rests on an approximation at the input layer whose error is uncharacterized.
 
-**4. PRISM/Storm integration novelty is limited.** The translation from extracted automata to PRISM's DTMC/MDP format is straightforward—it amounts to emitting a transition matrix in PRISM's guarded-command syntax. While practical, this is engineering rather than research contribution. The paper would benefit from identifying specific limitations of existing model checkers that CABER's coalgebraic framing overcomes, rather than presenting standard tool integration as a contribution.
+4. **State explosion risk is unaddressed.** PCL* learns up to 40 states on 3-6 state mock models. Real LLMs with complex behavioral landscapes could require thousands of states, making model checking intractable. No analysis of state scaling or mitigation strategies is provided.
 
-## Verdict
+5. **QCTL_F specifications are limited to the alternation-free fragment.** While this restriction enables polynomial-time model checking, it excludes properties involving nested path quantifiers (e.g., "for every jailbreak attempt, there exists a defense that persists"). The expressive power of the supported fragment relative to actual safety properties is not discussed.
 
-The model checking contributions are technically sound but need sharper differentiation from existing quantitative verification frameworks. CoalCEGAR's theoretical novelty is real, but practical scalability and expressiveness claims need stronger evidence. A formal comparison with PCTL* and symbolic state-space management would elevate this work significantly.
+## Novelty Assessment
+
+The coalgebraic framing of LLM behavioral verification is genuinely novel. The PCL* algorithm, functor bandwidth concept, and the integration of CoalCEGAR with QCTL_F represent original contributions. However, the positioning relative to prior work (AALpy + PRISM) is not adequately justified — the claimed structural advantages (functor-parameterized abstraction, quantitative bisimulation) are theoretical since the implementation uses mock models where PDFA + PRISM would also succeed. **High novelty in framing, uncertain novelty in practice.**
+
+## Suggestions
+
+1. Prioritize Lean 4 formalization of at least Theorem 1 (PCL* convergence) to validate the core guarantee.
+2. Validate on at least one real LLM API to demonstrate practical viability.
+3. Characterize the error introduced by the non-functorial alphabet abstraction.
+4. Analyze state scaling and provide strategies for managing state explosion on complex models.
+5. Discuss the expressive limitations of the alternation-free fragment relative to practical safety properties.
+
+## Overall Assessment
+
+CABER is the most theoretically sophisticated project in this collection, with genuine contributions in coalgebraic LLM modeling, PCL*, and functor bandwidth. The CoalCEGAR instantiation is a proper CEGAR, unlike TOPOS's mislabeled version. However, the gap between theory and practice is wide: no Lean formalization, no real LLM validation, and an acknowledged non-functorial approximation at the input layer. The work is a strong theoretical contribution that needs substantial empirical validation to fulfill its promises.
+
+**Score:** 7/10
+**Confidence:** 4/5

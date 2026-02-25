@@ -1808,6 +1808,7 @@ impl Default for EmbeddingRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::wfa::automaton::Alphabet;
 
     // ── helpers ────────────────────────────────────────────────────────
 

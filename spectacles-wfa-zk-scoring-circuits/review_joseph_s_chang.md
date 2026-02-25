@@ -1,38 +1,56 @@
-# Review: Spectacles — Verified WFA-ZK Scoring Circuits for Contamination-Certified Evaluation
+# Review: Spectacles — Contamination-Certified Evaluation Certificates
 
-**Reviewer:** Joseph S. Chang (Automated Reasoning & Logic Expert)  
-**Expertise:** Interactive theorem proving, proof automation, decidability theory, arithmetic circuit complexity, proof-carrying code and certified compilation  
-**Score:** 7/10  
-**Recommendation:** Weak Accept
+**Reviewer:** Joseph S. Chang
+**Persona:** Automated Reasoning and Logic Expert
+**Expertise:** Formal verification, proof theory, decidability, compilation correctness, theorem proving methodology
 
 ---
 
 ## Summary
 
-Spectacles ambitiously combines mechanized proof (Lean 4), zero-knowledge proof systems (STARKs), and private set intersection into a unified evaluation certification framework. The formal verification strategy—particularly the must-prove/should-prove stratification and the decidability characterization of WFA-expressible metrics—demonstrates genuine theorem-proving sophistication, but critical proof obligations remain open, and the proof-carrying certificate design needs refinement.
+Spectacles compiles NLP scoring functions into STARK arithmetic circuits via WFA over semirings, aiming to produce machine-checkable proofs of score correctness. The WFA decomposition insight is theoretically interesting and the Lean 4 formalization of semiring axioms demonstrates commitment to rigor. However, the formalization covers only the foundational algebraic layer — the critical compilation correctness theorem (WFA semantics preserved by circuit translation) is unproved. The "sorry" count (12 routine + 5 novel) in the Lean development is concerning, particularly since the 5 novel instances include the most important proof obligations.
 
 ## Strengths
 
-**1. Must-Prove/Should-Prove Stratification is Methodologically Sound.** The explicit classification of proof obligations into must-prove (semiring homomorphism injectivity, WFA bisimulation soundness, STARK circuit-specification equivalence) and should-prove (Hopcroft minimization, NTT correctness, hash collision resistance) reflects mature verification engineering. This stratification acknowledges that not all components carry equal trust risk and allocates formal verification effort accordingly. The must-prove obligations are precisely the ones where a bug would silently invalidate certificates, while should-prove obligations affect performance or have well-studied cryptographic arguments.
+1. **WFA-to-circuit compilation as a verified compilation problem is well-framed.** Treating the metric computation as a formal language problem and the circuit generation as compilation creates a clean verification target. The compilation should preserve denotational semantics, and the target (arithmetic circuits) has a clear operational semantics.
 
-**2. Decidability Characterization of WFA-Expressible Metrics is Novel.** The paper provides the first explicit characterization of which standard NLP metrics are decidably equivalent when expressed as WFA over specific semirings. The key insight—that decidability follows from Schützenberger's theorem when the underlying semiring is commutative and Noetherian—is not new, but its application to BLEU, ROUGE, exact match, token F1, regex, and pass@k as a systematic classification is a genuine contribution to the intersection of formal language theory and NLP evaluation.
+2. **Two-tier compilation strategy handles algebraic complexity correctly.** The distinction between F_p-embeddable (homomorphism-based) and non-embeddable (gadget-assisted) semirings is the right decomposition. The Tier 2 soundness proof with the T·w_max < 2^63 precondition is careful and correct.
 
-**3. Lean 4 Formalization Strategy Targets the Right Kernel.** The 800 LoC pilot formalizes the core trust kernel: semiring axioms, WFA definitions, bisimulation relation, and the key lemma that bisimilar WFA produce equal weighted languages. This is the correct minimization of the trusted computing base—if this kernel is correct, the remaining system properties (circuit compilation, STARK soundness) can be argued from standard cryptographic assumptions without additional formalization. The choice of Lean 4 over Coq or Isabelle is justified by Lean's superior metaprogramming (needed for the `wfa_equiv` tactic) and growing Mathlib ecosystem.
+3. **Comparison gadget soundness and completeness proofs are non-trivial.** The soundness proof (gadget computes min(a,b) for values in [0, 2^63)) and completeness proof (unique satisfying witness) are proper formal results with careful precondition analysis. The edge case at 2^63-1 is explicitly handled.
 
-**4. STARK Arithmetic Circuit Soundness Argument is Precise.** The soundness argument for the STARK circuits correctly decomposes into (a) the algebraic constraint system faithfully encodes the WFA computation, (b) FRI proximity testing ensures low-degree polynomial commitment, and (c) Fiat-Shamir heuristic provides non-interactivity in the random oracle model. The Goldilocks field choice enables efficient NTT-based polynomial arithmetic, and the paper correctly notes that soundness error is dominated by the FRI query count rather than the field characteristic.
+4. **Sorry categorization shows self-awareness.** Distinguishing routine sorries (~12, targetable by omega/decide) from novel ones (~5, requiring new proof techniques) demonstrates understanding of the formalization challenges and enables targeted effort.
+
+5. **Cross-language validation adds independent checking.** Python implementations of semiring axioms providing an independent verification layer beyond Lean and Rust is a sound methodology.
 
 ## Weaknesses
 
-**1. Hopcroft Minimization is Critical, Not Optional.** The classification of Hopcroft minimization as "should-prove" is the paper's most significant verification gap. The `wfa_equiv` tactic works by minimizing both WFA and checking isomorphism of the minimal forms. If minimization produces non-canonical forms, the tactic is unsound—it could declare inequivalent WFA equivalent (false positive) or equivalent WFA inequivalent (false negative). Both failure modes are dangerous: false positives mean the certificate attests to a wrong score, while false negatives mean valid metrics are rejected. This should be must-prove, and the 800 LoC Lean formalization is incomplete without it.
+1. **The critical compilation correctness theorem is unproved.** The theorem "for all WFA W and inputs x, execute_wfa(W, x) = evaluate_circuit(compile(W), x)" is the linchpin of the verification chain. Without this theorem, the differential testing (800K pairs, 0 disagreements) provides strong empirical evidence but not a formal guarantee. This theorem is listed among the 5 novel sorry instances.
 
-**2. Proof-Carrying Certificate Design Lacks Formal Specification.** The paper describes certificates as "cryptographic proofs that simultaneously attest to score correctness and training-test data separation," but never formally specifies what a certificate contains, what properties a valid certificate satisfies, or what a verifier checks. A proof-carrying code approach (Necula 1997) requires an explicit verification condition generator and a proof checker; the paper has the prover (STARK) but not the verifier specification. Without this, certificate interoperability across different verifier implementations is undefined.
+2. **Lean formalization scope is narrower than the presentation suggests.** Semiring axioms are foundational but algebraically simple. The hard verification targets (Hopcroft minimization correctness, WFA-to-AIR compilation, STARK proof generation) are not formalized. The paper's "verified specification" framing is honest but readers may overestimate the formalization depth.
 
-**3. Decidability Characterization Excludes Important Metrics.** The WFA-expressibility characterization covers seven metrics, but notably excludes BERTScore (which involves neural embeddings), MAUVE (which involves distribution divergence), and other learned metrics increasingly used in LLM evaluation. The paper does not provide a negative result—a proof that these metrics are not WFA-expressible—which would be equally valuable. The characterization is thus an open-ended positive result without clear boundaries.
+3. **STARK proof generation correctness is taken on faith.** The STARK proving component computes proofs of arithmetic circuit satisfiability, but the STARK implementation itself is not verified. A bug in the STARK prover could produce invalid proofs that pass verification. The paper does not discuss STARK implementation trust.
 
-**4. STARK Circuit-Specification Equivalence is the Hardest Must-Prove.** The must-prove obligation that the STARK arithmetic circuit correctly encodes the WFA computation is stated but not addressed in the Lean formalization. This is the most complex proof obligation: it requires formalizing the circuit compiler's semantics, the WFA-to-constraint-system translation, and proving their equivalence. The paper acknowledges this but offers no strategy beyond "future work," which is unsatisfying given that this is classified as must-prove.
+4. **Proof size analysis is asymptotic, not concrete.** The O(λ·log²(T|Q|)) proof size bound is useful for scalability analysis but the constants matter for practical deployment. The 45-750 KiB estimates use a formula with specific constants, but these are not validated against a real STARK prover.
 
-**5. No Formal Connection Between Lean Proofs and STARK Verification.** The Lean proofs establish properties of abstract WFA, and the STARK proofs establish properties of concrete arithmetic circuits, but there is no formal bridge connecting them. The certificate consumer must trust that the Lean-verified WFA specification corresponds to the STARK-verified circuit computation, but this correspondence is exactly the Lean-Rust semantic gap by another name. A proof-carrying certificate should bundle both the STARK proof and a Lean-checkable witness that the circuit implements the specification, but no such mechanism is proposed.
+5. **No proof-theoretic analysis of the verification certificate.** What exactly does the STARK proof prove? It proves that there exists a witness (execution trace) consistent with the circuit constraints. But are the circuit constraints sound? This requires the unproved compilation correctness theorem. The proof-theoretic chain is: circuit constraints ← compilation ← WFA semantics ← metric specification. Only the last link (WFA ← metric) has some Lean coverage.
 
-## Verdict
+6. **No formal treatment of the Goldilocks field.** The p = 2^64 - 2^32 + 1 field is used for arithmetic circuits, and two bugs were found and fixed. The field axioms should be Lean-verified (they are straightforward), and the fixed implementations should be proved correct against the axioms.
 
-The formal verification strategy shows genuine sophistication—the must-prove/should-prove stratification and decidability characterization are contributions to verification methodology. However, the critical gaps in Hopcroft minimization, circuit-specification equivalence, and the absence of a formal certificate specification mean the proof-carrying architecture is more aspirational than realized. Closing these gaps would yield a landmark contribution.
+## Novelty Assessment
+
+The WFA decomposition is a genuinely novel insight. The compilation pipeline from specification to circuit is an original contribution. The Lean formalization, while incomplete, represents a serious attempt at formal verification. **High novelty for the WFA approach, moderate novelty for the formalization methodology.**
+
+## Suggestions
+
+1. Prove the compilation correctness theorem — this should be the #1 priority for the Lean development.
+2. Lean-verify the Goldilocks field axioms and the fixed Montgomery/Lagrange implementations.
+3. Analyze the STARK implementation trust: use a verified STARK library or provide independent verification.
+4. Provide concrete proof size measurements from a real STARK prover, not just asymptotic estimates.
+5. State the proof-theoretic chain explicitly and mark which links are formally verified.
+
+## Overall Assessment
+
+Spectacles has the most intellectually interesting insight (NLP metrics as WFA over semirings) and the most ambitious verification goal (machine-checkable proofs of score correctness). The Lean formalization demonstrates commitment to rigor, and the sorry categorization shows self-awareness. However, the critical compilation correctness theorem is unproved, reducing the formal guarantee to semiring axioms. The STARK prover and protocol layer are unverified. With the compilation theorem and Goldilocks field formalization, this would be a significantly stronger contribution.
+
+**Score:** 7/10
+**Confidence:** 5/5

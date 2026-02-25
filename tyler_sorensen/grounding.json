@@ -106,7 +106,7 @@
       "claim": "642 meaningful differential tests (plus 3,000 trivial determinism checks), ALL passing (0 mismatches)",
       "section": "Section 4.4",
       "evidence_type": "artifact",
-      "evidence": "litmus_inf/paper_results_v4/differential_testing.json. 642 meaningful differential tests pass: monotonicity (450), fence soundness (60), custom model cross-validation (57/57), litmus round-trip (75). Plus 3,000 trivial determinism checks.",
+      "evidence": "litmus_inf/paper_results_v4/differential_testing.json. 642 meaningful: monotonicity (450), fence soundness (60), custom model (57), litmus round-trip (75). Plus 3,000 determinism checks.",
       "reproducible_command": "cd litmus_inf && python3 differential_testing.py"
     },
     {
@@ -238,6 +238,52 @@
       "evidence_type": "artifact",
       "evidence": "litmus_inf/paper_results_v4/false_negative_analysis.json. Updated from prior 13/21 analysis.",
       "reproducible_command": "cd litmus_inf && python3 false_negative_analysis.py"
+    },
+    {
+      "claim": "750/750 universal Z3 certificate coverage (100%), Wilson CI [99.5%, 100%]",
+      "section": "Abstract, Section 4.7, Appendix Q",
+      "evidence_type": "artifact",
+      "evidence": "litmus_inf/paper_results_v5/universal_certificates.json. 408 UNSAT safety certificates + 342 SAT unsafety certificates, 0 timeouts, 750/750 agreement.",
+      "reproducible_command": "cd litmus_inf && python3 run_phase_b_experiments.py"
+    },
+    {
+      "claim": "Severity classification: 228 data race, 44 security vulnerability, 70 benign (342 total unsafe pairs)",
+      "section": "Abstract, Section 4.7.1",
+      "evidence_type": "artifact",
+      "evidence": "litmus_inf/paper_results_v5/severity_classification.json. All 342 unsafe pairs classified with Z3-backed evidence. Per-architecture breakdown available.",
+      "reproducible_command": "cd litmus_inf && python3 severity_classification.py"
+    },
+    {
+      "claim": "DSL-to-.cat formal correspondence: 170/171 (99.4%) across TSO, ARM, RISC-V (Wilson CI [96.8%, 99.9%])",
+      "section": "Abstract, Section 4.7.2",
+      "evidence_type": "artifact",
+      "evidence": "litmus_inf/paper_results_v5/dsl_cat_correspondence.json. x86-TSO: 57/57 (100%), AArch64: 57/57 (100%), RISC-V: 56/57 (98.2%). Single mismatch: mp_fence_wr (asymmetric fence expressiveness gap).",
+      "reproducible_command": "cd litmus_inf && python3 dsl_cat_correspondence.py"
+    },
+    {
+      "claim": "DSL-to-.cat correspondence for x86-TSO (Proposition 5)",
+      "section": "Appendix R",
+      "evidence_type": "proof",
+      "evidence": "paper.tex Proposition 5. Formal proof sketch that DSL TSO definition and herd7 x86-TSO.cat accept identical executions for litmus tests. Empirically confirmed by 57/57 DSL agreement and 228/228 herd7 agreement."
+    },
+    {
+      "claim": "Disjoint-variable composition theorem (Theorem 6)",
+      "section": "Appendix S",
+      "evidence_type": "proof",
+      "evidence": "paper.tex Theorem 6. Patterns with disjoint variable sets compose safely. Proof by ghb graph decomposition."
+    },
+    {
+      "claim": "Shared-variable composition is unsafe in general (Proposition 7)",
+      "section": "Appendix S",
+      "evidence_type": "proof",
+      "evidence": "paper.tex Proposition 7. Proof by counterexample: two safe MP-fence patterns sharing variable y can create unsafe composition."
+    },
+    {
+      "claim": "GPU SMT encoding bug found and fixed during universal certificate extension",
+      "section": "Appendix Q",
+      "evidence_type": "artifact",
+      "evidence": "Fixed in litmus_inf/smt_validation.py: removed incorrect dependency preservation from GPU SMT encoding. 6 lb_data disagreements resolved.",
+      "reproducible_command": "cd litmus_inf && python3 -c \"from smt_validation import cross_validate_gpu_smt; r = cross_validate_gpu_smt(); print(r[\"agree\"], r[\"total_checks\"])\""
     }
   ],
   "artifact_manifest": {
@@ -259,7 +305,16 @@
       "litmus_inf/paper_results_v4/case_studies.json",
       "litmus_inf/paper_results_v4/false_negative_analysis.json",
       "litmus_inf/paper_results_v4/mismatch_analysis.json",
-      "litmus_inf/paper_results_v4/completeness_analysis.json"
+      "litmus_inf/paper_results_v4/completeness_analysis.json",
+      "litmus_inf/paper_results_v4/universal_certificates.json",
+      "litmus_inf/paper_results_v5/universal_certificates.json",
+      "litmus_inf/paper_results_v5/severity_classification.json",
+      "litmus_inf/paper_results_v5/dsl_cat_correspondence.json",
+      "litmus_inf/paper_results_v5/herd7_validation.json",
+      "litmus_inf/paper_results_v5/fence_proofs.json",
+      "litmus_inf/paper_results_v5/smt_cross_validation.json",
+      "litmus_inf/paper_results_v5/portability_matrix.json",
+      "litmus_inf/paper_results_v5/experiment_summary.json"
     ],
     "source_code": [
       "litmus_inf/portcheck.py (core engine with verify_test_generic for custom models)",
@@ -278,7 +333,10 @@
       "litmus_inf/api.py (636 lines: API layer)",
       "litmus_inf/ci_integration.py (CI/CD helpers: GitHub Actions, pre-commit hooks)",
       "litmus_inf/litmus_check.py (CLI entry point)",
-      "litmus_inf/dartagnan_comparison.py (Dartagnan feature comparison)"
+      "litmus_inf/dartagnan_comparison.py (Dartagnan feature comparison)",
+      "litmus_inf/severity_classification.py (~230 lines: severity classification of unsafe pairs)",
+      "litmus_inf/dsl_cat_correspondence.py (~350 lines: DSL-to-.cat formal correspondence for TSO/ARM/RISC-V)",
+      "litmus_inf/run_phase_b_experiments.py (~300 lines: Phase B comprehensive experiment runner)"
     ],
     "validation": [
       "litmus_inf/litmus_files/ (57 .litmus files for herd7)",
@@ -302,6 +360,9 @@
     "statistical_analysis": "cd litmus_inf && python3 statistical_analysis.py",
     "herd7_export": "cd litmus_inf && python3 herd7_export.py",
     "all_experiments": "cd litmus_inf && python3 run_paper_experiments.py",
+    "phase_b_experiments": "cd litmus_inf && python3 run_phase_b_experiments.py",
+    "severity_classification": "cd litmus_inf && python3 severity_classification.py",
+    "dsl_cat_correspondence": "cd litmus_inf && python3 dsl_cat_correspondence.py",
     "compile_paper": "cd litmus_inf && pdflatex paper.tex && pdflatex paper.tex"
   },
   "honesty_notes": {
@@ -322,6 +383,9 @@
     "gpu_smt_gap": "GPU scoped synchronization now has 108/108 SMT validation (18 GPU patterns \u00d7 6 models). All formal claims span both CPU and GPU models.",
     "unrecognized_patterns": "Tool emits UnrecognizedPatternWarning with coverage_confidence metric when code does not match known patterns. Prevents silent failure.",
     "theorem2_triviality": "Theorem 2 (Fence Menu Minimality) is trivially true by construction (argmin is minimum). Paper explicitly acknowledges this in a remark and discusses NP-hardness of whole-program version.",
-    "ci_cd": "CI/CD integration via litmus-check CLI and GitHub Actions workflow. Sub-ms speed makes this viable as pre-commit check."
+    "ci_cd": "CI/CD integration via litmus-check CLI and GitHub Actions workflow. Sub-ms speed makes this viable as pre-commit check.",
+    "universal_certificates": "750/750 Z3 certificate coverage. Both encodings developed by same authors. Internal consistency, not independent external validation. GPU SMT encoding bug (incorrect dependency preservation) found and fixed during this effort.",
+    "dsl_cat_correspondence": "Formal correspondence now validated across all three CPU models: x86-TSO (100%), AArch64 (100%), RISC-V (98.2%). 170/171 (99.4%) overall agreement. Single mismatch is mp_fence_wr on RISC-V due to DSL's inability to express asymmetric fence pred/succ sets — a known expressiveness gap, not a model error.",
+    "compositional_reasoning": "Disjoint-variable composition is a straightforward graph decomposition result. Shared-variable case is acknowledged as unsafe. General composition decidability discussion references standard complexity theory."
   }
 }

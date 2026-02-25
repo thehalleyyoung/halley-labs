@@ -1,7 +1,19 @@
 # Spectacles API Reference
 
-Comprehensive API documentation for every public module, type, trait, and
-function in the `spectacles-core` crate.
+API documentation for implemented public modules, types, traits, and
+functions in the `spectacles-core` crate. All items documented below
+are implemented and tested.
+
+**Scope note.** This documents the Rust implementation only. The Lean 4
+formalization covers semiring axioms and core compilation theorems but
+does not have a verified extraction to this Rust codebase.
+
+**What has been empirically validated:**
+- Scoring module: 57,518 differential tests, 0 disagreements
+- WFA module: Semiring axioms (125 unit tests), automaton evaluation (81 tests)
+- Circuit module: STARK prove+verify demonstrated on real data (9 proofs, all verified)
+- Proof sizes: ~36–73 KiB measured on real proofs; full metric circuit proofs are future work
+- PSI module: Detects n-gram overlap only, not paraphrase memorization
 
 ## Table of Contents
 

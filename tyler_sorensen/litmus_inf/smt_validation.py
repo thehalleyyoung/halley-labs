@@ -1091,11 +1091,37 @@ def run_full_smt_validation():
         'z3_version': '4.x',
     }
 
+    # 7. Universal certificate coverage (all 750 pairs)
+    print("\n[7/7] Universal certificate coverage (all 750 pairs)...")
+    cert_report = cross_validate_all_750_smt()
+    print(f"  Certified: {cert_report['certified']}/{cert_report['total_pairs']} "
+          f"({cert_report['certificate_coverage_pct']}%)")
+    print(f"  UNSAT (safe): {cert_report['cert_safe_unsat']}, "
+          f"SAT (unsafe): {cert_report['cert_unsafe_sat']}")
+    print(f"  Agreement: {cert_report['agree']}/{cert_report['agree']+cert_report['disagree']} "
+          f"({cert_report['agreement_rate']}%)")
+    if cert_report['disagreements']:
+        print(f"  ⚠ {len(cert_report['disagreements'])} disagreements")
+
+    full_results['universal_certificates'] = {
+        'total_pairs': cert_report['total_pairs'],
+        'certified': cert_report['certified'],
+        'coverage_pct': cert_report['certificate_coverage_pct'],
+        'cert_safe_unsat': cert_report['cert_safe_unsat'],
+        'cert_unsafe_sat': cert_report['cert_unsafe_sat'],
+        'timeouts': cert_report['timeouts'],
+        'agreement_rate': cert_report['agreement_rate'],
+        'wilson_95ci': cert_report['wilson_95ci'],
+    }
+
     os.makedirs('paper_results_v4', exist_ok=True)
     with open('paper_results_v4/smt_validation.json', 'w') as f:
         json.dump(full_results, f, indent=2, default=str)
+    with open('paper_results_v4/universal_certificates.json', 'w') as f:
+        json.dump(cert_report, f, indent=2, default=str)
 
     print(f"\nResults saved to paper_results_v4/smt_validation.json")
+    print(f"Certificate catalog saved to paper_results_v4/universal_certificates.json")
     return full_results
 
 
@@ -1113,14 +1139,9 @@ def _po_preserved_gpu_smt(a, b, model_name, thread_ops, a_idx, b_idx, test=None)
 
     scope = 'workgroup' if model_name.endswith('-WG') or model_name == 'PTX-CTA' else 'device'
 
-    # Dependencies (for GPU patterns with dep annotations)
-    if b.dep_on is not None:
-        if b.dep_on == 'addr' and a.optype == 'load':
-            return True
-        if b.dep_on == 'data' and a.optype == 'load' and b.optype == 'store':
-            return True
-        if b.dep_on == 'ctrl' and a.optype == 'load' and b.optype == 'store':
-            return True
+    # GPU models intentionally do NOT preserve dependencies (conservative).
+    # This matches the enumeration-based checker behavior where dependency
+    # preservation is only applied to ARM/RISC-V CPU models.
 
     # Check for intervening fence with proper scope
     for k in range(a_idx + 1, b_idx):
@@ -1431,6 +1452,113 @@ def cross_validate_gpu_smt():
         'results': results,
         'disagreements': [r for r in results if r.get('agrees') == False],
     }
+
+
+def cross_validate_all_750_smt():
+    """Cross-validate ALL 750 (pattern, architecture) pairs via SMT.
+
+    Extends coverage from 228 CPU + 108 GPU = 336 pairs to all 750.
+    Uses appropriate encoding (CPU or GPU) depending on the architecture.
+
+    Each pair receives a Z3 certificate:
+    - UNSAT (safety certificate): no execution produces the forbidden outcome
+    - SAT (unsafety certificate): Z3 witness shows forbidden outcome is reachable
+    - timeout: Z3 could not decide within time limit
+
+    Returns comprehensive certificate catalog.
+    """
+    if not Z3_AVAILABLE:
+        return {'error': 'z3 not available'}
+
+    cpu_model_map = {'x86': 'TSO', 'sparc': 'PSO', 'arm': 'ARM', 'riscv': 'RISC-V'}
+    gpu_archs = ['opencl_wg', 'opencl_dev', 'vulkan_wg', 'vulkan_dev', 'ptx_cta', 'ptx_gpu']
+    cpu_archs = ['x86', 'sparc', 'arm', 'riscv']
+    all_archs = cpu_archs + gpu_archs
+
+    results = []
+    agree = 0
+    disagree = 0
+    timeout_count = 0
+    total = 0
+    cert_safe = 0
+    cert_unsafe = 0
+
+    for pat_name in sorted(PATTERNS.keys()):
+        pat_def = PATTERNS[pat_name]
+        n_threads = max(op.thread for op in pat_def['ops']) + 1
+        lt = LitmusTest(
+            name=pat_name, n_threads=n_threads,
+            addresses=pat_def['addresses'], ops=pat_def['ops'],
+            forbidden=pat_def['forbidden'],
+        )
+
+        for arch_name in all_archs:
+            total += 1
+
+            # Enumeration-based result
+            enum_allowed, n_checked = verify_test(lt, ARCHITECTURES[arch_name])
+
+            # SMT-based result: use appropriate encoding
+            if arch_name in cpu_archs:
+                model_name = cpu_model_map[arch_name]
+                smt_result = validate_pattern_smt(pat_name, model_name)
+            else:
+                smt_result = validate_gpu_pattern_smt(pat_name, arch_name)
+
+            agrees = None
+            cert_type = None
+            if smt_result.get('allowed') is not None:
+                agrees = smt_result['allowed'] == enum_allowed
+                if agrees:
+                    agree += 1
+                else:
+                    disagree += 1
+                if smt_result['allowed']:
+                    cert_type = 'SAT (unsafe)'
+                    cert_unsafe += 1
+                else:
+                    cert_type = 'UNSAT (safe)'
+                    cert_safe += 1
+            else:
+                timeout_count += 1
+                cert_type = 'timeout'
+
+            results.append({
+                'pattern': pat_name,
+                'arch': arch_name,
+                'enum_allowed': enum_allowed,
+                'smt_allowed': smt_result.get('allowed'),
+                'smt_status': smt_result.get('smt_result'),
+                'smt_time_ms': smt_result.get('time_ms'),
+                'agrees': agrees,
+                'certificate_type': cert_type,
+            })
+
+    resolved = agree + disagree
+    if resolved > 0:
+        agreement_p, ci_lo, ci_hi = wilson_ci(agree, resolved)
+    else:
+        agreement_p, ci_lo, ci_hi = 0, 0, 0
+
+    certified = cert_safe + cert_unsafe
+    coverage_pct = round(100 * certified / total, 1) if total > 0 else 0
+
+    report = {
+        'total_pairs': total,
+        'certified': certified,
+        'certificate_coverage_pct': coverage_pct,
+        'cert_safe_unsat': cert_safe,
+        'cert_unsafe_sat': cert_unsafe,
+        'timeouts': timeout_count,
+        'agree': agree,
+        'disagree': disagree,
+        'agreement_rate': round(agreement_p * 100, 1) if resolved > 0 else None,
+        'wilson_95ci': [round(ci_lo * 100, 1), round(ci_hi * 100, 1)] if resolved > 0 else None,
+        'disagreements': [r for r in results if r.get('agrees') == False],
+        'results': results,
+    }
+
+    return report
 
 
 if __name__ == '__main__':

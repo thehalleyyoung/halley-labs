@@ -1,86 +1,144 @@
 {
+  "project": "CABER",
+  "reviews": [
+    {
+      "reviewer": "Yuan Cheng",
+      "persona": "probabilistic_modeling_researcher",
+      "summary": "The theoretical framework is impressive with genuine contributions in error composition and functor bandwidth, but the entire evaluation relies on stochastic mock LLMs (Markov chains) \u2014 precisely the ideal case for L*-style learning. PAC guarantees depend on assumptions (stationarity, independence) unlikely to hold for real LLMs.",
+      "strengths": [
+        "Rigorous end-to-end error composition (Theorem 3) with five explicitly composed error sources",
+        "Classifier robustness analysis with 2,000 Monte Carlo trials per error rate across 6 rates",
+        "Functor bandwidth as a meaningful complexity measure connected to metric entropy",
+        "Convergence theorem (Theorem 1) with explicit sample complexity bound"
+      ],
+      "weaknesses": [
+        "Mock LLMs are Markov chains \u2014 the ideal case for L*-style learning, providing no evidence of real-LLM viability",
+        "Independent sampling assumption violated in practice by temperature-dependent sampling and context dependencies",
+        "PAC parameters (\u03b5, \u03b4) are set without connection to deployment requirements or risk tolerance",
+        "Specification soundness degrades rapidly with model size: 98.3% (n\u2080\u226450) to 94.2% (n\u2080=200)",
+        "Query cost estimate ($200-$600) based on mock model complexity, not real LLM complexity"
+      ],
+      "score": 6,
+      "confidence": 4
+    },
+    {
+      "reviewer": "Aniruddha Sinha",
+      "persona": "model_checking_ai_applicant",
+      "summary": "CoalCEGAR has genuine CEGAR structure with abstraction lattice and Galois connections \u2014 significantly more rigorous than TOPOS's mislabeled version. QCTL_F is well-chosen for probabilistic behavioral verification. However, no Lean 4 formalization exists, validation is on mock models only, and the non-functorial alphabet abstraction breaks the coalgebraic foundation.",
+      "strengths": [
+        "CoalCEGAR has genuine CEGAR structure with abstraction lattice, monotonicity proof, and termination guarantee",
+        "QCTL_F with graded satisfaction degrees is appropriate for probabilistic behavioral verification",
+        "Kantorovich bisimulation distance is the canonically correct metric for quantitative behavioral comparison",
+        "End-to-end error composition (Theorem 3) with careful sequential conditioning argument",
+        "38 property-based tests covering meaningful mathematical invariants"
+      ],
+      "weaknesses": [
+        "No Lean 4 formalization \u2014 core theorems are paper proofs that property-based tests cannot verify",
+        "Mock LLM validation is insufficient \u2014 Markov chains with 3-6 states don't represent real LLM complexity",
+        "Alphabet abstraction is acknowledged as non-functorial, breaking the coalgebraic foundation",
+        "State explosion risk unaddressed \u2014 scaling from 40 states to real LLM behavioral complexity",
+        "QCTL_F limited to alternation-free fragment, excluding nested path quantifier properties"
+      ],
+      "score": 7,
+      "confidence": 4
+    },
+    {
+      "reviewer": "Lila Zhang",
+      "persona": "symbolic_reasoning_ai_expert",
+      "summary": "The coalgebraic framing is the most intellectually rigorous approach to LLM behavioral analysis reviewed, with elegant functor bandwidth and Kantorovich distance constructions. However, the theory-practice gap is enormous: non-functorial alphabet abstraction, no comparison to simpler PDFA+PRISM approaches, and no validation on non-Markovian systems.",
+      "strengths": [
+        "Coalgebraic semantics provides the right abstraction level for treating LLMs as state-based behavioral systems",
+        "Functor bandwidth via \u03b5-covering numbers is an elegant complexity measure connecting metric geometry and automata theory",
+        "QCTL_F with graded satisfaction naturally handles probabilistic behavioral verification",
+        "Kantorovich lifting is the canonical distance metric for the coalgebraic setting",
+        "Theoretical framework is internally consistent across Theorems 1-3"
+      ],
+      "weaknesses": [
+        "Theory-practice gap is enormous: 19-40 state automata from 3-6 state mock models, no real LLM validation",
+        "Non-functorial alphabet abstraction breaks the coalgebraic homomorphism theorems at the input layer",
+        "No comparison to simpler PDFA+PRISM pipeline on the same mock models to justify coalgebraic complexity",
+        "Specification templates not validated against actual documented LLM safety failures",
+        "Certificate format is not standardized for interoperability or third-party verification"
+      ],
+      "score": 7,
+      "confidence": 4
+    },
+    {
+      "reviewer": "Sara Roy",
+      "persona": "machine_learning_formal_verification",
+      "summary": "The ML-verification integration is deeper than typical systems, with purpose-built learning algorithms and properly composed error bounds. However, the complete absence of real-LLM validation is a critical gap. Deployment cost analysis is unrealistic, no comparison to existing evaluation frameworks, and the AALpy baseline has an unfair handicap.",
+      "strengths": [
+        "End-to-end error composition properly handles multi-stage ML+verification pipeline dependencies",
+        "Classifier robustness analysis is methodologically strong with 12,000 total Monte Carlo trials",
+        "PCL* is purpose-built for the coalgebraic verification pipeline, not a generic algorithm",
+        "Certificate generation provides tangible, timestamped, independently checkable output",
+        "~99K lines of code demonstrates serious implementation depth and commitment"
+      ],
+      "weaknesses": [
+        "Mock LLM evaluation invalidates all practical claims \u2014 Markov chains don't represent real LLM behavior",
+        "No real-LLM experiment, even a small one with GPT-2 or a fine-tuned model",
+        "Deployment cost estimate ($200-$600) unrealistic for real LLMs with more complex behavior",
+        "No comparison to HELM, CheckList, DecodingTrust, or other established evaluation frameworks",
+        "Specification templates assume known failure modes, with no mechanism for discovering unexpected behaviors",
+        "AALpy+PRISM baseline receives manually defined alphabet while CABER discovers its own \u2014 non-controlled comparison"
+      ],
+      "score": 6,
+      "confidence": 4
+    },
+    {
+      "reviewer": "Joseph S. Chang",
+      "persona": "automated_reasoning_and_logic_expert",
+      "summary": "QCTL_F model checking is technically competent but not novel \u2014 it is an acknowledged Pattinson-Schr\u00f6der instantiation. The absence of Lean 4 formalization is fundamental for a paper claiming formal guarantees. Property-based tests verify instances, not proofs, and cannot substitute for mechanized verification.",
+      "strengths": [
+        "QCTL_F is appropriate for probabilistic behavioral verification with graded satisfaction degrees",
+        "Fixed-point model checking follows correct Tarski-Knaster construction for the quantitative setting",
+        "Specification templates naturally formalize real LLM safety concerns as temporal formulas",
+        "End-to-end error composition is a genuine reasoning contribution with non-trivial proof",
+        "Property-based tests cover meaningful invariants (Hoeffding bounds, bandwidth monotonicity, PAC decomposition)"
+      ],
+      "weaknesses": [
+        "No Lean 4 formalization for core theorems \u2014 property-based tests verify instances, not proofs",
+        "QCTL_F is not novel \u2014 it is an acknowledged Pattinson-Schr\u00f6der instantiation",
+        "Witness generation is underspecified with no guarantees on witness quality",
+        "Fixed-point convergence on approximate automata not analyzed at the model-checking level",
+        "No model-checking-specific optimizations (BDD, partial order reduction, symmetry reduction)",
+        "38 property tests 'bridge a gap' that should not exist \u2014 they cannot substitute for Lean formalization"
+      ],
+      "score": 6,
+      "confidence": 5
+    }
+  ],
   "synthesis": {
-    "overall_assessment": "CABER presents a theoretically ambitious and largely well-executed coalgebraic framework for black-box LLM auditing. The core contributions—PCL*, QCTL_F, CoalCEGAR, and the behavioral functor architecture—are technically sound and represent genuine advances at the intersection of formal methods and AI evaluation. However, the framework's practical viability remains undemonstrated: the alphabet abstraction introduces a non-compositional foundation that partially undermines the categorical elegance, query costs are prohibitive for production deployment, and the Lean 4 formalization claim is not credible without scoping. The consensus across reviewers is that the theoretical core merits publication, but the empirical gap and several unvalidated assumptions prevent a strong acceptance.",
     "consensus_strengths": [
-      "PCL* extends Angluin's L* to stochastic oracles with rigorous PAC-style convergence guarantees, representing a genuine contribution to probabilistic automata learning theory that goes beyond prior work (ALERGIA, spectral methods).",
-      "The behavioral functor F_LLM provides principled compositionality: varying functor parameters (output granularity k, input depth n, tolerance ε) yields a lattice of behavioral models connected by coalgebra morphisms, enabling systematic multi-granularity auditing with no counterpart in existing evaluation frameworks.",
-      "QCTL_F's quantitative fixed-point semantics are well-founded (Knaster-Tarski on [0,1]^S), with polynomial-time model checking for the practically relevant fragment and clean integration with existing probabilistic model checkers (PRISM, Storm).",
-      "The black-box API-only assumption is practically appropriate for closed-source LLM auditing, and the specification templates (Refusal Persistence, Paraphrase Invariance) provide an accessible bridge between practitioner requirements and formal temporal properties.",
-      "CoalCEGAR's adaptation of CEGAR to quantitative settings via Kantorovich-Lipschitz degradation bounds is theoretically novel, providing a principled refinement framework where classical Boolean counterexample elimination is replaced by metric-based approximation quality improvement."
+      "The coalgebraic framing of LLM behavioral verification is genuinely novel and provides the most theoretically rigorous foundation for treating LLMs as verifiable systems",
+      "CoalCEGAR has genuine CEGAR structure (abstraction lattice, Galois connections, monotonicity, termination) \u2014 a proper formal methods contribution",
+      "End-to-end error composition (Theorem 3) with five explicitly composed error sources across pipeline stages is a principled framework for multi-stage ML+verification systems",
+      "Functor bandwidth provides an elegant, novel complexity measure connecting metric entropy to behavioral diversity, enabling sublinear query complexity",
+      "The ML-verification integration is deeper than typical approaches, with purpose-built learning algorithms specifically designed for the coalgebraic verification pipeline"
     ],
     "consensus_weaknesses": [
-      "The alphabet abstraction (two-phase clustering on embeddings) is non-functorial and introduces a pre-categorical discretization that undermines the formal guarantees: classifier errors are not propagated into the PAC analysis, clustering instability can cause non-convergence of CEGAR, and small sample perturbations produce incompatible alphabets.",
-      "Query complexity is prohibitive for practical deployment: the union bound across O(n²) state pairs yields per-test significance levels requiring ~10⁶ queries per equivalence check, translating to $500-$5,000 per audit at current API pricing, with no discussion of query-efficient strategies (active learning, caching, incremental updates).",
-      "The Lean 4 formalization claim is not credible without substantial scoping: formalizing the core theory would require 80,000-120,000 lines of Lean 4, including foundations not available in Mathlib (Kantorovich metrics, coalgebraic bisimilarity, PAC learning theory), representing a multi-year effort.",
-      "No empirical comparison with existing LLM evaluation frameworks (HELM, CheckList, DeepInspect) demonstrating that CABER detects behavioral issues missed by these tools or that temporal properties capture failure modes not expressible as static test cases.",
-      "Phase 0 experimental results validating the stationarity assumption, clustering stability, and end-to-end pipeline feasibility are conspicuously absent, making it impossible to assess whether the theoretical framework survives contact with real LLM APIs."
+      "The entire empirical validation is on stochastic mock LLMs (Markov chains with 3-6 states) \u2014 the ideal case for L*-style learning, providing no evidence of real-LLM viability",
+      "No Lean 4 formalization exists for core theorems \u2014 38 property-based tests provide instance-level evidence but cannot verify the proofs themselves",
+      "The non-functorial alphabet abstraction (embedding-based clustering) breaks the coalgebraic homomorphism theorems, undermining the theoretical guarantees at the input layer",
+      "State explosion risk is unaddressed \u2014 scaling from \u226440 states on 3-6 state mock models to real LLMs with thousands of effective behavioral states",
+      "No comparison to existing LLM evaluation frameworks (HELM, CheckList, DecodingTrust) or simpler alternatives (PDFA+PRISM) on shared tasks"
     ],
-    "divergent_opinions": [
-      "Zhang (categorical) views the functor-parameterized architecture as CABER's primary contribution and considers the alphabet abstraction's non-functoriality as theoretically fixable via presheaf constructions, while Roy (practical) considers the same abstraction layer as a fundamental fragility that undermines deployment reliability.",
-      "Cheng (statistical) focuses on tightening the PAC analysis through better concentration inequalities (Rademacher complexity, Bonferroni-Holm) and considers this achievable, while Chang (logic) questions whether the finite-state assumption underlying PCL* termination is even verifiable for LLMs.",
-      "Sinha (model checking) considers PRISM/Storm integration as standard engineering, while Roy (practical) views the formal certificate output as a genuine contribution for regulatory compliance contexts (EU AI Act, NIST AI RMF)—highlighting a theory-practice tension in evaluating the work's contribution."
+    "controversial_points": [
+      "Whether the coalgebraic framing provides practical advantages over simpler PDFA+PRISM: Lila Zhang and Aniruddha Sinha acknowledge theoretical elegance but question whether it produces empirically different outcomes on the same mock models. The answer requires real-LLM validation.",
+      "Significance of the non-functorial alphabet abstraction: Lila Zhang views it as fundamentally undermining the theoretical guarantees, while Sara Roy and Aniruddha Sinha treat it as a known approximation with potential mitigations via continuity analysis.",
+      "Whether 38 property-based tests are an adequate substitute for Lean formalization: Joseph Chang argues they are categorically insufficient, while Aniruddha Sinha considers them a reasonable bridge pending formalization. The question is whether empirical evidence of theorem instances constitutes sufficient verification.",
+      "The overall contribution level: Aniruddha Sinha and Lila Zhang score 7/10 for theoretical elegance, while Yuan Cheng and Sara Roy score 6/10 emphasizing the practical validation gap. The split reflects whether one values theoretical ambition or empirical grounding."
     ],
-    "credibility_assessment": "The theoretical claims are well-supported by proofs and established mathematical frameworks (coalgebraic semantics, PAC learning, optimal transport). The implementation claims (60-80K LoC Rust+Python) are plausible but unverified by reviewers. The practical viability claims are not supported by evidence: Phase 0 results are missing, no comparative evaluation exists, and the query cost analysis suggests significant deployment barriers. The Lean 4 formalization claim is assessed as infeasible by the logic expert.",
-    "practical_impact_assessment": "High potential impact if the query efficiency problem is solved and empirical validation demonstrates detection of real behavioral regressions. The specification template approach could see independent adoption for LLM contract testing. The coalgebraic framework provides a principled foundation for regulatory compliance tooling. However, current practical impact is limited by the absence of deployed results and the significant cost barrier to production use.",
-    "best_paper_award_path": "Would require: (1) empirical demonstration of detecting a real-world LLM behavioral regression missed by HELM/CheckList, (2) 10x query efficiency improvement via active learning or incremental methods, (3) scoped but completed Lean 4 formalization of PCL* convergence, (4) formal expressiveness comparison of QCTL_F with PCTL*. Currently too theoretical for best paper consideration at an applied venue, and too applied for best paper at a theory venue.",
-    "aggregate_score": 6.8,
-    "recommendation": "Weak Accept. The theoretical contributions are solid and the problem is important, but the gap between the mathematical framework and practical validation is too wide for a strong acceptance. The paper should be accepted with major revisions addressing query efficiency, empirical comparison with existing tools, and scoping the Lean 4 claim. The categorical compositionality and PCL* algorithm represent contributions that will influence future work regardless of the current empirical gaps."
-  },
-  "reviews": {
-    "yuan_cheng": {
-      "score": 7,
-      "key_points": [
-        "PAC-style query complexity Õ(β·n·log(1/δ)) for PCL* is a genuine theoretical contribution with correct Hoeffding-based confidence intervals for stochastic oracle queries.",
-        "Kantorovich (Wasserstein-1) metric choice is well-justified: respects embedding-induced metric structure, provides a genuine metric (not divergence), and enables LP-based computation for finite state spaces.",
-        "Union bound across O(n²) state pairs is overly conservative, yielding per-test significance levels ~10⁻⁶ requiring ~10⁶ queries per equivalence check; Rademacher complexity or Bonferroni-Holm step-down would substantially reduce overhead.",
-        "Classifier error from alphabet abstraction is not incorporated into PAC analysis—misclassification corrupts observed transition probabilities via convolution with confusion matrix, making (ε,δ) guarantee informal without noise-channel correction.",
-        "Stationarity assumption is questionable for production LLM APIs undergoing continuous fine-tuning and load balancing; sliding-window adaptation of convergence bounds is needed."
-      ],
-      "recommendation": "Weak Accept"
-    },
-    "aniruddha_sinha": {
-      "score": 7,
-      "key_points": [
-        "CoalCEGAR adapts CEGAR to quantitative settings with genuine novelty via Kantorovich-Lipschitz degradation bounds, replacing Boolean spurious counterexample elimination with metric-based refinement minimizing Kantorovich distance between abstract and concrete behavioral functors.",
-        "QCTL_F model checking reduces to a sequence of LP instances (one per modal depth) solvable in polynomial time, with natural integration to PRISM's value iteration and Storm's sparse engine.",
-        "State-space explosion is not addressed: no symbolic encoding (BDDs, MTBDDs) or compositional reasoning strategy is provided, and CEGAR refinement potentially doubles state space at each iteration.",
-        "QCTL_F expressiveness relative to PCTL*/rPATL is unclear—encoding of nested probabilistic operators P_{≥p}[φ U ψ] in functor-parameterized modality is not shown to preserve quantitative semantics exactly.",
-        "Quantitative counterexample interpretation lacks formal refinement termination guarantees: graded counterexamples (property holds to degree 0.7 vs 0.8) require a principled threshold for refinement decisions."
-      ],
-      "recommendation": "Weak Accept"
-    },
-    "lila_zhang": {
-      "score": 7,
-      "key_points": [
-        "Categorical compositionality via the behavioral functor is CABER's strongest differentiator: natural transformations between functor instantiations correspond to meaningful behavioral relationships (coarsening/refining), enabling a lattice of models connected by coalgebra morphisms.",
-        "Sub-distribution functor correctly handles partial observations (API failures, timeouts, OOD responses), avoiding the common error of assuming total transition functions in probabilistic modeling of LLM behavior.",
-        "Alphabet abstraction breaks functoriality at the system boundary: clustering depends on specific response samples, producing incompatible alphabets under small perturbations; a presheaf over a category of possible alphabets would restore compositionality.",
-        "QCTL_F should be positioned relative to Schröder's coalgebraic μ-calculus and Pattinson's predicate liftings—if it is an instance of existing coalgebraic modal logic frameworks, novelty is primarily in the application domain.",
-        "Compositionality is limited to single-model analysis; coalgebraic approach naturally supports multi-model reasoning via tensor products or comonadic composition (agent pipelines, RAG systems), but this direction is unexplored."
-      ],
-      "recommendation": "Weak Accept"
-    },
-    "sara_roy": {
-      "score": 6,
-      "key_points": [
-        "Query budget of 50,000-200,000 API calls per audit translates to $500-$5,000 at current GPT-4 pricing, making continuous monitoring prohibitively expensive compared to HELM (~40K examples total) and CheckList (hundreds of targeted tests).",
-        "Embedding clustering (all-MiniLM-L6-v2 + k-means) is fragile: cluster assignments are highly variable for k>10-12, and each CEGAR re-clustering invalidates previously extracted automata, potentially causing non-convergence.",
-        "Refusal classifier (fine-tuned RoBERTa, ~95% accuracy) introduces critical fragility for safety-critical auditing: 5% error rate with no per-category analysis, no adversarial robustness assessment, and no uncertainty propagation into (ε,δ) guarantees.",
-        "No head-to-head empirical comparison demonstrating CABER detects behavioral issues missed by HELM/CheckList or that temporal properties capture failure modes not expressible as static test cases.",
-        "Formal (ε,δ)-bisimilarity certificates are a genuine contribution for regulatory compliance (EU AI Act, NIST AI RMF), providing machine-readable auditable artifacts superior to narrative-form model cards."
-      ],
-      "recommendation": "Borderline"
-    },
-    "joseph_s_chang": {
-      "score": 7,
-      "key_points": [
-        "PCL* is a genuine theoretical contribution: integrating approximate equivalence queries via statistical hypothesis testing into L*'s observation table framework while maintaining closed-and-consistent invariants up to tolerance ε goes beyond prior probabilistic automata learning algorithms.",
-        "QCTL_F fixed-point semantics are well-founded via Knaster-Tarski on [0,1]^S, with monotonicity following from Kantorovich lifting of the transition functor ensuring unique fixed points and terminating computation.",
-        "Lean 4 formalization claim is not credible: estimated 80,000-120,000 LoC requiring formalization of Kantorovich metrics, coalgebraic bisimilarity, and PAC learning theory (none in Mathlib), representing a multi-year team effort.",
-        "PCL* termination depends on the unverifiable assumption that LLM behavior admits a finite-state quotient at chosen granularity; models implementing counting mechanisms could create unboundedly many distinguishable states.",
-        "Comparison with existing probabilistic automata learning algorithms (ALERGIA, MDI, Balle & Mohri spectral methods) is inadequate: formal complexity comparison would clarify whether coalgebraic framing provides concrete improvements or repackages known results."
-      ],
-      "recommendation": "Weak Accept"
-    }
+    "overall_assessment": "CABER is the most theoretically ambitious project reviewed, with genuine contributions in coalgebraic LLM modeling, functor bandwidth, CoalCEGAR, and end-to-end error composition. The theoretical framework is internally consistent and mathematically sophisticated. However, the gap between theory and validation is the widest of all projects: no Lean formalization, no real-LLM experiments, and an acknowledged non-functorial approximation at the input layer. The work reads as a strong theoretical proposal with proof-of-concept validation on toy models. The coalgebraic framing is novel and potentially impactful, but the promises of formal behavioral guarantees for real LLMs remain unvalidated.",
+    "recommended_improvements": [
+      "Validate on at least one real LLM API (even GPT-2 or a fine-tuned model) to demonstrate meaningful behavioral structure extraction from non-Markovian systems",
+      "Prioritize Lean 4 formalization of Theorem 1 (PCL* convergence) \u2014 this is the core guarantee and the most impactful proof target",
+      "Characterize the error introduced by the non-functorial alphabet abstraction, possibly via continuity analysis or Lipschitz bounds",
+      "Demonstrate a concrete scenario where the coalgebraic machinery detects a behavioral property that PDFA+PRISM misses",
+      "Analyze state scaling: how does PCL* perform as the true number of behavioral states grows from 6 to 100 to 1000?",
+      "Ground specification templates in documented real LLM safety incidents",
+      "Provide realistic deployment cost analysis accounting for API rate limits, re-auditing frequency, and real LLM behavioral complexity",
+      "Fix the AALpy+PRISM baseline by providing both systems with the same alphabet or neither with a manual one"
+    ]
   }
 }

@@ -1,36 +1,56 @@
 # Review: CABER — Coalgebraic Behavioral Auditing of Foundation Models
 
-**Reviewer:** Sara Roy (Machine Learning & Formal Verification)  
-**Expertise:** ML model testing, neural network verification, LLM evaluation benchmarks, deployment reliability, API-based model evaluation at scale  
-**Score:** 6/10  
-**Recommendation:** Borderline
+**Reviewer:** Sara Roy
+**Persona:** Machine Learning and Formal Verification
+**Expertise:** ML-verification integration, learning-based verification, experimental methodology, practical deployment considerations
 
 ---
 
 ## Summary
 
-CABER proposes a theoretically motivated framework for LLM behavioral auditing using coalgebraic automata extraction and temporal property verification. While the mathematical framework is impressive, the paper does not convincingly demonstrate practical advantages over existing LLM evaluation tools, and several deployment-critical assumptions remain unvalidated.
+CABER combines active machine learning (PCL*) with formal model checking (QCTL_F) to verify behavioral properties of LLMs. The ML component learns finite automata from query responses, while the verification component checks temporal specifications. The integration is deeper than typical ML+verification systems — the learning algorithm is specifically designed for the coalgebraic verification pipeline, and error bounds are composed end-to-end. However, the entire evaluation is on stochastic mock LLMs, and the practical deployment considerations (cost, latency, API constraints) are not adequately addressed.
 
 ## Strengths
 
-**1. Addresses a real gap in LLM auditing infrastructure.** Current evaluation frameworks (HELM, CheckList, DeepInspect) provide snapshot assessments—point-in-time accuracy on fixed benchmarks—but cannot detect behavioral regressions across API versions or verify temporal properties of multi-turn interactions. CABER's automaton-based approach enables continuous monitoring and regression detection, which is genuinely needed as providers silently update models behind stable API endpoints. The version stability specification template directly addresses a pain point reported by production LLM users.
+1. **End-to-end error composition is properly done.** Theorem 3 composes errors from five sources (learning, abstraction, classifier, model checking, drift) with explicit dependence on PAC parameters. This is the correct way to handle a multi-stage ML+verification pipeline.
 
-**2. Black-box assumption is practically appropriate.** Unlike white-box verification approaches (e.g., CROWN, α-β-CROWN for neural networks), CABER works entirely through the API interface, making it applicable to closed-source models like GPT-4, Claude, and Gemini. This is the correct operating assumption for the vast majority of LLM deployments, and the paper wisely avoids requiring access to model weights or activations.
+2. **Classifier robustness analysis is methodologically strong.** 2,000 Monte Carlo trials per error rate with 6 error rates provides good statistical coverage. The agreement between theoretical bound and simulation results validates the error model.
 
-**3. Formal certificates provide auditable artifacts.** The (ε,δ)-bisimilarity certificates are machine-readable, timestamped, and include the full specification of the behavioral functor and property checked. This is more rigorous than the narrative-form model cards currently used in practice and could serve as evidence in regulatory compliance contexts (EU AI Act, NIST AI RMF).
+3. **The learning component is purpose-built.** PCL* is not a generic learning algorithm applied to verification — it is specifically designed for the coalgebraic setting, with tolerance parameters and sample counts that connect directly to the verification guarantees.
 
-**4. Specification templates lower the barrier to entry.** The mapping from natural-language behavioral requirements to QCTL_F formulae via parameterized templates is well-designed for practitioner adoption. A safety engineer who cannot write temporal logic can still specify "the model should consistently refuse harmful requests across paraphrases" and obtain a formal verification result.
+4. **Certificate generation provides a tangible output.** The AuditCertificate with hash chain, PAC parameters, and verification results provides a concrete, timestamped deliverable that can be independently checked.
+
+5. **~99K lines of code demonstrates implementation depth.** The Rust workspace with separate crates for core, CLI, examples, and integration shows a well-structured implementation effort.
 
 ## Weaknesses
 
-**1. Query budget makes the approach impractical for production use.** The paper's own complexity analysis yields Õ(β·n·log(1/δ)) queries for automaton extraction, and the reported experiments (when Phase 0 results are provided) suggest 50,000-200,000 API calls per audit. At current GPT-4 pricing (~$0.03/1K input tokens, ~$0.06/1K output tokens), a single audit could cost $500-$5,000. For continuous monitoring, these costs are prohibitive. The paper does not discuss query-efficient strategies such as active learning prioritization, cached response reuse, or incremental automaton updating—all of which are essential for practical deployment. By contrast, HELM evaluates a model on ~40K examples total across all scenarios, and CheckList requires only hundreds of targeted tests.
+1. **Mock LLM evaluation invalidates all practical claims.** The four mock models (Markov chains with 3-6 states) bear no resemblance to real LLMs. Key differences: (a) real LLMs have context-dependent distributions over unbounded sequences, (b) real LLM behavior varies with prompt engineering, (c) real LLMs have non-stationary behavior across API updates. Success on Markov chains provides zero evidence of practical viability.
 
-**2. Embedding clustering fragility undermines reliability.** The alphabet abstraction uses all-MiniLM-L6-v2 embeddings clustered via k-means, but the paper does not validate that this clustering is stable across runs or robust to distribution shift in model outputs. In preliminary experiments I have conducted with similar clustering approaches, k-means on sentence embeddings produces highly variable cluster assignments when the number of clusters exceeds 10-12, particularly for LLM outputs that span diverse topics. The CEGAR refinement loop can adapt the clustering, but each refinement invalidates the previously extracted automaton, potentially leading to non-convergence in practice.
+2. **No real-LLM experiment, even a small one.** Even a single experiment with GPT-2 or a small fine-tuned model would provide some evidence that the approach extracts meaningful behavioral structure. The complete absence of real-LLM validation makes the claims entirely theoretical.
 
-**3. Refusal classifier dependency is a critical fragility.** Several specification templates (Refusal Persistence, Jailbreak Resistance) depend on a binary refusal classifier to map LLM responses to the abstract alphabet. The paper uses a fine-tuned RoBERTa classifier but reports only aggregate accuracy (~95%). For safety-critical auditing, the 5% error rate is concerning: a false negative (classifying a harmful response as a refusal) could lead CABER to certify a model as safe when it is not. The paper does not provide per-category error analysis, does not discuss adversarial robustness of the classifier itself, and does not propagate classifier uncertainty into the (ε,δ) guarantee.
+3. **Deployment cost analysis is unrealistic.** The $200-$600 estimate is based on mock model query counts (71K-94K). Real LLMs with more complex behavior would require far more queries. Additionally, the estimate doesn't account for: (a) API rate limits that extend wall-clock time, (b) prompt construction costs, (c) embedding model inference costs for alphabet abstraction, (d) re-auditing frequency.
 
-**4. No head-to-head comparison with existing evaluation frameworks.** The paper positions CABER as complementary to HELM and CheckList but does not provide any empirical comparison showing that CABER detects behavioral issues missed by these tools, or that its temporal properties capture meaningful failure modes not expressible as static test cases. Without such evidence, the added complexity of the coalgebraic framework is difficult to justify to practitioners who already have working evaluation pipelines.
+4. **No comparison to existing LLM evaluation frameworks.** There is no comparison against HELM, CheckList, DecodingTrust, or other established evaluation frameworks. The paper argues that CABER provides temporal properties that these frameworks cannot express, but this argument should be supported by showing a concrete property that matters in practice that existing frameworks miss.
 
-## Verdict
+5. **The specification templates assume known behavioral failure modes.** The six templates presuppose knowledge of what properties to check. In practice, unknown failure modes (emergent behaviors, capability overhangs) may be more dangerous than known ones. The framework provides no mechanism for discovering unexpected behavioral patterns.
 
-CABER's theoretical framework is sound, but the paper fails to make a convincing case for practical adoption. The query costs, classifier fragility, and absence of comparative evaluation against established tools are significant barriers. A focused empirical study demonstrating detection of real behavioral regressions missed by HELM/CheckList would substantially strengthen the practical motivation.
+6. **AALpy+PRISM baseline receives an unfair handicap.** The baseline comparison gives AALpy a manually defined alphabet while CABER discovers its own. This makes CABER's task harder but also makes the comparison non-controlled — any performance difference could be due to alphabet quality, not framework quality.
+
+## Novelty Assessment
+
+The ML-verification integration is deeper than typical approaches. The purpose-built learning algorithm with verification-aware error composition is genuinely novel. However, without real-LLM validation, the demonstrated novelty is theoretical. **High theoretical novelty, no practical novelty demonstrated.**
+
+## Suggestions
+
+1. Conduct at least one real-LLM experiment (even GPT-2) to bridge the theory-practice gap.
+2. Compare against HELM or CheckList on a shared task to contextualize the contribution.
+3. Provide a realistic deployment cost analysis including API rate limits, latency, and re-auditing frequency.
+4. Add a behavioral anomaly detection mode that discovers unexpected patterns rather than only checking specified properties.
+5. Fix the AALpy baseline by giving both systems the same alphabet or neither system a manual one.
+
+## Overall Assessment
+
+CABER has the best ML-verification integration of the projects reviewed, with purpose-built learning algorithms and properly composed error bounds. However, the complete absence of real-LLM validation is a critical gap. The mock model evaluation demonstrates that the implementation works on the ideal case but provides no evidence of practical viability. The work is a strong theoretical contribution with a significant validation gap.
+
+**Score:** 6/10
+**Confidence:** 4/5

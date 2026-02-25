@@ -1,38 +1,56 @@
-# Review: Spectacles — Verified WFA-ZK Scoring Circuits for Contamination-Certified Evaluation
+# Review: Spectacles — Contamination-Certified Evaluation Certificates
 
-**Reviewer:** Sara Roy (Machine Learning & Formal Verification)  
-**Expertise:** ML system deployment, formal verification of ML pipelines, software engineering for AI, large-scale system integration, benchmark platform design  
-**Score:** 7/10  
-**Recommendation:** Weak Accept
+**Reviewer:** Sara Roy
+**Persona:** Machine Learning and Formal Verification
+**Expertise:** ML evaluation methodology, benchmark contamination, verified computation, practical deployment of formal verification
 
 ---
 
 ## Summary
 
-Spectacles addresses a genuine and growing need—trustworthy, contamination-aware evaluation of language models—with an ambitious architecture spanning formal verification, zero-knowledge proofs, and private set intersection. While the conceptual contribution is strong, significant practical adoption barriers related to engineering scale, ecosystem integration, and the Lean-Rust semantic gap temper my assessment.
+Spectacles addresses a real and important problem: trustworthy ML benchmark evaluation with contamination detection. The approach of compiling scoring functions to verifiable circuits is sound in principle, and the triple-implementation methodology provides strong empirical evidence of correctness. However, the system's practical utility is limited by the weakness of the contamination detection (n-gram overlap only), the partial formal verification (Lean proofs cover semiring axioms but not the compilation pipeline), and the absence of end-to-end benchmarking on real datasets at scale.
 
 ## Strengths
 
-**1. Addresses a Real and Urgent Problem.** Benchmark contamination is arguably the most pressing credibility crisis in LLM evaluation today. Spectacles is the first system to propose cryptographic contamination certificates that are both verifiable and privacy-preserving. Unlike statistical contamination detection (e.g., min-k% prob, perplexity-based methods), which are inherently heuristic and gameable, the PSI-based approach provides a hard guarantee: the evaluator cannot have seen more than τ fraction of the test set without the certificate revealing this. This is a qualitative improvement over the status quo.
+1. **Addresses a genuine need in ML evaluation.** Benchmark contamination is a real and growing problem. A system that can certify both score correctness and data separation fills an important gap in the ML evaluation ecosystem.
 
-**2. Specification-Level Correctness is the Right Abstraction.** Most ZK-based computation verification proves "this program executed correctly on these inputs," but Spectacles proves "this score equals the mathematical definition of the metric." This distinction matters: a buggy BLEU implementation can execute correctly (in the ZK sense) while producing wrong scores. By compiling from mathematical specifications via WFA, Spectacles shifts the trusted computing base from implementation to specification, which is a meaningful security improvement.
+2. **Triple-implementation methodology is rigorous.** Three independent implementations of each metric, cross-validated on 100K random pairs, is a strong empirical verification methodology that exceeds standard practice.
 
-**3. Differential Testing Methodology is Pragmatic.** The 100K pair differential testing between the Rust implementation and reference Python implementations (SacreBLEU, HuggingFace evaluate) is the right pragmatic validation strategy for a system where full formal verification is infeasible. The choice of reference implementations is well-motivated: SacreBLEU is the community standard for BLEU, and HuggingFace evaluate covers the remaining six metrics. Testing across edge cases (empty strings, single-token outputs, maximum-length inputs) shows engineering maturity.
+3. **Mathematical bugs discovered demonstrate value.** Finding and fixing the Montgomery inverse constant error and Lagrange interpolation bug shows that the verification methodology catches real errors that standard testing might miss.
 
-**4. Laptop-CPU Feasibility Lowers Adoption Barriers.** The explicit design goal of running on commodity hardware (laptop CPUs with AES-NI) rather than requiring GPU clusters or specialized FPGA setups dramatically lowers the adoption barrier. The use of BLAKE3 for hashing (which is SIMD-optimized) and AES-NI for OPRF operations means the cryptographic overhead is bounded by hardware-accelerated primitives, making integration into existing evaluation pipelines at least architecturally feasible.
+4. **Lean-Rust correspondence documentation is honest.** The three-layer empirical methodology (Lean proofs, proptest, differential testing) is clearly distinguished from verified extraction, and the comparison to CompCert/CakeML honestly acknowledges the gap.
+
+5. **Seven metrics supported with honest coverage reporting.** Supporting exact match, token F1, BLEU, ROUGE-N, ROUGE-L, regex, and pass@k, with per-metric WFA coverage percentages, provides a useful toolkit with transparent capabilities.
 
 ## Weaknesses
 
-**1. Engineering Scale Risk is Severe.** The projected 117–142K LoC across Lean 4, Rust, and TLA+ is comparable to a production database engine. The paper proposes a 12-month timeline, which implies roughly 10–12K LoC per month of production-quality, formally verified code. For comparison, the seL4 microkernel (10K LoC C + 200K LoC Isabelle) took approximately 20 person-years. Even accounting for Lean 4's superior ergonomics over Isabelle, the proposed timeline appears optimistic by a factor of 3–5×. No staffing plan or team composition is provided to justify the schedule.
+1. **Contamination detection is too weak for the "certified" framing.** N-gram PSI detects only literal overlap. The paper acknowledges that paraphrase memorization has TPR ≈ 0, but the title and abstract still use "contamination-certified." This framing will mislead practitioners who need actual contamination detection.
 
-**2. Lean-Rust Semantic Gap Undermines End-to-End Guarantees.** The 800 LoC Lean pilot formalizes metric specifications and WFA equivalence, but the production Rust implementation is connected only via differential testing. This means the end-to-end guarantee has a trust gap: the Lean proofs certify properties of abstract WFA, while the STARK circuit operates on a Rust-compiled concrete circuit. Without verified extraction (à la CertiCoq for Coq or code extraction in Isabelle/HOL), a subtle bug in the Rust WFA-to-circuit compiler could invalidate all formal guarantees while passing differential tests.
+2. **No real-dataset evaluation at scale.** The end-to-end tests use "benchmark-style data, not full datasets." Without evaluation on actual MMLU, SQuAD, or other standard benchmarks at full scale, the practical performance (proof generation time, memory usage, proof size) is unknown.
 
-**3. Ecosystem Coordination Requirements are Underestimated.** For Spectacles to achieve its stated goal, benchmark platforms (HELM, LM-Eval-Harness, OpenCompass) must integrate the certificate verification pipeline. This requires these platforms to (a) adopt the EvalSpec DSL for metric specification, (b) run the PSI protocol with model developers, and (c) verify STARK proofs. The paper assumes this coordination will happen but provides no analysis of the incentive structures, standardization requirements, or migration costs. In practice, ecosystem adoption is the hardest part of any verification infrastructure.
+3. **Lean verification covers only the easy parts.** Semiring axioms are algebraic identities that are straightforward to formalize. The hard parts — WFA compilation, STARK circuit generation, PSI protocol correctness — are not Lean-verified. The formalization creates a misleading impression of verification depth.
 
-**4. Semi-Honest Security Model Contradicts the Threat Scenario.** The threat model posits adversaries who actively inflate scores (A1) and substitute outputs (A2), but the PSI protocol assumes semi-honest behavior. A malicious evaluator could submit fabricated model outputs to the PSI protocol—outputs that were never actually generated by the model—and receive a valid contamination certificate for these fake outputs. The commit-then-reveal protocol (G3) partially addresses this, but only if the commitment scheme is binding against computationally bounded adversaries, which requires explicit security reduction not provided in the paper.
+4. **The STARK prover is simulated, not implemented.** Proof sizes and verification times are computed from analytical formulas, not from running an actual STARK prover. This means the "under 20ms verification" claim is an estimate, not a measurement.
 
-**5. No User Study or Benchmark Platform Integration Prototype.** The paper claims practical impact on LLM evaluation but provides no evidence of usability: no user study with benchmark maintainers, no prototype integration with any existing platform, no API design for certificate generation and verification. For a systems paper claiming practical relevance, the absence of any empirical evaluation of the human and organizational factors is a significant gap. Even a small pilot with one benchmark suite would substantially strengthen the practical contribution claim.
+5. **No cost-benefit analysis for deployment.** What is the computational overhead of certified evaluation vs. standard evaluation? If proof generation takes 100x longer than scoring, the system may be impractical for routine benchmark evaluation. Without benchmarking, this question is unanswered.
 
-## Verdict
+6. **Post-processing operations are a significant unverified gap.** The paper acknowledges that aggregation gadgets are tested but not formally verified. For metrics like BLEU where 35% of the computation is tested-only, the "verified scoring" claim overstates what is actually proved.
 
-Spectacles identifies the right problem and proposes a technically sophisticated solution, but the gap between the formal architecture and practical deployment is substantial. The engineering scale, ecosystem coordination, and Lean-Rust semantic gap are not merely implementation details—they are fundamental feasibility concerns that the paper must address more convincingly to merit a strong accept.
+## Novelty Assessment
+
+The WFA decomposition approach is novel and the combination with STARK proofs is an original contribution. However, the contamination detection using PSI is a straightforward application of existing cryptographic techniques. **High novelty for the verification pipeline, low novelty for contamination detection.**
+
+## Suggestions
+
+1. Evaluate on at least one full benchmark dataset (e.g., 1000 MMLU questions) with actual proof generation and timing.
+2. Implement the STARK prover and measure real proof sizes and verification times.
+3. Rename the contamination component to accurately reflect its capabilities (n-gram overlap detection, not general contamination detection).
+4. Provide a deployment cost-benefit analysis comparing certified vs. standard evaluation.
+5. Prioritize Lean verification of the WFA-to-circuit compilation over additional semiring proofs.
+
+## Overall Assessment
+
+Spectacles tackles an important problem with an elegant approach. The WFA decomposition is a genuine insight and the triple-implementation methodology is rigorous. However, the gap between the "certified evaluation" framing and the actual verification coverage is significant: the STARK prover is simulated, the Lean proofs cover only semiring axioms, and the contamination detection is limited to literal overlap. With real-scale evaluation, actual STARK implementation, and honest repositioning, this could be a strong practical contribution.
+
+**Score:** 7/10
+**Confidence:** 4/5

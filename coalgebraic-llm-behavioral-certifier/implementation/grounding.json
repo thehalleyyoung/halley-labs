@@ -13,6 +13,7 @@
       "claim": "PCL* convergence: d_TV(M_α, H) ≤ ε with probability ≥ 1-δ in Õ(β·n₀·log(1/δ)) queries",
       "evidence": [
         "Theorem 1 in tool_paper.tex with proof sketch in Appendix A.1",
+        "Causal coupling caveat: Remark 4.3 in tool_paper.tex addresses sequential conditioning vs naive union bound",
         "Regularity conditions explicitly stated: bounded outputs, local stationarity, independent sampling",
         "Property-based tests: pclstar_hoeffding_bound, pclstar_query_complexity_monotone in property_tests.rs",
         "Convergence bounds implementation: caber-core/src/learning/convergence.rs"
@@ -21,6 +22,10 @@
         "Bounded outputs (enforced by abstraction layer)",
         "Local stationarity (monitored via CUSUM drift detection)",
         "Independent sampling (approximated via session isolation)"
+      ],
+      "caveats": [
+        "Union bound over causally coupled errors yields conservative but sound guarantee (Remark 4.3)",
+        "Sequential conditioning analysis provided as tighter alternative"
       ],
       "type": "theoretical_with_caveats"
     },
@@ -32,10 +37,11 @@
       "type": "experimental_on_mock_models"
     },
     {
-      "claim": "Bisimulation distances track behavioral drift within 8% relative error",
+      "claim": "Bisimulation distances track behavioral drift within 9% relative error",
       "evidence": [
         "Table 5 in tool_paper.tex: relative error 3.1-8.9% across 8 configurations",
-        "Property-based tests: bisim_distance_reflexive, bisim_distance_symmetric, bisim_distance_bounded, differential_test_bisim_distance_known in property_tests.rs"
+        "Property-based tests: bisim_distance_reflexive, bisim_distance_symmetric, bisim_distance_bounded, differential_test_bisim_distance_known in property_tests.rs",
+        "Remark on ε-behavioral equivalence vs approximate bisimulation in §3.5"
       ],
       "type": "experimental_on_mock_models"
     },
@@ -43,7 +49,11 @@
       "claim": "Functor bandwidth grows sublinearly in alphabet size",
       "evidence": [
         "Table 3 in tool_paper.tex: β grows from 3.1 (n=10) to 14.2 (n=200) vs naive alphabet 500",
+        "Figure 4 in tool_paper.tex: pgfplots visualization of β vs n₀",
         "Property-based tests: functor_bandwidth_sublinear, functor_bandwidth_monotone in property_tests.rs"
+      ],
+      "caveats": [
+        "Estimating β itself is a hard problem (Remark 4.6); practical estimation uses greedy set-cover heuristic that yields upper bound"
       ],
       "type": "experimental_and_theoretical"
     },
@@ -51,6 +61,7 @@
       "claim": "CoalCEGAR monotonicity: safety properties preserved under abstraction refinement",
       "evidence": [
         "Proposition 1 in tool_paper.tex with proof sketch in Appendix A.3",
+        "Galois connection details in Appendix F",
         "Liveness caveat explicitly stated",
         "Property-based tests: coalcegar_safety_monotonicity, coalcegar_galois_distortion, coalcegar_refinement_reduces_distance in property_tests.rs",
         "Galois connection implementation: caber-core/src/abstraction/galois.rs"
@@ -61,18 +72,55 @@
       "claim": "Stochastic mock LLM behavioral surfaces admit tractable finite-state abstraction",
       "evidence": [
         "Phase 0 validation: 4 stochastic mock LLMs with 3-6 ground-truth states all learned with ≤40 states",
+        "Figure 2 in tool_paper.tex: prediction accuracy bar chart",
         "Runnable: python3 phase0_experiments.py",
         "Results: phase0_results.json"
       ],
-      "limitation": "Demonstrated on stochastic mock LLMs (Markov chains), not real LLM APIs. Mock models are designed to be realistic but cannot capture the full complexity of deployed models. Real LLM validation is the key open question.",
+      "limitation": "Demonstrated on stochastic mock LLMs (Markov chains), not real LLM APIs. Mock models are designed to be realistic but cannot capture the full complexity of deployed models.",
       "type": "experimental_with_limitation"
+    },
+    {
+      "claim": "Real LLM behavior admits tractable finite-state abstraction (gpt-4.1-nano)",
+      "evidence": [
+        "Real LLM experiment: gpt-4.1-nano via OpenAI API, 63 total queries",
+        "Extracted 3-state behavioral automaton (initial, compliant, refusal)",
+        "3 behavioral properties verified: refusal persistence (3/3), sycophancy resistance (3/3), jailbreak resistance (3/3)",
+        "Runnable: python3 phase_b_experiments.py (requires OPENAI_API_KEY)",
+        "Results: phase_b_results.json"
+      ],
+      "limitation": "gpt-4.1-nano is a small model with limited behavioral complexity (2 atoms). Only 3 trials per condition. Keyword-based classifier is coarse.",
+      "type": "experimental_proof_of_concept"
+    },
+    {
+      "claim": "CABER produces 5-10x more compact automata than PDFA+PRISM baseline with higher accuracy",
+      "evidence": [
+        "PDFA baseline comparison on 4 mock LLMs: CABER avg 30 states vs PDFA avg 293 states",
+        "CABER avg accuracy 90.1% vs PDFA avg 68.5% (21.6pp difference)",
+        "Table in tool_paper.tex §7.3",
+        "Runnable: python3 phase_b_experiments.py",
+        "Results: phase_b_results.json → pdfa_baseline_comparison"
+      ],
+      "type": "experimental"
+    },
+    {
+      "claim": "PCL* maintains ≥96% accuracy up to 100 ground-truth states with O(n^1.42) query scaling",
+      "evidence": [
+        "State scaling experiment: 9 configurations from 3 to 100 ground-truth states",
+        "All achieve ≥96.4% prediction accuracy",
+        "Log-linear regression yields exponent 1.42, consistent with theoretical O~(n^{3/2})",
+        "Runnable: python3 phase_b_experiments.py",
+        "Results: phase_b_results.json → state_scaling_analysis"
+      ],
+      "type": "experimental"
     },
     {
       "claim": "Pipeline maintains ≥99% verdict accuracy under 20% classifier error",
       "evidence": [
         "Monte Carlo simulation: 2,000 trials per error rate (classifier_robustness_analysis.py)",
         "Results: classifier_robustness_results.json",
+        "Figure 3 in tool_paper.tex: verdict accuracy vs classifier error rate",
         "Theoretical bound: ε_total ≤ ε_learn/(1-ρ) + ε_mc + ρ (Equation 1, proof in Appendix A.2)",
+        "Causal coupling note in Appendix A.2: bound valid for state-independent errors, uses max error rate for correlated errors",
         "Property-based tests: pac_total_error_decomposition, classifier_error_at_most_linear, sample_complexity_scaling in property_tests.rs"
       ],
       "type": "experimental_and_theoretical"
@@ -87,29 +135,118 @@
       "type": "tested"
     },
     {
-      "claim": "Union bound composition: total error ≤ Σ individual errors",
+      "claim": "QCTL_F alternation-free fragment is polynomial-time decidable",
       "evidence": [
-        "Property-based tests: union_bound_composition, holm_bonferroni_tighter_than_union in property_tests.rs",
-        "Paper discusses PAC error propagation: ε_total ≤ ε_learn + ε_mc + ε_class"
+        "Appendix C in tool_paper.tex: decidability analysis",
+        "All six specification templates fall within the alternation-free fragment",
+        "Fixed-point computation: caber-core/src/model_checker/fixpoint.rs"
       ],
-      "type": "tested"
+      "type": "theoretical"
+    },
+    {
+      "claim": "QCTL_F is an instantiation of the Pattinson-Schröder coalgebraic modal logic framework",
+      "evidence": [
+        "Explicitly stated in §5 and §8 of tool_paper.tex",
+        "Contribution is the integration with learned automata and specification template library, not logical novelty"
+      ],
+      "type": "positioning"
+    },
+    {
+      "claim": "Classifier error bound: ε_total ≤ ε_learn/(1-ρ) + ε_mc + ρ",
+      "evidence": [
+        "Equation 1 in tool_paper.tex",
+        "Proof in Appendix A.2 with causal coupling caveat",
+        "Sensitivity analysis data: classifier_robustness_results.json (Appendix D, Table B.1)",
+        "Property-based tests: pac_total_error_decomposition in property_tests.rs"
+      ],
+      "type": "theoretical_with_experimental_validation"
+    },
+    {
+      "claim": "Query cost: ~$200-$500 per audit at current API pricing",
+      "evidence": [
+        "Computed from Phase 0 query counts (71K-94K queries × ~100 tokens × $30-60/M tokens)",
+        "Discussed in tool_paper.tex Section 7 (Evaluation)"
+      ],
+      "type": "estimate"
+    },
+    {
+      "claim": "Sub-distribution Kantorovich bounds hold with same rates as full distributions",
+      "evidence": [
+        "Remark 4.5 in tool_paper.tex explains sub-distribution treatment",
+        "Missing mass transported to sink state at unit cost (Baldan et al. 2018)"
+      ],
+      "type": "theoretical"
+    },
+    {
+      "claim": "Cosine similarity converted to angular distance for metric axiom compliance",
+      "evidence": [
+        "Appendix H in tool_paper.tex: angular distance formula and metric verification"
+      ],
+      "type": "theoretical"
+    },
+    {
+      "claim": "AALpy+PRISM comparison is structurally different from CABER",
+      "evidence": [
+        "Comparison caveat explicitly stated in §7.1 of tool_paper.tex",
+        "Baseline provided with manually defined alphabet; CABER discovers its own"
+      ],
+      "type": "positioning"
     }
   ],
   "not_claimed": [
     "Lean 4 formalization of core theorems (acknowledged as future work, estimated 80-120K LoC; explicitly stated as not claimed in paper §9)",
-    "Real LLM API experiments (Phase 0 uses stochastic mock LLMs; real API validation identified as key open question in §8.5)",
-    "Production deployment (tool is research prototype; query cost limitations discussed in §7.5)",
+    "Frontier LLM validation (Phase B uses gpt-4.1-nano; GPT-4/Claude/Llama validation identified as next step in §9)",
+    "Production deployment (tool is research prototype; query cost limitations discussed in §8.5)",
     "Hyperproperties or fairness specifications (QCTL_F excludes these)",
     "Multi-agent compositional verification",
-    "Functorial alphabet abstraction (non-functoriality acknowledged as limitation in §8.5)"
+    "Functorial alphabet abstraction (non-functoriality acknowledged as limitation in §8.5)",
+    "Human studies or user evaluations",
+    "PyPI or GitHub deployment",
+    "Logical novelty of QCTL_F (explicitly positioned as Pattinson-Schröder instantiation)",
+    "Adversarial robustness of embedding model (acknowledged as open vulnerability in §8.5)",
+    "Human annotation or manual labeling"
   ],
   "honest_limitations": [
-    "Phase 0 validation uses stochastic mock LLMs (Markov chains), not real LLM APIs - the key open question is whether real LLM behavior admits tractable finite-state abstraction",
+    "Real LLM validation uses gpt-4.1-nano (a small model); frontier model validation (GPT-4, Claude, Llama) is future work",
+    "PDFA baseline comparison uses simplified ALERGIA + value iteration, not the full AALpy+PRISM pipeline",
+    "State scaling analysis caps at max_states parameter; very large models (>100 states) may need hierarchical learning",
     "Alphabet abstraction (embedding clustering) is non-functorial: clustering depends on samples, breaks compositionality. Mitigated by large sample sets and silhouette monitoring. Presheaf fix deferred to future work.",
     "Convergence theorem assumes local stationarity, which deployed LLMs may violate due to silent model updates. CUSUM drift monitoring detects gross violations.",
-    "Classifier errors are bounded (Equation 1) but not eliminated: at ρ=0.20, error bound degrades from 0.05 to ~0.27",
-    "Query cost ($200-$500 per audit) requires active learning and caching for production deployment",
+    "Classifier errors are bounded (Equation 1) but not eliminated: at ρ=0.20, error bound degrades from 0.05 to ~0.27.",
     "No formal verification (Lean 4 estimated at 80-120K LoC); 38 property-based tests bridge the gap computationally",
-    "Simplified bisimulation distance (Jaccard-based) in integration tests does not satisfy exact triangle inequality - full Kantorovich lifting in caber-core does"
-  ]
+    "QCTL_F is an instantiation of existing coalgebraic modal logic, not a novel logic. Contribution is integration with learned automata and specification templates.",
+    "Embedding model alignment with behavioral equivalence is unvalidated on adversarial inputs",
+    "ML-verification boundary is conditional: formal guarantees assume ML-constructed abstraction is correct",
+    "Functor bandwidth estimation is itself computationally hard; practical estimate is an upper bound via greedy heuristic"
+  ],
+  "paper_to_artifact_mapping": {
+    "Theorem 1 (PCL* Convergence)": "Proof sketch: tool_paper.tex Appendix A.1; Remark 4.3 (causal coupling); Implementation: caber-core/src/learning/convergence.rs; Tests: pclstar_hoeffding_bound, pclstar_query_complexity_monotone",
+    "Theorem 2 (Bandwidth-Sample Complexity)": "Full proof: tool_paper.tex §4.3; Connection to metric entropy (Kolmogorov-Tikhomirov); Empirical validation: Table 3; Implementation: caber-core/src/coalgebra/bandwidth.rs; Tests: functor_bandwidth_sublinear, functor_bandwidth_monotone",
+    "Theorem 3 (End-to-End Error Composition)": "Theorem: tool_paper.tex §7.2; Full proof: Appendix A.4; Decomposes 5 error sources; Numerical example: total ≤ 0.173; Consistent with empirical >92% accuracy",
+    "Remark 4.3 (Causal Coupling)": "Sequential conditioning argument addressing union bound critique; tool_paper.tex §4.1",
+    "Remark 4.5 (Sub-distributions)": "Sub-distribution Kantorovich treatment; tool_paper.tex §4.3",
+    "Remark 4.6 (Bandwidth Estimation)": "Practical estimation caveat; tool_paper.tex §4.3",
+    "Remark 4.8 (CoalCEGAR Termination)": "Finite lattice argument; 2-4 refinement steps in practice",
+    "Remark 5.1 (ε-Behavioral Equivalence)": "Connection to approximate bisimulation; tool_paper.tex §3.5",
+    "Equation 1 (Classifier Error)": "Proof: tool_paper.tex Appendix A.2 with causal coupling note; Validation: classifier_robustness_analysis.py → classifier_robustness_results.json; Tests: pac_total_error_decomposition",
+    "Proposition 1 (CoalCEGAR Monotonicity)": "Proof sketch: tool_paper.tex Appendix A.3; Galois connection details: Appendix F; Implementation: caber-core/src/abstraction/galois.rs; Tests: coalcegar_safety_monotonicity",
+    "Section 7.4 (PDFA+PRISM Separation)": "Three structural advantages argued: functor-parameterized abstraction, quantitative bisimulation, property-indexed complexity; AALpy+PRISM baseline comparison with caveats",
+    "Definition 1 (Behavioral Functor)": "Implementation: caber-core/src/coalgebra/functor.rs",
+    "Definition 2 (QCTL_F Syntax)": "Positioned as Pattinson-Schröder instantiation in §5; Implementation: caber-core/src/temporal/syntax.rs",
+    "Definition 3 (Functor Bandwidth)": "Formal definition via ε-covering numbers; Connection to metric entropy; Implementation: caber-core/src/coalgebra/bandwidth.rs; Tests: functor_bandwidth_sublinear, functor_bandwidth_monotone",
+    "Table 1 (Specification Templates)": "Implementation: caber-core/src/temporal/templates.rs",
+    "Table 2 (Phase 0 Results)": "Experiment: phase0_experiments.py → phase0_results.json",
+    "Table 3 (Functor Bandwidth)": "Property tests: functor_bandwidth_sublinear",
+    "Table 4 (Specification Soundness)": "Mock model experiments in tool_paper.tex; comparison caveat noted for AALpy+PRISM baseline",
+    "Table 5 (Bisimulation Distance)": "Tests: bisim_distance_reflexive, bisim_distance_symmetric, bisim_distance_bounded",
+    "Table 6 (Classifier Robustness)": "Experiment: classifier_robustness_analysis.py → classifier_robustness_results.json",
+    "Figure 1 (Architecture)": "Code organization matches: caber-core/ layers 1-6, caber-python/ layer 7",
+    "Figure 2 (Phase 0 Accuracy)": "Data from phase0_results.json",
+    "Figure 3 (Classifier Robustness)": "Data from classifier_robustness_results.json",
+    "Figure 4 (Functor Bandwidth)": "Data from mock model experiments",
+    "Algorithm 1 (PCL*)": "Implementation: caber-core/src/learning/pcl_star.rs",
+    "Algorithm 2 (CoalCEGAR)": "Implementation: caber-core/src/abstraction/cegar.rs",
+    "Appendix F (Galois Connection)": "Detailed abstraction/concretization maps and distortion bounds",
+    "Appendix G (Cosine to Angular)": "Angular distance metric for Kantorovich lifting"
+  }
 }

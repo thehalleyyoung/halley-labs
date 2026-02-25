@@ -87,7 +87,7 @@
       "claim": "Conditional soundness (Theorem 1)",
       "section": "Theorem 1",
       "evidence_type": "proof",
-      "evidence": "paper.tex Theorem 1 + Lemma 1 (RF×CO Decomposition). Proof by exhaustive enumeration. Machine-checked witness: 228/228 SMT agreement."
+      "evidence": "paper.tex Theorem 1 + Lemma 1 (RF\u00d7CO Decomposition). Proof by exhaustive enumeration. Machine-checked witness: 228/228 SMT agreement."
     },
     {
       "claim": "Fence menu minimality (Theorem 2)",
@@ -116,7 +116,7 @@
       "reproducible_command": "python3 smt_validation.py"
     },
     {
-      "claim": "Per-thread fence savings: ARM 50.9% ± 32.4%, RISC-V 66.5% ± 26.8%",
+      "claim": "Per-thread fence savings: ARM 50.9% \u00b1 32.4%, RISC-V 66.5% \u00b1 26.8%",
       "section": "Appendix (Fence Cost)",
       "evidence_type": "artifact",
       "evidence": "paper_results_v4/fence_optimization.json (55 entries), paper_results_v4/statistical_analysis.json",
@@ -130,7 +130,7 @@
       "reproducible_command": "python3 model_dsl.py"
     },
     {
-      "claim": "Model boundaries: TSO→PSO:6, PSO→ARM:7, ARM→RISC-V:1, GPU Dev→WG:5",
+      "claim": "Model boundaries: TSO\u2192PSO:6, PSO\u2192ARM:7, ARM\u2192RISC-V:1, GPU Dev\u2192WG:5",
       "section": "Appendix (Custom Model)",
       "evidence_type": "artifact",
       "evidence": "paper_results_v4/model_boundaries.json",
@@ -151,7 +151,7 @@
       "reproducible_command": "python3 differential_testing.py"
     },
     {
-      "claim": "mp_fence_wr is the sole ARM→RISC-V discriminator",
+      "claim": "mp_fence_wr is the sole ARM\u2192RISC-V discriminator",
       "section": "Appendix (Custom Model)",
       "evidence_type": "artifact",
       "evidence": "paper_results_v4/portability_matrix.json",
@@ -169,6 +169,25 @@
       "evidence_type": "artifact",
       "evidence": "paper_results_v4/expanded_benchmark.json: accuracy.per_category (16 categories)",
       "reproducible_command": "python3 benchmark_suite.py"
+    },
+    {
+      "claim": "750/750 universal Z3 certificate coverage (100%), Wilson CI [99.5%, 100%]",
+      "section": "Abstract, Section 4.7, Appendix Q",
+      "evidence_type": "artifact",
+      "evidence": "litmus_inf/paper_results_v4/universal_certificates.json. 408 UNSAT + 342 SAT certificates.",
+      "reproducible_command": "cd litmus_inf && python3 -c \"from smt_validation import cross_validate_all_750_smt; r = cross_validate_all_750_smt(); print(r[\"certified\"], r[\"total_pairs\"])\""
+    },
+    {
+      "claim": "DSL-to-.cat correspondence for x86-TSO (Proposition 5)",
+      "section": "Appendix R",
+      "evidence_type": "proof",
+      "evidence": "paper.tex Proposition 5. Proof sketch with 5-step correspondence argument."
+    },
+    {
+      "claim": "Disjoint-variable composition theorem (Theorem 6) and shared-variable unsafety (Proposition 7)",
+      "section": "Appendix S",
+      "evidence_type": "proof",
+      "evidence": "paper.tex Theorems 6-7. Composition theory with positive (disjoint) and negative (shared) results."
     }
   ],
   "artifact_manifest": {
@@ -189,7 +208,8 @@
       "paper_results_v4/false_negative_analysis.json",
       "paper_results_v4/mismatch_analysis.json",
       "paper_results_v4/completeness_analysis.json",
-      "paper_results_v4/case_studies.json"
+      "paper_results_v4/case_studies.json",
+      "litmus_inf/paper_results_v4/universal_certificates.json"
     ],
     "source_code": [
       "portcheck.py (core portability engine)",
@@ -229,7 +249,8 @@
     "benchmark_self_generated": "The 203-snippet benchmark was assembled by tool authors, not from an independent external corpus.",
     "false_negative_sample": "0/7 UNSAFE on self-generated benchmark; insufficient for safety-critical (10^-4) confidence levels.",
     "encoding_fidelity": "Model implementations manually derived from specs, not mechanically extracted from .cat files. 228/228 herd7 agreement provides empirical but not formal fidelity evidence.",
-    "gpu_approximation": "GPU model is intentionally conservative; vendor-specific subtleties (Vulkan availability/visibility, PTX .weak) not modeled."
+    "gpu_approximation": "GPU model is intentionally conservative; vendor-specific subtleties (Vulkan availability/visibility, PTX .weak) not modeled.",
+    "universal_certificates": "750/750 Z3 certificate coverage (internal consistency, not external). GPU encoding bug found and fixed during this effort."
   },
   "critique_responses": {
     "certificate_coverage_12.7%": {

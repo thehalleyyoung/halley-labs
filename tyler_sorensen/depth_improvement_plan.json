@@ -199,7 +199,29 @@
             "status": "completed"
         }
     ],
-    "expected_outcome": "All improvements complete and verified. Paper numbers match experiments: 96.6% exact-match, 98.0% top-3, 7 non-exact-matches (4 SAFE, 3 NEUTRAL, 0 UNSAFE, 100% effective safety rate), 642 meaningful + 3,000 determinism differential tests, 228/228 herd7, 228/228 CPU SMT, 108/108 GPU SMT, 55 UNSAT + 40 SAT fence proofs, 5 synthesized litmus tests. All stale numbers fixed. Compositional reasoning limitations, SMT scalability, and all reviewer critiques explicitly addressed.",
+    "expected_outcome": "All improvements complete and verified. Paper numbers match experiments: 96.6% exact-match, 98.0% top-3, 750/750 Z3 certificate coverage, 342 unsafe pairs severity-classified (228 data_race, 44 security_vulnerability, 70 benign), 170/171 DSL-to-.cat correspondence across TSO/ARM/RISC-V, 228/228 herd7 agreement, 55 UNSAT + 40 SAT fence proofs. All stale numbers fixed. Compositional reasoning limitations, SMT scalability, and all reviewer critiques explicitly addressed.",
+    "phase_b_improvements": {
+        "certificate_coverage": {
+            "status": "VERIFIED",
+            "description": "750/750 Z3 certificate coverage already at 100%. Re-validated with run_phase_b_experiments.py. 408 UNSAT (safe) + 342 SAT (unsafe), 0 timeouts, Wilson CI [99.5%, 100%]."
+        },
+        "severity_classification": {
+            "status": "DONE",
+            "description": "Created severity_classification.py. All 342 unsafe pairs classified: 228 data_race (66.7%), 44 security_vulnerability (12.9%), 70 benign (20.5%). Each backed by Z3 certificate. Paper updated with severity table and appendix."
+        },
+        "dsl_cat_correspondence": {
+            "status": "DONE",
+            "description": "Created dsl_cat_correspondence.py. Extended from TSO-only to all 3 CPU models: x86-TSO 57/57 (100%), AArch64 57/57 (100%), RISC-V 56/57 (98.2%). Total 170/171 (99.4%), Wilson CI [96.8%, 99.9%]. Single mismatch documented (mp_fence_wr: asymmetric fence expressiveness gap)."
+        },
+        "paper_update": {
+            "status": "DONE",
+            "description": "Paper updated: abstract reordered to lead with certificates, added severity classification section and table, added DSL-.cat correspondence section and table, updated discussion and conclusion. Compiles cleanly (26 pages)."
+        },
+        "documentation_update": {
+            "status": "DONE",
+            "description": "Updated grounding.json (3 new claims), README.md (both levels), API.md (both levels) with severity classification and DSL-.cat correspondence APIs."
+        }
+    },
     "new_improvements": {
         "cpp_atomics_fix": {
             "status": "DONE",

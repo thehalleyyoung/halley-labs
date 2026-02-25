@@ -1,38 +1,51 @@
-# Review: Spectacles — Verified WFA-ZK Scoring Circuits for Contamination-Certified Evaluation
+# Review: Spectacles — Contamination-Certified Evaluation Certificates
 
-**Reviewer:** Yuan Cheng (Probabilistic Modeling Researcher)  
-**Expertise:** Probabilistic reasoning, statistical testing, information-theoretic privacy, randomized algorithms in NLP evaluation, cryptographic soundness analysis  
-**Score:** 7/10  
-**Recommendation:** Weak Accept
+**Reviewer:** Yuan Cheng
+**Persona:** Probabilistic Modeling Researcher
+**Expertise:** Statistical rigor, calibration, hypothesis testing, contamination detection methodology, false positive/negative analysis
 
 ---
 
 ## Summary
 
-Spectacles proposes a compelling architecture coupling weighted finite automata over semirings with STARK-based zero-knowledge proofs to produce contamination-certified evaluation certificates. The statistical and probabilistic dimensions—PSI false positive/negative rates, pass@k sampling in ZK, BLEU smoothing specification equivalence, and STARK soundness—are partially addressed but leave meaningful gaps that temper my enthusiasm.
+Spectacles combines WFA-based scoring, STARK zero-knowledge proofs, and PSI-based contamination detection to produce certified benchmark evaluations. The differential testing methodology (800K pairs, 0 disagreements) is impressive, and the triple-implementation approach provides strong empirical confidence in scoring correctness. However, the contamination detection component conflates n-gram overlap with statistical contamination, and the paper's honest limitations section acknowledges that paraphrase memorization has TPR ≈ 0. The "certified" framing overstates what the certificate actually attests.
 
 ## Strengths
 
-**1. Principled Probabilistic Framing of Contamination Detection.** The PSI-based contamination guarantee (overlap < τ) is cast as a statistical hypothesis test with a well-defined null, which is far more rigorous than ad hoc n-gram deduplication. The trie-structure optimization achieving 50–100× communication reduction is a genuine contribution, and the OPRF construction preserves the statistical guarantees while hiding individual membership decisions. The connection to differential privacy literature is implicit but promising.
+1. **Triple implementation with differential testing is a gold standard for empirical correctness.** Implementing each metric three times (reference, WFA, circuit) and cross-validating on 100K random pairs per metric with 0 disagreements across 800K total pairs provides very strong evidence that the implementations agree. This is superior to unit testing alone.
 
-**2. Correct Semiring Decomposition for Counting Metrics.** The observation that BLEU n-gram counts, token-level precision/recall, and exact match all decompose over counting or Boolean semirings with injective homomorphisms into F_p is mathematically sound. The Tier 1 algebraic embedding preserves the monoidal structure needed for correct aggregation, meaning the STARK proof inherits specification-level correctness rather than merely attesting to program execution.
+2. **Honest WFA coverage decomposition.** Table 2 transparently reports the percentage of each metric that is WFA-proved vs. gadget-assisted vs. tested-only. BLEU at 60% WFA, 5% gadget, 35% tested-only is an honest admission that not everything is formally verified.
 
-**3. STARK Soundness Aligned with Evaluation Scale.** The Goldilocks field choice (p = 2^64 − 2^32 + 1) gives soundness error 2^{-64} per query, which over realistic evaluation corpus sizes (10^3–10^5 instances) keeps the union-bound failure probability negligible. The authors correctly note that FRI proximity gaps dominate the concrete security parameter, showing awareness of the gap between asymptotic and concrete soundness.
+3. **The contamination detection addresses a real problem.** N-gram overlap as a necessary-but-not-sufficient condition for contamination is correctly scoped, and the ROC analysis by attack type (paraphrase memorization → TPR ≈ 0) is commendably honest.
 
-**4. Explicit Treatment of pass@k Sampling Complexity.** The paper acknowledges that pass@k requires sampling k completions per problem and that the unbiased estimator (Chen et al., 2021) involves combinatorial terms that must be arithmetized. This is a non-trivial observation—naïve circuit encoding of binomial coefficients in F_p would blow up constraint counts—and the proposed lookup-table approach is pragmatic.
+4. **Mathematical bugs found and fixed.** Discovering and correcting the Montgomery inverse constant and Lagrange interpolation errors through property-based testing demonstrates the value of the verification methodology.
 
 ## Weaknesses
 
-**1. PSI False Positive Rate Under Approximate Matching is Uncharacterized.** The OPRF-based PSI assumes exact string equality, but real contamination involves paraphrasing, truncation, and reformatting. The paper gestures at fuzzy matching via Jaccard-based thresholds but provides no analysis of how approximate matching inflates the false positive rate or distorts the contamination bound τ. Without this, the statistical guarantee degrades to an exact-duplicate check, which the community already knows is insufficient.
+1. **N-gram PSI is a weak contamination detector.** The paper honestly acknowledges that paraphrase memorization, indirect contamination, and contamination-aware fine-tuning are undetectable by n-gram overlap. This means the contamination certificate attests only to literal overlap, not to statistical contamination in any meaningful sense. The "contamination-certified" framing in the title is therefore misleading — it should be "n-gram-overlap-certified."
 
-**2. BLEU Smoothing Variants Break Specification Equivalence.** The paper claims WFA equivalence for BLEU, but standard BLEU has at least four smoothing variants (add-ε, add-1, NIST geometric, exponential decay) that produce different scores on identical inputs. The WFA formalization appears to fix one variant without justifying which, and the decidable equivalence result applies only within that choice. Cross-variant equivalence is undecidable in general because smoothing introduces irrational weights outside any finite semiring embedding.
+2. **Threshold τ requires domain-specific calibration with no guidance.** The contamination threshold is described as needing calibration at the 99th percentile of clean-pair distribution, but no empirical guidance, recommended ranges, or calibration methodology is provided. Without this, users cannot meaningfully set τ.
 
-**3. Probabilistic Soundness Composition Across Protocol Phases is Missing.** The three guarantees (G1: STARK proof, G2: PSI contamination, G3: commit-then-reveal) each have independent soundness parameters, but the paper does not compose them. A certificate consumer needs a single confidence level, which requires analyzing whether the protocol phases are sequentially composable or whether adaptive adversary strategies can amplify failure probabilities across phases.
+3. **Proof sizes are estimated, not measured.** The 45-750 KiB proof sizes come from an analytical formula (constraints × 16 + wires × 32 + ...), not from actual STARK prover execution. End-to-end wall-clock timing on realistic corpora is acknowledged as future work.
 
-**4. pass@k Arithmetization Cost is Underestimated.** The lookup-table approach for binomial coefficients in the STARK circuit requires precomputing C(n, k) for all relevant n, and the table size grows as O(n_max · k_max). For pass@100 with 1000 problems, this is 10^5 entries in the Goldilocks field, each requiring a Plookup gate. The resulting constraint overhead may dominate the rest of the scoring circuit, but no concrete benchmarks are provided.
+4. **The per-metric WFA coverage varies enormously.** Exact match and regex are 100% WFA-proved, but ROUGE-L is only 65% WFA with 20% tested-only. The "verified scoring" claim is strong only for simple metrics — complex metrics have significant unverified components.
 
-**5. No Confidence Intervals on Differential Testing Results.** The 100K differential testing pairs are presented as a point estimate of correctness, but without confidence intervals or coverage analysis (e.g., partition testing over input equivalence classes), the statistical power of this validation is unclear. A Clopper-Pearson interval on 0/100K failures gives an upper bound of ~3×10^{-5} defect rate at 95% confidence, which the authors should state explicitly.
+5. **No statistical power analysis for the differential testing.** With 100K pairs per metric, the probability of missing a 10⁻⁴ disagreement rate is ~e⁻¹⁰ ≈ 4.5×10⁻⁵. This should be stated explicitly to contextualize what "0 disagreements" means.
 
-## Verdict
+## Novelty Assessment
 
-Spectacles makes a strong conceptual contribution by unifying WFA-based metric decomposition with zero-knowledge contamination certification, and the statistical foundations are mostly sound. However, the gaps in PSI approximate matching analysis, BLEU smoothing specification, and cross-phase soundness composition prevent me from giving a strong accept—addressing these would elevate the work significantly.
+The WFA decomposition of NLP metrics is a genuine contribution. The combination with STARK proofs and PSI contamination detection is novel in this application domain. However, the contamination detection component is weak enough to undermine the "contamination-certified" positioning. **Moderate to high novelty for the WFA+STARK pipeline, low novelty for contamination detection.**
+
+## Suggestions
+
+1. Rename from "contamination-certified" to "overlap-certified" or add prominent qualifiers about the scope of contamination detection.
+2. Provide empirical guidance for τ calibration with examples from actual benchmark datasets.
+3. Measure actual proof sizes and verification times from running the STARK prover.
+4. Report the statistical power of the differential testing (detection probability for specific disagreement rates).
+
+## Overall Assessment
+
+Spectacles makes a genuine contribution with the WFA decomposition of NLP metrics and the triple-implementation verification methodology. The differential testing provides strong empirical confidence. However, the contamination detection is limited to literal n-gram overlap, making the "contamination-certified" framing misleading. The verification depth varies significantly by metric, with complex metrics having substantial unverified components. With honest repositioning of the contamination claims, this is a solid contribution to verified evaluation.
+
+**Score:** 7/10
+**Confidence:** 4/5

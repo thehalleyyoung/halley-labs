@@ -1,38 +1,53 @@
-# Review: Spectacles — Verified WFA-ZK Scoring Circuits for Contamination-Certified Evaluation
+# Review: Spectacles — Contamination-Certified Evaluation Certificates
 
-**Reviewer:** Aniruddha Sinha (Model Checking & AI Applicant)  
-**Expertise:** Temporal logic model checking, automata-theoretic verification, TLA+ specification, counterexample-guided abstraction refinement (CEGAR), state-space exploration for protocol verification  
-**Score:** 7/10  
-**Recommendation:** Weak Accept
+**Reviewer:** Aniruddha Sinha
+**Persona:** Model Checking and AI Applicant
+**Expertise:** Protocol verification, state machine verification, formal methods for security protocols, model checking methodology
 
 ---
 
 ## Summary
 
-Spectacles presents a novel architecture connecting weighted finite automata equivalence with zero-knowledge proof systems to build verifiable evaluation certificates. From a model-checking perspective, the TLA+ specification of the commit-then-reveal protocol and the automata-theoretic foundations are sound in conception, but several verification gaps—particularly around Hopcroft minimization and state-space explosion in transducer composition—limit the formal assurance claims.
+Spectacles implements a verification pipeline from NLP metric specification to STARK proof generation, with a commit-then-execute protocol for contamination detection. The verification architecture is well-structured with clear separation of concerns (specification, automata, circuit, protocol, privacy, scoring). However, the protocol layer lacks formal verification — no TLA+ specification, no model-checked state machine, no security proof beyond informal arguments. The Lean 4 formalization covers only semiring axioms, not the compilation pipeline or protocol correctness.
 
 ## Strengths
 
-**1. TLA+ Specification of Commit-Then-Reveal is Well-Scoped.** The commit-then-reveal protocol (addressing threat A2: different outputs) is specified in TLA+ with explicit safety and liveness properties. The safety property—that a committed evaluation cannot be retroactively altered—is naturally expressible as an invariant, and the liveness property—that honest participants eventually receive certificates—avoids the common trap of vacuous liveness in Byzantine settings by restricting to semi-honest adversaries. The refinement mapping from the abstract specification to the BLAKE3-based implementation is a model-checking best practice.
+1. **The EvalSpec DSL with formal BNF, typing rules, and denotational semantics is well-designed.** The formal specification provides clear semantics for what each metric computes. The expressibility boundary table honestly marking geometric mean, corpus BLEU, and BERTScore as NOT WFA-expressible is commendable.
 
-**2. Schützenberger's Decidability Result is Correctly Applied.** The paper correctly invokes the 1961 decidability result for WFA equivalence over commutative semirings, and extends it to the specific semirings needed for NLP metrics. The decidability characterization is precise: Boolean and counting semirings are commutative and Noetherian, so minimization terminates; the tropical semiring requires the additional bit-decomposition gadget because min/max operations break the polynomial-time equivalence algorithm. This automata-theoretic precision is rare in applied ZK work.
+2. **Two-tier compilation is architecturally sound.** Separating F_p-embeddable semirings (direct homomorphism, Tier 1) from tropical semirings (comparison gadgets, Tier 2) is the right abstraction. The tier selection is principled and automated.
 
-**3. Coalgebraic Bisimulation Provides Modular Proof Structure.** The choice of coalgebraic bisimulation over classical language-equivalence proofs for the `wfa_equiv` tactic is well-motivated: bisimulation is compositional under parallel and sequential composition of automata, which matters when metric computations are built from composed WFA stages (tokenization → n-gram counting → aggregation). This compositionality would not hold for trace-equivalence-based proofs.
+3. **Property-based testing is thorough.** 37 proptest tests covering 8 core semiring axioms × 3+ types, with 256 random inputs each, provides good coverage. Cross-language validation with 22 Python tests adds an independent verification layer.
 
-**4. Threat Model Decomposition Maps Cleanly to Verification Obligations.** The A1→G1, A2→G3, A3→G2 mapping creates a clean separation of verification concerns. Each guarantee can be model-checked independently: G1 as a functional correctness property of the STARK circuit, G3 as a temporal property of the commit protocol, and G2 as a privacy property of the PSI protocol. This decomposition enables incremental verification, which is the right engineering approach for a system of this scale.
+4. **Comparison gadget soundness and completeness are proved.** The soundness proof (gadget correctly computes min(a,b)) and completeness proof (unique satisfying witness) in Appendix D are non-trivial contributions with proper precondition analysis (T·w_max < 2^63).
+
+5. **118K lines of Rust demonstrates serious implementation effort.** The six-layer architecture with per-layer integration tests shows a well-structured codebase.
 
 ## Weaknesses
 
-**1. Hopcroft Minimization Correctness is Deferred.** The `wfa_equiv` tactic depends on Hopcroft minimization to compute canonical forms, but this is classified as "should-prove" rather than "must-prove." In model-checking terms, this is equivalent to trusting the state-space reduction without verifying the bisimulation quotient—precisely the kind of assumption that leads to spurious counterexamples in CEGAR. The Lean formalization of coalgebraic bisimulation is incomplete without this component; the gap between "equivalent up to bisimulation" and "minimized automaton is canonical" is where bugs hide.
+1. **No TLA+ or Promela protocol specification.** The commit-then-execute protocol is described informally but not model-checked. Concurrency bugs, race conditions, and liveness violations cannot be ruled out without formal protocol verification. This is acknowledged in limitations but is a fundamental gap for a security-sensitive protocol.
 
-**2. State-Space Explosion in Transducer Composition is Unaddressed.** Composing WFA stages (e.g., tokenizer × n-gram counter × aggregator) produces a product automaton whose state space is multiplicative. For ROUGE-L, which involves longest common subsequence computation, the transducer state space is O(m × n) where m, n are sequence lengths. The paper does not analyze whether the resulting STARK circuit constraint count scales polynomially or whether intermediate state-space explosion makes certain metrics computationally infeasible in practice.
+2. **Lean formalization covers only semiring axioms, not the compilation pipeline.** The Lean proofs cover KleeneSemiring axioms and circuit soundness (partially), but not the WFA-to-AIR compilation, STARK proving, or PSI protocol. The paper's three-layer empirical methodology (Lean + proptest + differential) is a reasonable mitigation but does not provide machine-checked certainty for the most critical components.
 
-**3. TLA+ Model Covers Only Semi-Honest Adversaries.** The TLA+ specification assumes semi-honest behavior, but the threat model explicitly considers adversaries who "inflate scores" (A1) or "use different outputs" (A2)—these are malicious behaviors. The semi-honest assumption means the TLA+ model cannot capture the most interesting attacks. A CEGAR-style approach that refines the adversary model based on discovered attack traces would strengthen the verification, but is not discussed.
+3. **The PSI protocol assumes semi-honest adversaries.** No UC security, no VOPRF, and collusion is out of scope. In a benchmark certification setting, the model provider has strong incentives to cheat, and semi-honest security may be insufficient. The commit-then-execute protocol provides some defense but relies on binding commitments that are not formally verified.
 
-**4. No Explicit Fairness or Liveness Verification for PSI Protocol.** The PSI protocol for contamination detection involves multi-round communication between the evaluator and a data holder. The paper provides no TLA+ specification for this protocol, meaning liveness (the PSI eventually terminates with a correct result) and fairness (neither party can stall indefinitely) are unverified. Given that PSI is the mechanism for the contamination guarantee G2, this is a significant gap.
+4. **No end-to-end formal verification chain.** The pipeline from EvalSpec → WFA → AIR → STARK → Certificate has formal proofs at individual steps (semiring axioms, comparison gadget) but no end-to-end composition theorem. Errors at layer boundaries could invalidate downstream guarantees.
 
-**5. CEGAR-Style Refinement Could Address the Lean-Rust Gap.** The paper identifies the Lean-Rust semantic gap as a risk but proposes only differential testing. A CEGAR-style approach—abstracting the Rust implementation as a Lean model, checking properties, and refining based on counterexamples—would provide stronger guarantees than testing alone. The absence of this well-known technique from the verification strategy is a missed opportunity, especially given the 117–142K LoC implementation scale.
+5. **Hopcroft minimization is not formally verified.** The WFA equivalence check via Hopcroft minimization is critical for the metric equivalence theorem (Theorem 3), but the Lean proof is deferred. Brute-force testing on words up to length 6 does not cover all cases.
 
-## Verdict
+## Novelty Assessment
 
-Spectacles demonstrates strong automata-theoretic foundations and a well-structured threat model decomposition, but the deferred Hopcroft minimization proof and semi-honest TLA+ model undercut the formal assurance claims. Addressing these with CEGAR-style refinement and explicit protocol specifications would make the verification story compelling.
+The WFA-based approach to NLP metric verification is novel. The two-tier compilation strategy is a genuine architectural contribution. However, the STARK proving and PSI components use established techniques without methodological innovation. **Moderate to high novelty overall, concentrated in the WFA decomposition and compilation.**
+
+## Suggestions
+
+1. Create a TLA+ specification of the commit-then-execute protocol and model-check it for safety and liveness.
+2. Complete the Lean formalization for Hopcroft minimization, as it is critical for Theorem 3.
+3. Formalize the end-to-end compilation theorem as a single Lean theorem composing individual layer guarantees.
+4. Discuss the security model limitations more prominently and consider malicious-adversary extensions.
+
+## Overall Assessment
+
+Spectacles has the most ambitious verification goal of the projects reviewed — machine-checkable proofs of benchmark score correctness. The WFA decomposition and two-tier compilation are genuine contributions. However, the verification chain has significant gaps: no protocol verification, partial Lean formalization, and unverified Hopcroft minimization. The project would benefit enormously from TLA+ protocol verification and complete Lean formalization of the compilation pipeline.
+
+**Score:** 7/10
+**Confidence:** 4/5

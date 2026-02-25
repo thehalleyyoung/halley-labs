@@ -177,6 +177,38 @@ results = run_all_differential_tests()
 
 ---
 
+## Severity Classification
+
+### `classify_all_unsafe_pairs() → Dict`
+
+Classify all 342 unsafe (pattern, architecture) pairs by severity.
+
+```python
+from severity_classification import classify_all_unsafe_pairs
+
+report = classify_all_unsafe_pairs()
+print(report['severity_counts'])
+# {'data_race': 228, 'security_vulnerability': 44, 'benign': 70}
+```
+
+---
+
+## DSL-to-.cat Formal Correspondence
+
+### `validate_all_models() → Dict`
+
+Validate DSL model definitions against .cat reference specifications.
+
+```python
+from dsl_cat_correspondence import validate_all_models
+
+report = validate_all_models()
+print(f"Overall: {report['total_agree']}/{report['total_checks']} ({report['overall_agreement_rate']}%)")
+# 170/171 (99.4%)
+```
+
+---
+
 ## SMT-Based Formal Validation
 
 ### `cross_validate_smt() → Dict`

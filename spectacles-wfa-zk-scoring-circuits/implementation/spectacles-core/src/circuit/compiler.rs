@@ -787,9 +787,13 @@ pub trait Semiring: Clone + std::fmt::Debug {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CountingSemiring(pub u64);
 
+impl CountingSemiring {
+    pub fn new(v: u64) -> Self { CountingSemiring(v) }
+}
+
 impl Semiring for CountingSemiring {
-    fn zero() -> Self { CountingSemiring(0) }
-    fn one() -> Self { CountingSemiring(1) }
+    fn zero() -> Self { CountingSemiring::new(0) }
+    fn one() -> Self { CountingSemiring::new(1) }
     fn add(&self, other: &Self) -> Self { CountingSemiring(self.0.wrapping_add(other.0)) }
     fn mul(&self, other: &Self) -> Self { CountingSemiring(self.0.wrapping_mul(other.0)) }
 }
@@ -798,9 +802,13 @@ impl Semiring for CountingSemiring {
 #[derive(Clone, Debug, PartialEq)]
 pub struct BooleanSemiring(pub bool);
 
+impl BooleanSemiring {
+    pub fn new(v: bool) -> Self { BooleanSemiring(v) }
+}
+
 impl Semiring for BooleanSemiring {
-    fn zero() -> Self { BooleanSemiring(false) }
-    fn one() -> Self { BooleanSemiring(true) }
+    fn zero() -> Self { BooleanSemiring::new(false) }
+    fn one() -> Self { BooleanSemiring::new(true) }
     fn add(&self, other: &Self) -> Self { BooleanSemiring(self.0 || other.0) }
     fn mul(&self, other: &Self) -> Self { BooleanSemiring(self.0 && other.0) }
 }
@@ -809,22 +817,30 @@ impl Semiring for BooleanSemiring {
 #[derive(Clone, Debug, PartialEq)]
 pub struct TropicalSemiring(pub f64);
 
+impl TropicalSemiring {
+    pub fn new(v: f64) -> Self { TropicalSemiring(v) }
+}
+
 impl Semiring for TropicalSemiring {
-    fn zero() -> Self { TropicalSemiring(f64::INFINITY) }
-    fn one() -> Self { TropicalSemiring(0.0) }
-    fn add(&self, other: &Self) -> Self { TropicalSemiring(self.0.min(other.0)) }
-    fn mul(&self, other: &Self) -> Self { TropicalSemiring(self.0 + other.0) }
+    fn zero() -> Self { TropicalSemiring::new(f64::INFINITY) }
+    fn one() -> Self { TropicalSemiring::new(0.0) }
+    fn add(&self, other: &Self) -> Self { TropicalSemiring::new(self.0.min(other.0)) }
+    fn mul(&self, other: &Self) -> Self { TropicalSemiring::new(self.0 + other.0) }
 }
 
 /// Real semiring: (R, +, x, 0, 1)
 #[derive(Clone, Debug, PartialEq)]
 pub struct RealSemiring(pub f64);
 
+impl RealSemiring {
+    pub fn new(v: f64) -> Self { RealSemiring(v) }
+}
+
 impl Semiring for RealSemiring {
-    fn zero() -> Self { RealSemiring(0.0) }
-    fn one() -> Self { RealSemiring(1.0) }
-    fn add(&self, other: &Self) -> Self { RealSemiring(self.0 + other.0) }
-    fn mul(&self, other: &Self) -> Self { RealSemiring(self.0 * other.0) }
+    fn zero() -> Self { RealSemiring::new(0.0) }
+    fn one() -> Self { RealSemiring::new(1.0) }
+    fn add(&self, other: &Self) -> Self { RealSemiring::new(self.0 + other.0) }
+    fn mul(&self, other: &Self) -> Self { RealSemiring::new(self.0 * other.0) }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -933,14 +949,14 @@ impl SemiringEmbedding for BooleanSemiring {
 
 impl SemiringEmbedding for TropicalSemiring {
     fn embed(&self) -> GoldilocksField { tropical_to_field(self.0) }
-    fn extract(field_val: GoldilocksField) -> Self { TropicalSemiring(field_from_tropical(field_val)) }
+    fn extract(field_val: GoldilocksField) -> Self { TropicalSemiring::new(field_from_tropical(field_val)) }
     fn addition_is_field_addition() -> bool { false }
     fn multiplication_is_field_multiplication() -> bool { false }
 }
 
 impl SemiringEmbedding for RealSemiring {
     fn embed(&self) -> GoldilocksField { real_to_field(self.0) }
-    fn extract(field_val: GoldilocksField) -> Self { RealSemiring(field_from_real(field_val)) }
+    fn extract(field_val: GoldilocksField) -> Self { RealSemiring::new(field_from_real(field_val)) }
     fn addition_is_field_addition() -> bool { true }
     fn multiplication_is_field_multiplication() -> bool { false }
 }
@@ -2550,16 +2566,16 @@ fn is_power_of_two(n: usize) -> bool {
 /// Build a simple counting WFA that counts occurrences of a symbol.
 pub fn build_counting_wfa(symbol: u8, alphabet_size: usize) -> WFA<CountingSemiring> {
     let mut wfa = WFA::new(2, alphabet_size);
-    wfa.set_initial(0, CountingSemiring(1));
-    wfa.set_initial(1, CountingSemiring(0));
-    wfa.set_final(1, CountingSemiring(1));
+    wfa.set_initial(0, CountingSemiring::new(1));
+    wfa.set_initial(1, CountingSemiring::new(0));
+    wfa.set_final(1, CountingSemiring::new(1));
 
     for a in 0..alphabet_size {
-        wfa.add_transition(0, 0, a as u8, CountingSemiring(1));
+        wfa.add_transition(0, 0, a as u8, CountingSemiring::new(1));
     }
-    wfa.add_transition(0, 1, symbol, CountingSemiring(1));
+    wfa.add_transition(0, 1, symbol, CountingSemiring::new(1));
     for a in 0..alphabet_size {
-        wfa.add_transition(1, 1, a as u8, CountingSemiring(1));
+        wfa.add_transition(1, 1, a as u8, CountingSemiring::new(1));
     }
     wfa
 }
@@ -2567,20 +2583,20 @@ pub fn build_counting_wfa(symbol: u8, alphabet_size: usize) -> WFA<CountingSemir
 /// Build a simple boolean WFA that accepts strings containing a specific symbol.
 pub fn build_boolean_wfa(symbol: u8, alphabet_size: usize) -> WFA<BooleanSemiring> {
     let mut wfa = WFA::new(2, alphabet_size);
-    wfa.set_initial(0, BooleanSemiring(true));
-    wfa.set_initial(1, BooleanSemiring(false));
-    wfa.set_final(0, BooleanSemiring(false));
-    wfa.set_final(1, BooleanSemiring(true));
+    wfa.set_initial(0, BooleanSemiring::new(true));
+    wfa.set_initial(1, BooleanSemiring::new(false));
+    wfa.set_final(0, BooleanSemiring::new(false));
+    wfa.set_final(1, BooleanSemiring::new(true));
 
     for a in 0..alphabet_size {
         if a as u8 == symbol {
-            wfa.add_transition(0, 1, a as u8, BooleanSemiring(true));
+            wfa.add_transition(0, 1, a as u8, BooleanSemiring::new(true));
         } else {
-            wfa.add_transition(0, 0, a as u8, BooleanSemiring(true));
+            wfa.add_transition(0, 0, a as u8, BooleanSemiring::new(true));
         }
     }
     for a in 0..alphabet_size {
-        wfa.add_transition(1, 1, a as u8, BooleanSemiring(true));
+        wfa.add_transition(1, 1, a as u8, BooleanSemiring::new(true));
     }
     wfa
 }
@@ -2590,13 +2606,13 @@ pub fn build_tropical_shortest_path_wfa(
     num_states: usize, edges: &[(usize, usize, u8, f64)], alphabet_size: usize,
 ) -> WFA<TropicalSemiring> {
     let mut wfa = WFA::new(num_states, alphabet_size);
-    wfa.set_initial(0, TropicalSemiring(0.0));
-    for s in 1..num_states { wfa.set_initial(s, TropicalSemiring(f64::INFINITY)); }
-    wfa.set_final(num_states - 1, TropicalSemiring(0.0));
-    for s in 0..num_states - 1 { wfa.set_final(s, TropicalSemiring(f64::INFINITY)); }
+    wfa.set_initial(0, TropicalSemiring::new(0.0));
+    for s in 1..num_states { wfa.set_initial(s, TropicalSemiring::new(f64::INFINITY)); }
+    wfa.set_final(num_states - 1, TropicalSemiring::new(0.0));
+    for s in 0..num_states - 1 { wfa.set_final(s, TropicalSemiring::new(f64::INFINITY)); }
 
     for &(from, to, sym, weight) in edges {
-        wfa.add_transition(from, to, sym, TropicalSemiring(weight));
+        wfa.add_transition(from, to, sym, TropicalSemiring::new(weight));
     }
     wfa
 }
@@ -2607,10 +2623,10 @@ pub fn build_real_wfa(
     transitions: &[(usize, usize, u8, f64)], initial: &[f64], final_w: &[f64],
 ) -> WFA<RealSemiring> {
     let mut wfa = WFA::new(num_states, alphabet_size);
-    for (s, &w) in initial.iter().enumerate() { wfa.set_initial(s, RealSemiring(w)); }
-    for (s, &w) in final_w.iter().enumerate() { wfa.set_final(s, RealSemiring(w)); }
+    for (s, &w) in initial.iter().enumerate() { wfa.set_initial(s, RealSemiring::new(w)); }
+    for (s, &w) in final_w.iter().enumerate() { wfa.set_final(s, RealSemiring::new(w)); }
     for &(from, to, sym, weight) in transitions {
-        wfa.add_transition(from, to, sym, RealSemiring(weight));
+        wfa.add_transition(from, to, sym, RealSemiring::new(weight));
     }
     wfa
 }
@@ -3959,8 +3975,8 @@ mod tests {
     fn test_counting_semiring_properties() {
         let zero = CountingSemiring::zero();
         let one = CountingSemiring::one();
-        let a = CountingSemiring(5);
-        let b = CountingSemiring(3);
+        let a = CountingSemiring::new(5);
+        let b = CountingSemiring::new(3);
 
         assert_eq!(a.add(&zero), a);
         assert_eq!(zero.add(&a), a);
@@ -3969,8 +3985,8 @@ mod tests {
         assert_eq!(a.mul(&zero), zero);
         assert_eq!(a.add(&b), b.add(&a));
         assert_eq!(a.mul(&b), b.mul(&a));
-        assert_eq!(a.add(&b), CountingSemiring(8));
-        assert_eq!(a.mul(&b), CountingSemiring(15));
+        assert_eq!(a.add(&b), CountingSemiring::new(8));
+        assert_eq!(a.mul(&b), CountingSemiring::new(15));
     }
 
     #[test]
@@ -3991,13 +4007,13 @@ mod tests {
     fn test_tropical_semiring_properties() {
         let zero = TropicalSemiring::zero();
         let one = TropicalSemiring::one();
-        let a = TropicalSemiring(3.0);
-        let b = TropicalSemiring(5.0);
+        let a = TropicalSemiring::new(3.0);
+        let b = TropicalSemiring::new(5.0);
 
         assert_eq!(a.add(&b), a); // min(3, 5) = 3
         assert_eq!(a.add(&zero), a);
         assert_eq!(zero.add(&a), a);
-        assert_eq!(a.mul(&b), TropicalSemiring(8.0));
+        assert_eq!(a.mul(&b), TropicalSemiring::new(8.0));
         assert_eq!(a.mul(&one), a);
     }
 
@@ -4005,13 +4021,13 @@ mod tests {
     fn test_real_semiring_properties() {
         let zero = RealSemiring::zero();
         let one = RealSemiring::one();
-        let a = RealSemiring(2.5);
-        let b = RealSemiring(4.0);
+        let a = RealSemiring::new(2.5);
+        let b = RealSemiring::new(4.0);
         assert_eq!(a.add(&zero), a);
         assert_eq!(a.mul(&one), a);
         assert_eq!(a.mul(&zero), zero);
-        assert_eq!(a.add(&b), RealSemiring(6.5));
-        assert_eq!(a.mul(&b), RealSemiring(10.0));
+        assert_eq!(a.add(&b), RealSemiring::new(6.5));
+        assert_eq!(a.mul(&b), RealSemiring::new(10.0));
     }
 
     // ─── Embedding Tests ────────────────────────────────────────────────
@@ -4019,7 +4035,7 @@ mod tests {
     #[test]
     fn test_counting_embedding_roundtrip() {
         for val in [0u64, 1, 42, 1000, 999999] {
-            let s = CountingSemiring(val);
+            let s = CountingSemiring::new(val);
             let field = s.embed();
             let extracted = CountingSemiring::extract(field);
             assert_eq!(extracted.0, val);
@@ -4028,8 +4044,8 @@ mod tests {
 
     #[test]
     fn test_boolean_embedding_roundtrip() {
-        let t = BooleanSemiring(true);
-        let f = BooleanSemiring(false);
+        let t = BooleanSemiring::new(true);
+        let f = BooleanSemiring::new(false);
         assert_eq!(t.embed(), GoldilocksField::ONE);
         assert_eq!(f.embed(), GoldilocksField::ZERO);
         assert!(BooleanSemiring::extract(GoldilocksField::ONE).0);
@@ -4039,19 +4055,19 @@ mod tests {
     #[test]
     fn test_tropical_embedding_roundtrip() {
         for val in [0.0, 1.0, -1.0, 3.14, 100.0, -50.5] {
-            let s = TropicalSemiring(val);
+            let s = TropicalSemiring::new(val);
             let field = s.embed();
             let extracted = TropicalSemiring::extract(field);
             assert!((extracted.0 - val).abs() < 1e-6, "Tropical roundtrip failed for {}: got {}", val, extracted.0);
         }
-        let inf = TropicalSemiring(f64::INFINITY);
+        let inf = TropicalSemiring::new(f64::INFINITY);
         assert!(TropicalSemiring::extract(inf.embed()).0.is_infinite());
     }
 
     #[test]
     fn test_real_embedding_roundtrip() {
         for val in [0.0, 1.0, -1.0, 2.5, -3.75, 100.125] {
-            let s = RealSemiring(val);
+            let s = RealSemiring::new(val);
             let field = s.embed();
             let extracted = RealSemiring::extract(field);
             assert!((extracted.0 - val).abs() < 1e-6, "Real roundtrip failed for {}: got {}", val, extracted.0);
@@ -4063,10 +4079,10 @@ mod tests {
     #[test]
     fn test_wfa_construction() {
         let mut wfa = WFA::<CountingSemiring>::new(3, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.add_transition(0, 1, 0, CountingSemiring(1));
-        wfa.add_transition(1, 2, 1, CountingSemiring(1));
-        wfa.set_final(2, CountingSemiring(1));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.add_transition(0, 1, 0, CountingSemiring::new(1));
+        wfa.add_transition(1, 2, 1, CountingSemiring::new(1));
+        wfa.set_final(2, CountingSemiring::new(1));
 
         assert_eq!(wfa.num_states, 3);
         assert_eq!(wfa.alphabet_size, 2);
@@ -4400,11 +4416,11 @@ mod tests {
     #[test]
     fn test_transition_matrix_counting() {
         let mut wfa = WFA::<CountingSemiring>::new(2, 2);
-        wfa.add_transition(0, 0, 0, CountingSemiring(1));
-        wfa.add_transition(0, 1, 0, CountingSemiring(2));
-        wfa.add_transition(1, 1, 0, CountingSemiring(3));
-        wfa.add_transition(0, 0, 1, CountingSemiring(4));
-        wfa.add_transition(1, 0, 1, CountingSemiring(5));
+        wfa.add_transition(0, 0, 0, CountingSemiring::new(1));
+        wfa.add_transition(0, 1, 0, CountingSemiring::new(2));
+        wfa.add_transition(1, 1, 0, CountingSemiring::new(3));
+        wfa.add_transition(0, 0, 1, CountingSemiring::new(4));
+        wfa.add_transition(1, 0, 1, CountingSemiring::new(5));
 
         let compiler = WFACircuitCompiler::<CountingSemiring>::default_compiler();
         let m0 = compiler.compute_transition_matrix(&wfa, 0);
@@ -4421,9 +4437,9 @@ mod tests {
     #[test]
     fn test_embed_all_transition_matrices() {
         let mut wfa = WFA::<CountingSemiring>::new(2, 3);
-        wfa.add_transition(0, 1, 0, CountingSemiring(1));
-        wfa.add_transition(1, 0, 1, CountingSemiring(1));
-        wfa.add_transition(0, 0, 2, CountingSemiring(1));
+        wfa.add_transition(0, 1, 0, CountingSemiring::new(1));
+        wfa.add_transition(1, 0, 1, CountingSemiring::new(1));
+        wfa.add_transition(0, 0, 2, CountingSemiring::new(1));
 
         let compiler = WFACircuitCompiler::<CountingSemiring>::default_compiler();
         let matrices = compiler.embed_transition_matrices(&wfa);
@@ -4438,10 +4454,10 @@ mod tests {
     #[test]
     fn test_compile_simple_counting_wfa() {
         let mut wfa = WFA::<CountingSemiring>::new(1, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.set_final(0, CountingSemiring(1));
-        wfa.add_transition(0, 0, 0, CountingSemiring(1));
-        wfa.add_transition(0, 0, 1, CountingSemiring(1));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.set_final(0, CountingSemiring::new(1));
+        wfa.add_transition(0, 0, 0, CountingSemiring::new(1));
+        wfa.add_transition(0, 0, 1, CountingSemiring::new(1));
 
         let mut compiler = WFACircuitCompiler::<CountingSemiring>::new(CompilerConfig {
             target: CompilationTarget::AlgebraicDirect,
@@ -4462,14 +4478,14 @@ mod tests {
     #[test]
     fn test_compile_two_state_counting_wfa() {
         let mut wfa = WFA::<CountingSemiring>::new(2, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.set_initial(1, CountingSemiring(0));
-        wfa.set_final(0, CountingSemiring(1));
-        wfa.set_final(1, CountingSemiring(1));
-        wfa.add_transition(0, 0, 0, CountingSemiring(1));
-        wfa.add_transition(0, 1, 1, CountingSemiring(1));
-        wfa.add_transition(1, 1, 0, CountingSemiring(1));
-        wfa.add_transition(1, 1, 1, CountingSemiring(1));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.set_initial(1, CountingSemiring::new(0));
+        wfa.set_final(0, CountingSemiring::new(1));
+        wfa.set_final(1, CountingSemiring::new(1));
+        wfa.add_transition(0, 0, 0, CountingSemiring::new(1));
+        wfa.add_transition(0, 1, 1, CountingSemiring::new(1));
+        wfa.add_transition(1, 1, 0, CountingSemiring::new(1));
+        wfa.add_transition(1, 1, 1, CountingSemiring::new(1));
 
         let mut compiler = WFACircuitCompiler::<CountingSemiring>::new(CompilerConfig {
             target: CompilationTarget::AlgebraicDirect,
@@ -4507,10 +4523,10 @@ mod tests {
     #[test]
     fn test_trace_generator_simple_counting() {
         let mut wfa = WFA::<CountingSemiring>::new(1, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.set_final(0, CountingSemiring(1));
-        wfa.add_transition(0, 0, 0, CountingSemiring(1));
-        wfa.add_transition(0, 0, 1, CountingSemiring(1));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.set_final(0, CountingSemiring::new(1));
+        wfa.add_transition(0, 0, 0, CountingSemiring::new(1));
+        wfa.add_transition(0, 0, 1, CountingSemiring::new(1));
 
         let mut compiler = WFACircuitCompiler::<CountingSemiring>::new(CompilerConfig {
             target: CompilationTarget::AlgebraicDirect, optimization_level: 0,
@@ -4535,15 +4551,15 @@ mod tests {
     #[test]
     fn test_simulate_wfa_counting() {
         let mut wfa = WFA::<CountingSemiring>::new(2, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.set_initial(1, CountingSemiring(0));
-        wfa.set_final(1, CountingSemiring(1));
-        wfa.set_final(0, CountingSemiring(0));
-        wfa.add_transition(0, 0, 0, CountingSemiring(1));
-        wfa.add_transition(0, 0, 1, CountingSemiring(1));
-        wfa.add_transition(0, 1, 1, CountingSemiring(1));
-        wfa.add_transition(1, 1, 0, CountingSemiring(1));
-        wfa.add_transition(1, 1, 1, CountingSemiring(1));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.set_initial(1, CountingSemiring::new(0));
+        wfa.set_final(1, CountingSemiring::new(1));
+        wfa.set_final(0, CountingSemiring::new(0));
+        wfa.add_transition(0, 0, 0, CountingSemiring::new(1));
+        wfa.add_transition(0, 0, 1, CountingSemiring::new(1));
+        wfa.add_transition(0, 1, 1, CountingSemiring::new(1));
+        wfa.add_transition(1, 1, 0, CountingSemiring::new(1));
+        wfa.add_transition(1, 1, 1, CountingSemiring::new(1));
 
         let gen = TraceGenerator::<CountingSemiring>::new();
         let state_trace = gen.generate_state_columns(&wfa, &[1, 0, 1]);
@@ -4556,11 +4572,11 @@ mod tests {
     #[test]
     fn test_generate_state_columns_dimensions() {
         let mut wfa = WFA::<CountingSemiring>::new(3, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.set_initial(1, CountingSemiring(0));
-        wfa.set_initial(2, CountingSemiring(0));
-        for s in 0..3 { for a in 0..2 { wfa.add_transition(s, s, a as u8, CountingSemiring(1)); } }
-        wfa.set_final(2, CountingSemiring(1));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.set_initial(1, CountingSemiring::new(0));
+        wfa.set_initial(2, CountingSemiring::new(0));
+        for s in 0..3 { for a in 0..2 { wfa.add_transition(s, s, a as u8, CountingSemiring::new(1)); } }
+        wfa.set_final(2, CountingSemiring::new(1));
 
         let gen = TraceGenerator::<CountingSemiring>::new();
         let cols = gen.generate_state_columns(&wfa, &[0, 1, 0]);
@@ -4682,20 +4698,20 @@ mod tests {
     #[test]
     fn test_product_wfa_construction() {
         let mut wfa1 = WFA::<CountingSemiring>::new(2, 2);
-        wfa1.set_initial(0, CountingSemiring(1));
-        wfa1.set_final(1, CountingSemiring(1));
-        wfa1.add_transition(0, 1, 0, CountingSemiring(1));
-        wfa1.add_transition(1, 1, 0, CountingSemiring(1));
-        wfa1.add_transition(0, 0, 1, CountingSemiring(1));
-        wfa1.add_transition(1, 0, 1, CountingSemiring(1));
+        wfa1.set_initial(0, CountingSemiring::new(1));
+        wfa1.set_final(1, CountingSemiring::new(1));
+        wfa1.add_transition(0, 1, 0, CountingSemiring::new(1));
+        wfa1.add_transition(1, 1, 0, CountingSemiring::new(1));
+        wfa1.add_transition(0, 0, 1, CountingSemiring::new(1));
+        wfa1.add_transition(1, 0, 1, CountingSemiring::new(1));
 
         let mut wfa2 = WFA::<CountingSemiring>::new(2, 2);
-        wfa2.set_initial(0, CountingSemiring(1));
-        wfa2.set_final(0, CountingSemiring(1));
-        wfa2.add_transition(0, 0, 0, CountingSemiring(1));
-        wfa2.add_transition(0, 1, 1, CountingSemiring(1));
-        wfa2.add_transition(1, 1, 0, CountingSemiring(1));
-        wfa2.add_transition(1, 0, 1, CountingSemiring(1));
+        wfa2.set_initial(0, CountingSemiring::new(1));
+        wfa2.set_final(0, CountingSemiring::new(1));
+        wfa2.add_transition(0, 0, 0, CountingSemiring::new(1));
+        wfa2.add_transition(0, 1, 1, CountingSemiring::new(1));
+        wfa2.add_transition(1, 1, 0, CountingSemiring::new(1));
+        wfa2.add_transition(1, 0, 1, CountingSemiring::new(1));
 
         let mut multi = MultiWFACompiler::<CountingSemiring>::new(CompilerConfig::default());
         let result = multi.compile_product(&[wfa1, wfa2], 3);
@@ -4705,15 +4721,15 @@ mod tests {
     #[test]
     fn test_union_wfa_construction() {
         let mut wfa1 = WFA::<CountingSemiring>::new(2, 2);
-        wfa1.set_initial(0, CountingSemiring(1));
-        wfa1.set_final(1, CountingSemiring(1));
-        wfa1.add_transition(0, 1, 0, CountingSemiring(1));
+        wfa1.set_initial(0, CountingSemiring::new(1));
+        wfa1.set_final(1, CountingSemiring::new(1));
+        wfa1.add_transition(0, 1, 0, CountingSemiring::new(1));
 
         let mut wfa2 = WFA::<CountingSemiring>::new(3, 2);
-        wfa2.set_initial(0, CountingSemiring(1));
-        wfa2.set_final(2, CountingSemiring(1));
-        wfa2.add_transition(0, 1, 1, CountingSemiring(1));
-        wfa2.add_transition(1, 2, 0, CountingSemiring(1));
+        wfa2.set_initial(0, CountingSemiring::new(1));
+        wfa2.set_final(2, CountingSemiring::new(1));
+        wfa2.add_transition(0, 1, 1, CountingSemiring::new(1));
+        wfa2.add_transition(1, 2, 0, CountingSemiring::new(1));
 
         let mut multi = MultiWFACompiler::<CountingSemiring>::new(CompilerConfig::default());
         let result = multi.compile_union(&[wfa1, wfa2], 3);
@@ -4725,10 +4741,10 @@ mod tests {
     #[test]
     fn test_compilation_pipeline_counting() {
         let mut wfa = WFA::<CountingSemiring>::new(1, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.set_final(0, CountingSemiring(1));
-        wfa.add_transition(0, 0, 0, CountingSemiring(1));
-        wfa.add_transition(0, 0, 1, CountingSemiring(1));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.set_final(0, CountingSemiring::new(1));
+        wfa.add_transition(0, 0, 0, CountingSemiring::new(1));
+        wfa.add_transition(0, 0, 1, CountingSemiring::new(1));
 
         let mut pipeline = CompilationPipeline::<CountingSemiring>::with_default_config();
         let (result, trace) = pipeline.compile_and_trace(&wfa, &[0, 1, 0]);
@@ -4903,8 +4919,8 @@ mod tests {
     #[test]
     fn test_emit_initial_state_constraints() {
         let mut wfa = WFA::<CountingSemiring>::new(2, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.set_initial(1, CountingSemiring(0));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.set_initial(1, CountingSemiring::new(0));
         let compiler = WFACircuitCompiler::<CountingSemiring>::default_compiler();
         let constraints = compiler.emit_initial_state_constraints(&wfa, &[0, 1]);
         assert_eq!(constraints.len(), 2);
@@ -4916,8 +4932,8 @@ mod tests {
     #[test]
     fn test_emit_final_state_constraints() {
         let mut wfa = WFA::<CountingSemiring>::new(2, 2);
-        wfa.set_final(0, CountingSemiring(1));
-        wfa.set_final(1, CountingSemiring(2));
+        wfa.set_final(0, CountingSemiring::new(1));
+        wfa.set_final(1, CountingSemiring::new(2));
         let compiler = WFACircuitCompiler::<CountingSemiring>::default_compiler();
         let constraints = compiler.emit_final_state_constraints(&wfa, &[0, 1], 2, 3);
         assert_eq!(constraints.len(), 1);
@@ -4948,13 +4964,13 @@ mod tests {
     #[test]
     fn test_column_map_populated() {
         let mut wfa = WFA::<CountingSemiring>::new(2, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.set_initial(1, CountingSemiring(0));
-        wfa.set_final(0, CountingSemiring(1));
-        wfa.add_transition(0, 0, 0, CountingSemiring(1));
-        wfa.add_transition(0, 0, 1, CountingSemiring(1));
-        wfa.add_transition(1, 1, 0, CountingSemiring(1));
-        wfa.add_transition(1, 1, 1, CountingSemiring(1));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.set_initial(1, CountingSemiring::new(0));
+        wfa.set_final(0, CountingSemiring::new(1));
+        wfa.add_transition(0, 0, 0, CountingSemiring::new(1));
+        wfa.add_transition(0, 0, 1, CountingSemiring::new(1));
+        wfa.add_transition(1, 1, 0, CountingSemiring::new(1));
+        wfa.add_transition(1, 1, 1, CountingSemiring::new(1));
 
         let mut compiler = WFACircuitCompiler::<CountingSemiring>::new(CompilerConfig {
             target: CompilationTarget::AlgebraicDirect, optimization_level: 0, ..CompilerConfig::default()
@@ -4997,10 +5013,10 @@ mod tests {
     #[test]
     fn test_end_to_end_counting_wfa_with_verification() {
         let mut wfa = WFA::<CountingSemiring>::new(1, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.set_final(0, CountingSemiring(1));
-        wfa.add_transition(0, 0, 0, CountingSemiring(1));
-        wfa.add_transition(0, 0, 1, CountingSemiring(1));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.set_final(0, CountingSemiring::new(1));
+        wfa.add_transition(0, 0, 0, CountingSemiring::new(1));
+        wfa.add_transition(0, 0, 1, CountingSemiring::new(1));
 
         let config = CompilerConfig {
             target: CompilationTarget::AlgebraicDirect, optimization_level: 0,
@@ -5041,15 +5057,15 @@ mod tests {
     #[test]
     fn test_compile_larger_wfa() {
         let mut wfa = WFA::<CountingSemiring>::new(5, 4);
-        wfa.set_initial(0, CountingSemiring(1));
-        for s in 1..5 { wfa.set_initial(s, CountingSemiring(0)); }
-        wfa.set_final(4, CountingSemiring(1));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        for s in 1..5 { wfa.set_initial(s, CountingSemiring::new(0)); }
+        wfa.set_final(4, CountingSemiring::new(1));
 
         for s in 0..4 {
-            wfa.add_transition(s, s + 1, s as u8, CountingSemiring(1));
-            for a in 0..4 { if a as u8 != s as u8 { wfa.add_transition(s, s, a as u8, CountingSemiring(1)); } }
+            wfa.add_transition(s, s + 1, s as u8, CountingSemiring::new(1));
+            for a in 0..4 { if a as u8 != s as u8 { wfa.add_transition(s, s, a as u8, CountingSemiring::new(1)); } }
         }
-        for a in 0..4 { wfa.add_transition(4, 4, a as u8, CountingSemiring(1)); }
+        for a in 0..4 { wfa.add_transition(4, 4, a as u8, CountingSemiring::new(1)); }
 
         let mut compiler = WFACircuitCompiler::<CountingSemiring>::new(CompilerConfig {
             target: CompilationTarget::AlgebraicDirect, optimization_level: 1, ..CompilerConfig::default()
@@ -5065,13 +5081,13 @@ mod tests {
     #[test]
     fn test_transition_matrices_consistency() {
         let mut wfa = WFA::<CountingSemiring>::new(3, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.add_transition(0, 1, 0, CountingSemiring(2));
-        wfa.add_transition(1, 2, 0, CountingSemiring(3));
-        wfa.add_transition(2, 0, 0, CountingSemiring(1));
-        wfa.add_transition(0, 0, 1, CountingSemiring(1));
-        wfa.add_transition(1, 1, 1, CountingSemiring(1));
-        wfa.add_transition(2, 2, 1, CountingSemiring(1));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.add_transition(0, 1, 0, CountingSemiring::new(2));
+        wfa.add_transition(1, 2, 0, CountingSemiring::new(3));
+        wfa.add_transition(2, 0, 0, CountingSemiring::new(1));
+        wfa.add_transition(0, 0, 1, CountingSemiring::new(1));
+        wfa.add_transition(1, 1, 1, CountingSemiring::new(1));
+        wfa.add_transition(2, 2, 1, CountingSemiring::new(1));
 
         let compiler = WFACircuitCompiler::<CountingSemiring>::default_compiler();
         let matrices = compiler.embed_transition_matrices(&wfa);
@@ -5089,10 +5105,10 @@ mod tests {
     #[test]
     fn test_matrix_chain_computation() {
         let mut wfa = WFA::<CountingSemiring>::new(2, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.add_transition(0, 0, 0, CountingSemiring(1));
-        wfa.add_transition(0, 1, 0, CountingSemiring(1));
-        wfa.add_transition(1, 1, 0, CountingSemiring(1));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.add_transition(0, 0, 0, CountingSemiring::new(1));
+        wfa.add_transition(0, 1, 0, CountingSemiring::new(1));
+        wfa.add_transition(1, 1, 0, CountingSemiring::new(1));
 
         let compiler = WFACircuitCompiler::<CountingSemiring>::default_compiler();
         let m0 = compiler.compute_transition_matrix(&wfa, 0);
@@ -5110,14 +5126,14 @@ mod tests {
     #[test]
     fn test_compile_with_full_optimization() {
         let mut wfa = WFA::<CountingSemiring>::new(2, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.set_initial(1, CountingSemiring(0));
-        wfa.set_final(0, CountingSemiring(1));
-        wfa.set_final(1, CountingSemiring(1));
-        wfa.add_transition(0, 0, 0, CountingSemiring(1));
-        wfa.add_transition(0, 1, 1, CountingSemiring(1));
-        wfa.add_transition(1, 1, 0, CountingSemiring(1));
-        wfa.add_transition(1, 0, 1, CountingSemiring(1));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.set_initial(1, CountingSemiring::new(0));
+        wfa.set_final(0, CountingSemiring::new(1));
+        wfa.set_final(1, CountingSemiring::new(1));
+        wfa.add_transition(0, 0, 0, CountingSemiring::new(1));
+        wfa.add_transition(0, 1, 1, CountingSemiring::new(1));
+        wfa.add_transition(1, 1, 0, CountingSemiring::new(1));
+        wfa.add_transition(1, 0, 1, CountingSemiring::new(1));
 
         let mut compiler = WFACircuitCompiler::<CountingSemiring>::new(CompilerConfig {
             target: CompilationTarget::AlgebraicDirect, optimization_level: 2,
@@ -5297,9 +5313,9 @@ mod tests {
     fn test_pipeline_run_counting() {
         let pipeline = CompilerPipeline::default_pipeline();
         let mut wfa = WFA::<CountingSemiring>::new(2, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.set_final(1, CountingSemiring(1));
-        wfa.add_transition(0, 1, 0, CountingSemiring(1));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.set_final(1, CountingSemiring::new(1));
+        wfa.add_transition(0, 1, 0, CountingSemiring::new(1));
         let result = pipeline.run(&wfa, 4);
         assert!(result.compilation_stats.num_constraints > 0);
     }
@@ -5480,10 +5496,10 @@ mod tests {
     #[test]
     fn test_wfa_analyze_counting() {
         let mut wfa = WFA::<CountingSemiring>::new(3, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.set_final(2, CountingSemiring(1));
-        wfa.add_transition(0, 1, 0, CountingSemiring(1));
-        wfa.add_transition(1, 2, 1, CountingSemiring(2));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.set_final(2, CountingSemiring::new(1));
+        wfa.add_transition(0, 1, 0, CountingSemiring::new(1));
+        wfa.add_transition(1, 2, 1, CountingSemiring::new(2));
 
         let analysis = WFAAnalyzer::analyze_counting(&wfa);
         assert_eq!(analysis.num_states, 3);
@@ -5496,10 +5512,10 @@ mod tests {
     #[test]
     fn test_wfa_analyze_tropical() {
         let mut wfa = WFA::<TropicalSemiring>::new(2, 2);
-        wfa.set_initial(0, TropicalSemiring(0.0));
-        wfa.set_final(1, TropicalSemiring(0.0));
-        wfa.add_transition(0, 1, 0, TropicalSemiring(1.5));
-        wfa.add_transition(0, 1, 1, TropicalSemiring(2.5));
+        wfa.set_initial(0, TropicalSemiring::new(0.0));
+        wfa.set_final(1, TropicalSemiring::new(0.0));
+        wfa.add_transition(0, 1, 0, TropicalSemiring::new(1.5));
+        wfa.add_transition(0, 1, 1, TropicalSemiring::new(2.5));
 
         let analysis = WFAAnalyzer::analyze_tropical(&wfa);
         assert_eq!(analysis.num_states, 2);
@@ -5511,7 +5527,7 @@ mod tests {
     #[test]
     fn test_wfa_recommend_target() {
         let mut wfa = WFA::<CountingSemiring>::new(2, 2);
-        wfa.add_transition(0, 1, 0, CountingSemiring(1));
+        wfa.add_transition(0, 1, 0, CountingSemiring::new(1));
         let analysis = WFAAnalyzer::analyze_counting(&wfa);
         let target = WFAAnalyzer::recommend_target(&analysis);
         assert_eq!(target, CompilationTarget::AlgebraicDirect);
@@ -5520,7 +5536,7 @@ mod tests {
     #[test]
     fn test_wfa_estimate_trace_size() {
         let mut wfa = WFA::<CountingSemiring>::new(4, 2);
-        wfa.add_transition(0, 1, 0, CountingSemiring(1));
+        wfa.add_transition(0, 1, 0, CountingSemiring::new(1));
         let analysis = WFAAnalyzer::analyze_counting(&wfa);
         let size = WFAAnalyzer::estimate_trace_size(&analysis, 10);
         assert!(size > 0);
@@ -5529,8 +5545,8 @@ mod tests {
     #[test]
     fn test_wfa_estimate_constraint_count() {
         let mut wfa = WFA::<CountingSemiring>::new(3, 2);
-        wfa.add_transition(0, 1, 0, CountingSemiring(1));
-        wfa.add_transition(1, 2, 1, CountingSemiring(1));
+        wfa.add_transition(0, 1, 0, CountingSemiring::new(1));
+        wfa.add_transition(1, 2, 1, CountingSemiring::new(1));
         let analysis = WFAAnalyzer::analyze_counting(&wfa);
         let count = WFAAnalyzer::estimate_constraint_count(&analysis);
         assert!(count >= analysis.num_transitions);
@@ -5540,10 +5556,10 @@ mod tests {
     fn test_wfa_density() {
         let mut wfa = WFA::<CountingSemiring>::new(2, 2);
         // Max transitions = 2 * 2 * 2 = 8. Adding 4 → density = 0.5
-        wfa.add_transition(0, 0, 0, CountingSemiring(1));
-        wfa.add_transition(0, 1, 0, CountingSemiring(1));
-        wfa.add_transition(1, 0, 1, CountingSemiring(1));
-        wfa.add_transition(1, 1, 1, CountingSemiring(1));
+        wfa.add_transition(0, 0, 0, CountingSemiring::new(1));
+        wfa.add_transition(0, 1, 0, CountingSemiring::new(1));
+        wfa.add_transition(1, 0, 1, CountingSemiring::new(1));
+        wfa.add_transition(1, 1, 1, CountingSemiring::new(1));
         let analysis = WFAAnalyzer::analyze_counting(&wfa);
         assert!((analysis.density - 0.5).abs() < 1e-9);
     }
@@ -5551,8 +5567,8 @@ mod tests {
     #[test]
     fn test_wfa_nondeterministic_detection() {
         let mut wfa = WFA::<CountingSemiring>::new(2, 2);
-        wfa.add_transition(0, 0, 0, CountingSemiring(1));
-        wfa.add_transition(0, 1, 0, CountingSemiring(1)); // same (state, symbol)
+        wfa.add_transition(0, 0, 0, CountingSemiring::new(1));
+        wfa.add_transition(0, 1, 0, CountingSemiring::new(1)); // same (state, symbol)
         let analysis = WFAAnalyzer::analyze_counting(&wfa);
         assert!(!analysis.is_deterministic);
     }
@@ -5721,9 +5737,9 @@ mod tests {
 
     fn make_simple_result() -> CompilationResult {
         let mut wfa = WFA::<CountingSemiring>::new(2, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.set_final(1, CountingSemiring(1));
-        wfa.add_transition(0, 1, 0, CountingSemiring(1));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.set_final(1, CountingSemiring::new(1));
+        wfa.add_transition(0, 1, 0, CountingSemiring::new(1));
         let mut compiler = WFACircuitCompiler::<CountingSemiring>::new(CompilerConfig::default());
         compiler.compile(&wfa, 4)
     }
@@ -5793,9 +5809,9 @@ mod tests {
     fn test_pipeline_with_diagnostics() {
         let pipeline = CompilerPipeline::default_pipeline();
         let mut wfa = WFA::<CountingSemiring>::new(2, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.set_final(1, CountingSemiring(1));
-        wfa.add_transition(0, 1, 0, CountingSemiring(1));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.set_final(1, CountingSemiring::new(1));
+        wfa.add_transition(0, 1, 0, CountingSemiring::new(1));
         let result = pipeline.run(&wfa, 4);
 
         let mut diag = CompilerDiagnostics::new();
@@ -5809,10 +5825,10 @@ mod tests {
     #[test]
     fn test_analyze_then_compile() {
         let mut wfa = WFA::<CountingSemiring>::new(3, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.set_final(2, CountingSemiring(1));
-        wfa.add_transition(0, 1, 0, CountingSemiring(1));
-        wfa.add_transition(1, 2, 1, CountingSemiring(1));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.set_final(2, CountingSemiring::new(1));
+        wfa.add_transition(0, 1, 0, CountingSemiring::new(1));
+        wfa.add_transition(1, 2, 1, CountingSemiring::new(1));
 
         let analysis = WFAAnalyzer::analyze_counting(&wfa);
         assert_eq!(analysis.num_states, 3);
@@ -5845,9 +5861,9 @@ mod tests {
     #[test]
     fn test_full_workflow_with_report() {
         let mut wfa = WFA::<CountingSemiring>::new(2, 2);
-        wfa.set_initial(0, CountingSemiring(1));
-        wfa.set_final(1, CountingSemiring(1));
-        wfa.add_transition(0, 1, 0, CountingSemiring(1));
+        wfa.set_initial(0, CountingSemiring::new(1));
+        wfa.set_final(1, CountingSemiring::new(1));
+        wfa.add_transition(0, 1, 0, CountingSemiring::new(1));
 
         let analysis = WFAAnalyzer::analyze_counting(&wfa);
         let est = WFAAnalyzer::estimate_constraint_count(&analysis);

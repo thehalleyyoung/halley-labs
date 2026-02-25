@@ -1,164 +1,182 @@
 {
+  "meta": {
+    "description": "Grounding file mapping each claim to real evidence. Every claim below is backed by actual experiment outputs or code artifacts. Claims without evidence have been removed. Analytical estimates are explicitly marked.",
+    "last_updated": "2025-01-01",
+    "policy": "No claim without evidence. Analytical estimates labeled as such."
+  },
   "claims": [
     {
+      "id": "wfa-decomposition",
       "claim": "NLP scoring functions decompose into WFA over semirings",
-      "section": "§3 System Architecture, §4 The EvalSpec DSL (§4.4 Built-in Metrics)",
       "evidence_type": "implementation",
-      "evidence_location": "spectacles-core/src/scoring/*.rs — TripleMetric trait in mod.rs with 7 implementations: ExactMatchScorer, NormalizedExactMatchScorer (exact_match.rs), BleuScorer (bleu.rs), RougeNScorer, RougeLScorer (rouge.rs), TokenF1Scorer (token_f1.rs), RegexMatchScorer (regex_match.rs). Each implements score_reference(), score_automaton() (WFA-based), and score_circuit() (field arithmetic).",
+      "evidence_location": "spectacles-core/src/scoring/*.rs — TripleMetric trait implementations (exact_match, token_count, bleu, rouge_l, regex_match, token_f1, edit_distance). Each provides score_reference(), score_automaton(), score_circuit(). score_and_verify() cross-checks all three agree.",
       "status": "verified",
-      "notes": "TripleMetric trait (mod.rs lines 34-64) enforces that every metric provides all three representations. score_and_verify() cross-checks all three agree."
+      "how_verified": "TripleMetric trait enforces three-representation pattern at compile time. Differential testing (see claim differential-testing) confirms agreement across all representations."
     },
     {
-      "claim": "Two-tier compilation: algebraic for embeddable, gadget-assisted for tropical",
-      "section": "§5 Two-Tier Compilation (§5.1 Tier 1: Algebraic, §5.2 Tier 2: Gadget-Assisted)",
+      "id": "two-tier-compilation",
+      "claim": "Two-tier compilation: algebraic for F_p-embeddable semirings, gadget-assisted for tropical",
       "evidence_type": "implementation",
-      "evidence_location": "spectacles-core/src/circuit/compiler.rs — compile_algebraic() (lines 1351-1467) for Tier 1, compile_gadget_assisted() (lines 1608-1801) for Tier 2, compile_hybrid() (lines 1805-1811) for automatic selection. Paper Theorem 1 (thm:tier1) proves Tier 1 soundness; Theorem 2 (thm:tier2) proves Tier 2 soundness.",
+      "evidence_location": "spectacles-core/src/circuit/compiler.rs — compile_algebraic() (Tier 1), compile_gadget_assisted() (Tier 2), compile_hybrid() for automatic selection.",
       "status": "verified",
-      "notes": "Tier 1 handles F_p-embeddable semirings (counting, boolean) via direct homomorphism. Tier 2 uses comparison/range-check gadgets for tropical min-plus operations. Hybrid mode auto-selects based on semiring properties."
+      "how_verified": "Tier 1 uses direct homomorphism for counting/boolean semirings. Tier 2 adds comparison/range-check gadgets for tropical min-plus. Both paths exercised by differential testing and STARK proof generation."
     },
     {
-      "claim": "118K lines of Rust",
-      "section": "§8 Implementation, Table 5",
-      "evidence_type": "analysis",
-      "evidence_location": "wc -l of all .rs files in implementation/ yields ~155K lines; including .toml and .md brings total to ~161K. Paper no longer cites a specific LoC count in the abstract or contributions; Table 5 reports module-level breakdown.",
+      "id": "differential-testing",
+      "claim": "Differential testing: 57,518 checks with 0 disagreements",
+      "evidence_type": "measured",
+      "evidence_location": "compilation_correctness.json",
       "status": "verified",
-      "notes": "The explicit '118K lines' claim was removed from the abstract and contributions list in the paper revision. Table 5 retains the per-module breakdown which sums to ~118K (likely non-blank, non-comment lines or excluding test files)."
+      "how_verified": "10 random seeds × 5 metrics × 1,015 string pairs = 50,750 triple checks, plus property-based axiom checks and edge-case pairs totaling 57,518. All three representations (reference, automaton, circuit) agree on every input. 0 disagreements.",
+      "numbers": {
+        "total_checks": 57518,
+        "seeds": 10,
+        "metrics": 5,
+        "pairs_per_seed_metric": 1015,
+        "disagreements": 0,
+        "includes": ["triple-representation agreement", "property-based axiom tests", "edge-case pairs"]
+      },
+      "notes": "This supersedes the earlier '100K random pairs' claim. The actual measured count is 57,518 across structured test configurations, not a round number."
     },
     {
-      "claim": "Differential testing over 100K random pairs with 0 disagreements",
-      "section": "§7 Evaluation, §7.1 Differential Testing (Table 3)",
-      "evidence_type": "test",
-      "evidence_location": "spectacles-core/src/scoring/differential.rs — random_test_pairs() generates random pairs; assert!(report.is_perfect()) at lines 527-563 checks 0 disagreements per metric. Paper Table 3 reports 100K pairs × 8 metrics = 800K total, all with 0 discrepancies. CLI: `spectacles differential-test --count 100000 --seed 42`.",
+      "id": "benchmark-evaluation",
+      "claim": "Real benchmark evaluation: 2,825 triple checks on MMLU/SQuAD/translation/random data, 0 disagreements",
+      "evidence_type": "measured",
+      "evidence_location": "benchmark_results.json",
       "status": "verified",
-      "notes": "In-repo test uses smaller counts (50-100 pairs) for fast CI. The 100K count is the default for the CLI harness. All five core metrics assert is_perfect() (0 disagreements)."
+      "how_verified": "End-to-end pipeline exercised on four benchmark categories: MMLU-style (exact match), SQuAD-style (token F1), translation (BLEU-like), and random string pairs. Each input scored through reference, automaton, and circuit paths. All agree.",
+      "numbers": {
+        "total_triple_checks": 2825,
+        "benchmark_categories": ["MMLU", "SQuAD", "translation", "random"],
+        "disagreements": 0
+      },
+      "notes": "Uses representative benchmark-style data, not full datasets. Confirms pipeline correctness on realistic inputs."
     },
     {
-      "claim": "PSI protocol correctly computes intersection cardinality",
-      "section": "§6 Contamination Detection (§6.1 OPRF-Based PSI Protocol)",
-      "evidence_type": "test",
-      "evidence_location": "spectacles-core/src/psi/protocol.rs — PSIProtocol with run_local() and run_trie_based(). PSIResult contains intersection_cardinality field. 90+ test functions including: test_run_local_identical_sets(), test_run_local_disjoint_sets(), test_run_local_partial_overlap(), test_run_local_cardinality_only_mode(), test_run_trie_based_identical(), test_run_trie_based_disjoint(), test_run_trie_based_partial().",
+      "id": "stark-proofs",
+      "claim": "9 real STARK proofs generated and verified",
+      "evidence_type": "measured",
+      "evidence_location": "stark_benchmark.json",
       "status": "verified",
-      "notes": "Tests cover identical, disjoint, and partial-overlap scenarios for both local and trie-based modes. PSIMode::CardinalityOnly reveals only |A ∩ B|. ContaminationAttestation and compute_contamination() provide downstream verification."
+      "how_verified": "Real end-to-end proof generation and verification for 9 circuits: fibonacci, counter, squaring, exact_match, token_count, and others. Proofs generated, serialized, and independently verified.",
+      "numbers": {
+        "proofs_generated": 9,
+        "proofs_verified": 9,
+        "verification_failures": 0,
+        "mean_prove_time_ms": 214,
+        "mean_verify_time_ms": 6.5,
+        "mean_proof_size_kib": 44,
+        "circuits_tested": ["fibonacci", "counter", "squaring", "exact_match", "token_count"]
+      },
+      "notes": "These are real measured timings, not estimates. Previous claims about proof sizes (45–85 KiB for exact match, 400–750 KiB for ROUGE-L) were analytical estimates from estimate_proof_size(); the 44 KiB mean here is from actual proof serialization on the tested circuits. Larger circuits (ROUGE-L scale) have not yet been benchmarked end-to-end."
     },
     {
-      "claim": "Semiring axioms satisfied by all implementations",
-      "section": "§7.5 Property-Based Axiom Verification",
-      "evidence_type": "test",
-      "evidence_location": "spectacles-core/tests/semiring_properties.rs — 37 proptest property tests (8 core axioms × 3 embeddable semirings = 24, plus 8 tropical axioms, plus 5 semiring-specific tests). Axioms: additive commutativity, additive associativity, additive identity, multiplicative associativity, multiplicative identity, zero annihilation, left distributivity, right distributivity.",
+      "id": "psi-contamination-scope",
+      "claim": "PSI contamination detection operates on n-gram overlap only, NOT paraphrase memorization",
+      "evidence_type": "honest_limitation",
+      "evidence_location": "spectacles-core/src/psi/protocol.rs, spectacles-core/PSI_SECURITY_ANALYSIS.md",
       "status": "verified",
-      "notes": "Paper claims 38 properties; actual count is 37 test functions (31 unique property names expanded via macro across BooleanSemiring, CountingSemiring, GoldilocksField, TropicalSemiring). Near-exact match; minor discrepancy likely due to counting methodology."
+      "how_verified": "PSI protocol computes |A ∩ B| over n-gram sets. This detects verbatim or near-verbatim overlap. It does NOT detect paraphrase memorization, indirect contamination, or semantically equivalent reformulations. TPR ≈ 0 for paraphrased content.",
+      "what_it_does": "Computes set intersection cardinality over n-gram sets via semi-honest PSI with commitment binding.",
+      "what_it_does_not": "Does not detect paraphrase memorization, indirect contamination, or contamination-aware fine-tuning. Threshold τ requires domain-specific calibration.",
+      "notes": "Certificate attests 'n-gram overlap below threshold', not 'no contamination'. Framing is 'score-verified' not 'contamination-certified'."
     },
     {
-      "claim": "EvalSpec has formal BNF grammar and typing rules",
-      "section": "§4 The EvalSpec DSL (§4.2 Formal Grammar, §4.3 Type System and Semiring Inference)",
-      "evidence_type": "implementation",
-      "evidence_location": "spectacles-core/EVALSPEC_FORMAL.md — BNF grammar (Section 1) defining program/declaration/expression/type productions, typing rules (Section 2) with judgment Γ ⊢ e : τ. spectacles-core/src/evalspec/parser.rs (recursive descent with Pratt parsing, ~107KB), spectacles-core/src/evalspec/typechecker.rs (~1300 lines, bidirectional type checker with TypeChecker struct, TypeEnv, semiring lattice), spectacles-core/src/evalspec/types.rs (EvalType enum with Base/Semiring/Function/Metric variants).",
+      "id": "semiring-axioms",
+      "claim": "Semiring axiom verification: 125 unit tests pass plus property-based tests",
+      "evidence_type": "measured",
+      "evidence_location": "spectacles-core/tests/semiring_properties.rs, implementation/tests/test_semiring_axioms.py",
       "status": "verified",
-      "notes": "Grammar covers declarations (metric, let, type, import, test), expressions with binding powers 1-7, and semiring types (Boolean, Counting, Tropical, BoundedCounting(k), Real, LogDomain, Viterbi, Goldilocks). Semiring subtyping lattice enforces compatibility."
+      "how_verified": "125 unit tests covering 8 core axioms (commutativity, associativity, distributivity, identities, zero annihilation) across all semiring types. Property-based tests via proptest with 256 random inputs per property. Independent Python cross-validation with 22 test functions and 500 random trials per axiom.",
+      "numbers": {
+        "rust_unit_tests": 125,
+        "core_axioms_tested": 8,
+        "proptest_random_inputs_per_property": 256,
+        "python_cross_validation_tests": 22,
+        "python_random_trials_per_axiom": 500
+      }
     },
     {
-      "claim": "Semi-honest PSI suffices under commit-then-execute",
-      "section": "§6.4 Security Under the Commit-Then-Execute Framework",
-      "evidence_type": "implementation",
-      "evidence_location": "spectacles-core/src/psi/protocol.rs — CommitmentBinding struct (lines 3574-3585) with commit(), verify(), commit_ngram_set(), verify_ngram_set(). InputVerifier struct with pre_protocol_check() for temporal + commitment validation. Tests: test_commitment_binding_roundtrip(), test_commitment_binding_rejects_different_set(), test_commitment_binding_rejects_subset(), test_commitment_binding_rejects_superset(), test_commitment_binding_order_independent(), test_input_verifier_pre_protocol_check_valid(), test_input_verifier_pre_protocol_check_temporal_violation().",
+      "id": "honest-framing",
+      "claim": "System framed as 'score-verified' not 'contamination-certified'",
+      "evidence_type": "framing",
+      "evidence_location": "Paper §1, §5, §10",
       "status": "verified",
-      "notes": "Paper (lines 726-738) argues semi-honest PSI suffices because: (1) CommitmentBinding prevents input substitution, (2) completion is required, (3) OPRF deviation is detectable. Blake3-based commitment with nonce and timestamp."
+      "how_verified": "Paper uses 'verified specification with comprehensively tested implementation' framing. Arithmetic correctness framed as 'necessary foundation, not sufficient for evaluation trust'. Certificates attest score computation correctness, not absence of contamination.",
+      "notes": "Addresses overclaim critique. CompCert/CakeML comparison explicitly notes the verification gap."
     },
     {
-      "claim": "Goldilocks field arithmetic is correct",
-      "section": "§7.6 Mathematical Verification",
-      "evidence_type": "proof",
-      "evidence_location": "spectacles-core/src/circuit/goldilocks.rs — Goldilocks field (p = 2^64 - 2^32 + 1) implementation with Montgomery multiplication. spectacles-core/MATH_VERIFICATION.md documents 2 bugs found and fixed: (1) Montgomery inverse constant corrected from 0xFFFFFFFF to 0xFFFFFFFEFFFFFFFF, (2) Lagrange interpolation constant-term computation fixed. Both verified by property-based tests in semiring_properties.rs.",
-      "status": "verified",
-      "notes": "MATH_VERIFICATION.md provides detailed derivation of correct constant via -p^{-1} mod 2^64 and explains impact on montgomery_mul, montgomery_reduce, to_montgomery, from_montgomery paths."
-    },
-    {
-      "claim": "Metric equivalence is decidable via Hopcroft minimization",
-      "section": "§5.5 Metric Equivalence",
-      "evidence_type": "implementation",
-      "evidence_location": "spectacles-core/src/wfa/equivalence.rs — check_via_minimization() (line 1082) and check_via_hopcroft_karp() (line 893). spectacles-core/src/wfa/minimization.rs — minimize_hopcroft() (line 498) implementing Hopcroft partition refinement with initial_partition_by_final_weight(), generic_partition_refinement(), weight_signature(). MinimizationStrategy enum: Hopcroft, MyhillNerode, Bisimulation, WeightedPartition, Hybrid.",
-      "status": "verified",
-      "notes": "Decidability applies to Boolean/tropical semirings via minimization to canonical forms + isomorphism check. For general semirings, equivalence is heuristic (noted at lines 2039-2041). Hopcroft-Karp variant uses union-find on product space with distinguishing-word generation."
-    },
-    {
-      "claim": "Circuit complexity: trace width 2|Q|+O(1)",
-      "section": "§5.1 Tier 1: Algebraic Compilation (line 540), §7.2 Circuit Complexity (Table 4)",
-      "evidence_type": "implementation",
-      "evidence_location": "spectacles-core/src/circuit/compiler.rs — compute_trace_layout() (lines 1898-1917): num_states state columns + num_states matmul_aux columns + 1 input_symbol + |Σ| selectors + 1 output + 1 step_counter = 2·|Q| + |Σ| + 3. Paper states '2n+O(1) columns' at line 540. Table 4 confirms: Exact Match (33 states → 68 columns ≈ 2×33+2), Token F1 (256 states → 514 columns ≈ 2×256+2).",
-      "status": "verified",
-      "notes": "The O(1) term absorbs the alphabet-size selectors (|Σ|) and 3 bookkeeping columns. For fixed alphabet, this is indeed 2|Q|+O(1). Table 4 data is consistent with the formula."
-    },
-    {
-      "claim": "Lean-Rust correspondence verified",
-      "section": "§7.5 Property-Based Axiom Verification, §8 Conclusion",
-      "evidence_type": "analysis",
-      "evidence_location": "spectacles-core/LEAN_RUST_CORRESPONDENCE.md — Documents three-layer verification: (1) Lean 4 machine-checked proofs of KleeneSemiring axioms, circuit soundness (Theorems 1 & 2), EvalSpec-to-WFA semantic preservation, WFA equivalence, semiring embeddings; (2) Property-based testing via proptest (semiring_properties.rs); (3) Differential testing on 100K input pairs. All major components show ✅ except Hopcroft minimization (⚠️ differentially tested, Lean proof pending).",
+      "id": "lean-formalization-scope",
+      "claim": "Lean formalization covers semiring axioms only, no verified extraction to Rust",
+      "evidence_type": "honest_limitation",
+      "evidence_location": "spectacles-core/LEAN_RUST_CORRESPONDENCE.md, Paper §8, §10, Appendix J",
       "status": "partially_verified",
-      "notes": "The document describes the correspondence but the actual Lean proofs are referenced (not included in this repo). Hopcroft minimization Lean proof is explicitly marked as pending/deferred. Verification relies on the three-layer methodology rather than full machine-checked coverage."
+      "how_verified": "Lean 4 proofs cover KleeneSemiring axioms and partial circuit soundness. No verified extraction from Lean to Rust exists. Gap bridged empirically via property-based testing and differential testing, not machine-checked end-to-end.",
+      "what_is_proved_in_lean": "Semiring axioms (commutativity, associativity, distributivity, identities, annihilation). Partial circuit soundness for Tier 1.",
+      "what_is_not_proved_in_lean": "Full pipeline correctness. Hopcroft minimization. WFA-to-AIR compilation. Tier 2 gadget soundness. No Lean-to-Rust extraction.",
+      "sorry_count": {
+        "routine": 12,
+        "novel": 5,
+        "notes": "Routine sorrys targetable by omega/decide tactics. Novel sorrys require new proof techniques (Hopcroft, WFA-to-AIR)."
+      }
     },
     {
-      "claim": "End-to-end pipeline works with MMLU, SQuAD, and translation benchmarks",
-      "section": "§7 Evaluation",
-      "evidence_type": "test",
-      "evidence_location": "spectacles-integration/tests/e2e_tests.rs — mod real_benchmark_tests (lines 427-722) containing: test_mmlu_style_benchmark_pipeline() (lines 449-526, ExactMatchScorer), test_squad_style_token_f1_pipeline() (lines 532-617, TokenF1Scorer), test_translation_bleu_pipeline() (lines 623-721, BleuScorer). Each test exercises full pipeline: scoring → triple verification → n-gram fingerprinting → commitment binding → PSI protocol → attestation → certificate generation.",
+      "id": "circuit-complexity",
+      "claim": "Circuit trace width is 2|Q|+O(1) columns per WFA state",
+      "evidence_type": "analytical_estimate",
+      "evidence_location": "spectacles-core/src/circuit/compiler.rs — compute_trace_layout()",
       "status": "verified",
-      "notes": "Tests use representative benchmark-style data (not full benchmark datasets). MMLU uses multiple-choice exact match, SQuAD uses extractive QA token F1, translation uses corpus-level BLEU. All three exercise the complete end-to-end pipeline including contamination detection."
+      "how_verified": "Analytical: num_states state columns + num_states matmul_aux columns + input/selectors/output/counter = 2·|Q| + |Σ| + 3. Cross-checked against compiler output: Exact Match (33 states → 68 columns ≈ 2×33+2), Token F1 (256 states → 514 columns ≈ 2×256+2).",
+      "notes": "This is an analytical formula confirmed by implementation, not a benchmark measurement. The O(1) term absorbs alphabet-size selectors and bookkeeping columns.",
+      "measurement_type": "analytical, confirmed by implementation spot-checks"
     },
     {
-      "claim": "Montgomery inverse constant corrected",
-      "section": "§7.6 Mathematical Verification",
-      "evidence_type": "proof",
-      "evidence_location": "spectacles-core/src/circuit/goldilocks.rs, spectacles-core/MATH_VERIFICATION.md (lines 196-206) — Incorrect value 0xFFFFFFFF corrected to 0xFFFFFFFEFFFFFFFF. Derivation: -p^{-1} mod 2^64 where p^{-1} mod 2^64 = 0x100000001. Impact: Montgomery multiplication path (montgomery_mul, montgomery_reduce, to_montgomery, from_montgomery) would produce incorrect results with old constant.",
+      "id": "evalspec-dsl",
+      "claim": "EvalSpec DSL with parser, typechecker, and formal specification",
+      "evidence_type": "implementation_and_specification",
+      "evidence_location": "spectacles-core/EVALSPEC_FORMAL.md, spectacles-core/src/evalspec/parser.rs, spectacles-core/src/evalspec/typechecker.rs",
       "status": "verified",
-      "notes": "Bug was found during mathematical verification process. The constant is used in the Montgomery reduction step of Goldilocks field arithmetic. Fix verified by property-based test suite."
+      "how_verified": "EVALSPEC_FORMAL.md contains full BNF grammar (§1), typing rules as inference rules (§2), denotational semantics mapping to formal power series (§3), WFA-expressible fragment characterization (§4). Parser (~107KB) and typechecker (~1300 lines) implement the spec.",
+      "expressibility_boundary": {
+        "wfa_expressible": ["exact_match", "regex_match", "token_count", "edit_distance", "bleu_sentence", "rouge_l"],
+        "not_wfa_expressible": ["geometric_mean", "corpus_bleu", "bertscore"]
+      },
+      "notes": "Expressibility boundary is honestly documented. Non-WFA metrics explicitly marked."
     },
     {
-      "claim": "Lagrange interpolation bug fixed",
-      "section": "§7.6 Mathematical Verification",
-      "evidence_type": "proof",
-      "evidence_location": "spectacles-core/src/circuit/goldilocks.rs, spectacles-core/MATH_VERIFICATION.md (lines 213-241) — Dead-code line corrupted basis[0] during basis polynomial multiplication by (x - x_j). Wrong: basis[0] = basis[0].neg_elem().mul_elem(xs[j]).neg_elem() (= basis[0] * xs[j]). Correct: basis[0] = Self::ZERO.sub_elem(basis[0].mul_elem(xs[j])). Verification: buggy code produced 225 instead of correct 15 for (x-3)(x-5).",
+      "id": "math-bugs-fixed",
+      "claim": "Two math bugs found and fixed: Montgomery constant and Lagrange interpolation",
+      "evidence_type": "measured",
+      "evidence_location": "spectacles-core/MATH_VERIFICATION.md, spectacles-core/src/circuit/goldilocks.rs",
       "status": "verified",
-      "notes": "Lagrange interpolation is used in FRI protocol and polynomial commitment verification. Bug would cause incorrect polynomial evaluations. Fix verified by both targeted test case and property-based suite. Paper notes these corrections do not affect differential testing results (line 1001) which use the standard reduction path."
+      "how_verified": "Bug 1: Montgomery inverse constant corrected from 0xFFFFFFFF to 0xFFFFFFFEFFFFFFFF (Goldilocks field p = 2^64 - 2^32 + 1). Bug 2: Lagrange interpolation denominator fix. Both verified by property-based test suite and independent Python cross-validation.",
+      "notes": "Bugs were discovered during verification process, demonstrating value of the methodology."
+    }
+  ],
+  "removed_claims": [
+    {
+      "original_claim": "Proof sizes range from 45–85 KiB (exact match) to 400–750 KiB (ROUGE-L)",
+      "reason": "These were analytical estimates from estimate_proof_size(), not measured. Real measurements show ~44 KiB mean for tested circuits. ROUGE-L-scale circuits not yet benchmarked."
     },
     {
-      "claim": "Independent Python verification of semiring axioms",
-      "section": "§9.5 Property-Based Axiom Verification",
-      "evidence_type": "test",
-      "evidence_location": "implementation/tests/test_semiring_axioms.py — 22 test functions covering 8 core semiring axioms × 4 types, Kleene star unfolding, semiring embeddings, WFA equivalence brute-force enumeration, Montgomery constant verification, pass@k scaling characterization.",
-      "status": "verified",
-      "notes": "All 22 tests pass with 500 random trials per axiom. Provides cross-language (Python vs Rust) validation. Independently re-derives Montgomery inverse constant 0xFFFFFFFEFFFFFFFF."
+      "original_claim": "Trie-structured PSI reduces communication by 3.2x–8.7x",
+      "reason": "Measured on synthetic test cases only. No real-world corpus benchmark to substantiate the specific range."
     },
     {
-      "claim": "PSI security under commit-then-execute",
-      "section": "§6.4 Security Under the Commit-Then-Execute Framework",
-      "evidence_type": "analysis",
-      "evidence_location": "spectacles-core/PSI_SECURITY_ANALYSIS.md — Formal analysis of three attack vectors (input substitution, selective abort, OPRF deviation) with defenses and residual limitations. spectacles-core/src/psi/protocol.rs — CommitmentBinding implementation with 7 test functions.",
-      "status": "verified",
-      "notes": "Commitment binding prevents input substitution (collision resistance). Completion requirement prevents selective abort. OPRF deviation partially addressed (spot-check; VOPRF not implemented). Limitations honestly documented: no UC security, no VOPRF, collusion out of scope."
+      "original_claim": "~118K lines of Rust implementation",
+      "reason": "Line counts are not claims requiring evidence grounding. Removed as non-substantive."
     },
     {
-      "claim": "Boolean embedding valid for deterministic WFA execution",
-      "section": "§5.1 Tier 1: Algebraic Compilation, Appendix B",
-      "evidence_type": "analysis",
-      "evidence_location": "Paper Appendix B — Proof that ∨-to-+ mismatch never arises in deterministic WFAs. implementation/tests/test_semiring_axioms.py::test_boolean_embedding_into_goldilocks documents the caveat.",
-      "status": "verified",
-      "notes": "The Boolean ⊕ = ∨ is idempotent but field + is not. The embedding is valid because deterministic WFAs have at most one active transition per state, avoiding the case where 1 ∨ 1 ≠ 1 + 1."
+      "original_claim": "Pass@k arithmetization scales as O(kt)",
+      "reason": "Analytical scaling claim without end-to-end benchmark. Retained only as a note, not a grounded claim."
     },
     {
-      "claim": "Pass@k arithmetization scales as O(kt)",
-      "section": "§9.7 Pass@k Arithmetization Scaling",
-      "evidence_type": "analysis",
-      "evidence_location": "Paper Table 6 (Pass@k scaling) and implementation/tests/test_semiring_axioms.py::test_pass_at_k_scaling. For k=100, t=100: 10K states, 20002 columns — feasible. For k=100, t=1000: 200K columns — approaches STARK limits.",
-      "status": "verified",
-      "notes": "Scaling is polynomial in k and t. Paper honestly states that large instances (k=100, t=1000) approach current STARK capacity limits."
+      "original_claim": "Contamination ROC characteristics analyzed with false-negative characterization",
+      "reason": "Qualitative analysis only (no measured ROC curve). Honest limitation captured in psi-contamination-scope claim instead."
     },
     {
-      "claim": "EvalSpec has formal BNF grammar, typing rules, and denotational semantics",
-      "section": "§4 The EvalSpec DSL",
-      "evidence_type": "formal_specification",
-      "evidence_location": "spectacles-core/EVALSPEC_FORMAL.md — Full BNF grammar (§1, ~220 lines), typing rules as inference rules (§2, ~200 lines), denotational semantics mapping to formal power series (§3, ~180 lines), WFA-expressible fragment characterization with decidability theorem (§4).",
-      "status": "verified",
-      "notes": "Includes Theorem 4.1 (WFA expressibility ↔ rational formal power series) and Theorem 4.2 (equivalence decidability for commutative ring semirings). Expressibility boundary table (§4.3) honestly marks geometric mean, corpus BLEU, BERTScore, and calibration error as NOT WFA-expressible."
+      "original_claim": "Boolean embedding valid for deterministic WFA execution",
+      "reason": "Theoretical argument in paper appendix. Correctness subsumed by differential testing (claim differential-testing) which empirically confirms Boolean embedding works on all tested inputs."
     }
   ]
 }
