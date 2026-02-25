@@ -1,144 +1,158 @@
 {
-  "project": "CABER",
+  "project": "CABER (Coalgebraic Behavioral Auditing of Foundation Models)",
   "reviews": [
     {
       "reviewer": "Yuan Cheng",
       "persona": "probabilistic_modeling_researcher",
-      "summary": "The theoretical framework is impressive with genuine contributions in error composition and functor bandwidth, but the entire evaluation relies on stochastic mock LLMs (Markov chains) \u2014 precisely the ideal case for L*-style learning. PAC guarantees depend on assumptions (stationarity, independence) unlikely to hold for real LLMs.",
+      "summary": "Bayesian analysis is sound (Beta-Binomial posterior correctly applied, P(rate > 25%) = 97.3%, 95% HPD [25.0%, 69.9%]), but the probabilistic framework is undermined by three critical issues: PAC bounds from Theorem 1 are vacuous at operating scale (~143K required vs 54-90 available) with an exponential correction from O(b*n0) to O(2^b*n0), graded satisfaction has 0.28-0.73 calibration error destroying the quantitative probabilistic semantics, and conventional statistical baselines (chi-squared, MMD) achieve comparable divergence detection power without coalgebraic complexity.",
       "strengths": [
-        "Rigorous end-to-end error composition (Theorem 3) with five explicitly composed error sources",
-        "Classifier robustness analysis with 2,000 Monte Carlo trials per error rate across 6 rates",
-        "Functor bandwidth as a meaningful complexity measure connected to metric entropy",
-        "Convergence theorem (Theorem 1) with explicit sample complexity bound"
+        "Sound Beta-Binomial posterior analysis with conjugate prior and HPD intervals (P(rate > 25%) = 97.3%)",
+        "Comprehensive baseline battery: chi-squared, MMD, KL divergence, frequency counting, random sampling, PDFA -- all with consistent evaluation metrics",
+        "Transparent PAC bound analysis with self-corrected query complexity and practical Bayesian alternative",
+        "Multi-configuration factorial design (3 configs x 15 prompts x 5-6 trials) with variance decomposition",
+        "Kantorovich distance grounded in optimal transport with known mathematical properties"
       ],
       "weaknesses": [
-        "Mock LLMs are Markov chains \u2014 the ideal case for L*-style learning, providing no evidence of real-LLM viability",
-        "Independent sampling assumption violated in practice by temperature-dependent sampling and context dependencies",
-        "PAC parameters (\u03b5, \u03b4) are set without connection to deployment requirements or risk tolerance",
-        "Specification soundness degrades rapidly with model size: 98.3% (n\u2080\u226450) to 94.2% (n\u2080=200)",
-        "Query cost estimate ($200-$600) based on mock model complexity, not real LLM complexity"
+        "PAC bounds from Theorem 1 require ~143K samples; at 54-90 samples the guarantees are vacuous, and the O(b*n0) to O(2^b*n0) correction reveals exponential blowup",
+        "Calibration error 0.28-0.73 renders graded satisfaction unreliable -- a satisfaction degree of 0.8 could correspond to true probability anywhere in [0.07, 1.0]",
+        "No posterior predictive validation: Dirichlet exchangeability assumptions untested, no comparison against overdispersed alternatives, no prior sensitivity analysis",
+        "Kantorovich distances reported as point estimates without bootstrap confidence intervals despite slow O(n^{-1/d}) convergence rate",
+        "Statistical baselines detect same 7/15 divergent prompts at comparable significance -- no demonstrated marginal value of coalgebraic machinery",
+        "No distributional robustness analysis: stationarity assumed without testing for temporal drift in LLM behavioral distributions"
       ],
-      "score": 6,
+      "score": 5,
       "confidence": 4
     },
     {
       "reviewer": "Aniruddha Sinha",
       "persona": "model_checking_ai_applicant",
-      "summary": "CoalCEGAR has genuine CEGAR structure with abstraction lattice and Galois connections \u2014 significantly more rigorous than TOPOS's mislabeled version. QCTL_F is well-chosen for probabilistic behavioral verification. However, no Lean 4 formalization exists, validation is on mock models only, and the non-functorial alphabet abstraction breaks the coalgebraic foundation.",
+      "summary": "Most theoretically ambitious model-checking application to LLMs, with genuine coalgebraic depth (PCL*, QCTL_F, CoalCEGAR, Kantorovich lifting). However, the theory-practice gap is structurally problematic, not merely large: 0-27% non-functorial abstraction invalidates preservation theorems, CoalCEGAR monotonicity is violated for 1/5 configurations breaking convergence guarantees, learned automata don't generalize beyond queried prompts (0.55-0.69 LOPO accuracy), safety-only fragment is unnecessarily restrictive for <=40-state automata, and no mechanized proofs despite corrected errors in hand proofs.",
       "strengths": [
-        "CoalCEGAR has genuine CEGAR structure with abstraction lattice, monotonicity proof, and termination guarantee",
-        "QCTL_F with graded satisfaction degrees is appropriate for probabilistic behavioral verification",
-        "Kantorovich bisimulation distance is the canonically correct metric for quantitative behavioral comparison",
-        "End-to-end error composition (Theorem 3) with careful sequential conditioning argument",
-        "38 property-based tests covering meaningful mathematical invariants"
+        "Theoretically grounded coalgebraic framework with genuine formal depth: behavioral functor, PCL* learning, QCTL_F model checking, Kantorovich lifting",
+        "CoalCEGAR with explicit abstraction lattice over (output_bound, input_bound, tolerance) triples and Galois connection structure (Proposition 1)",
+        "QCTL_F temporal specifications provide meaningful behavioral safety properties (refusal persistence, paraphrase invariance, instruction hierarchy)",
+        "38 property-based tests validate the right invariants: functor naturality, bisimulation metric properties, fixed-point convergence, lattice ordering",
+        "Theorem 3's structured five-source error composition provides modular error analysis framework"
       ],
       "weaknesses": [
-        "No Lean 4 formalization \u2014 core theorems are paper proofs that property-based tests cannot verify",
-        "Mock LLM validation is insufficient \u2014 Markov chains with 3-6 states don't represent real LLM complexity",
-        "Alphabet abstraction is acknowledged as non-functorial, breaking the coalgebraic foundation",
-        "State explosion risk unaddressed \u2014 scaling from 40 states to real LLM behavioral complexity",
-        "QCTL_F limited to alternation-free fragment, excluding nested path quantifier properties"
+        "0-27% non-functorial abstraction breaks coalgebra morphism requirement -- preservation theorem for QCTL_F satisfaction does not hold; no approximate preservation bound proven",
+        "CoalCEGAR monotonicity violated for 1/5 configs; corrected bound O(k_max + n_max + L) assumes monotonicity and thus does not apply when violated",
+        "Safety fragment only despite <=40-state automata making full CTL* model checking tractable -- restriction appears theoretical, not computational",
+        "No mechanized proofs; corrected query complexity (exponential factor) and CoalCEGAR bound demonstrate hand proofs are error-prone in this domain",
+        "Learned automata don't generalize: 0.55-0.69 LOPO accuracy means model checking covers only observed behavioral fragments, not the behavioral space",
+        "PDFA baseline deliberately weakened: simplified ALERGIA instead of AALpy+PRISM; tuned baseline at 76-80% may approach CABER's 92%"
       ],
-      "score": 7,
-      "confidence": 4
+      "score": 5,
+      "confidence": 5
     },
     {
       "reviewer": "Lila Zhang",
       "persona": "symbolic_reasoning_ai_expert",
-      "summary": "The coalgebraic framing is the most intellectually rigorous approach to LLM behavioral analysis reviewed, with elegant functor bandwidth and Kantorovich distance constructions. However, the theory-practice gap is enormous: non-functorial alphabet abstraction, no comparison to simpler PDFA+PRISM approaches, and no validation on non-Markovian systems.",
+      "summary": "Genuine symbolic behavioral models -- learned automata with <=40 states, compositional QCTL_F specifications, algebraically grounded Kantorovich distances -- provide richer structural output than any competing framework. However, the symbolic reasoning is fundamentally shallow: no abductive explanation of why divergence occurs, keyword classifier bottleneck (0.55-0.69 LOPO accuracy) corrupts all downstream symbolic reasoning, no compositional prompt semantics, no integration with LLM's own symbolic processing, and 0-27% abstraction inconsistency breaks symbol grounding.",
       "strengths": [
-        "Coalgebraic semantics provides the right abstraction level for treating LLMs as state-based behavioral systems",
-        "Functor bandwidth via \u03b5-covering numbers is an elegant complexity measure connecting metric geometry and automata theory",
-        "QCTL_F with graded satisfaction naturally handles probabilistic behavioral verification",
-        "Kantorovich lifting is the canonical distance metric for the coalgebraic setting",
-        "Theoretical framework is internally consistent across Theorems 1-3"
+        "Learned automata provide interpretable symbolic models with emergent behavioral discovery (e.g., 'terse' atom in instruction-rigid configuration)",
+        "Compositional QCTL_F formula language with Boolean connectives, temporal operators, path quantifiers, and probability operators",
+        "Kantorovich distance satisfies triangle inequality, symmetry, and identity of indiscernibles -- enabling transitive behavioral comparison",
+        "Graded satisfaction with Lukasiewicz semantics provides established algebraic framework for multi-valued symbolic reasoning",
+        "Theorem 3's five-source error decomposition provides interpretable, individually addressable error components"
       ],
       "weaknesses": [
-        "Theory-practice gap is enormous: 19-40 state automata from 3-6 state mock models, no real LLM validation",
-        "Non-functorial alphabet abstraction breaks the coalgebraic homomorphism theorems at the input layer",
-        "No comparison to simpler PDFA+PRISM pipeline on the same mock models to justify coalgebraic complexity",
-        "Specification templates not validated against actual documented LLM safety failures",
-        "Certificate format is not standardized for interoperability or third-party verification"
+        "No abductive reasoning: framework detects 7/15 divergent prompts but cannot explain which system-prompt features cause divergence or identify minimal perturbations",
+        "Keyword classifier bottleneck: 0.55-0.69 LOPO accuracy means shallow symbolic grounding corrupts temporal logic, bisimulation, and CEGAR -- all downstream reasoning inherits this limitation",
+        "No compositional prompt analysis: prompts are opaque strings with no semantic decomposition, preventing systematic behavioral space exploration",
+        "No integration with LLM's own symbolic processing: no chain-of-thought analysis, no probing, no attention pattern examination despite partial relaxation being possible",
+        "0-27% abstraction inconsistency is analogous to 27% self-contradiction in a knowledge base -- symbol grounding is broken",
+        "No behavioral ontology: atoms treated as flat labels without taxonomic relationships (hedging as partial compliance, terse as degenerate compliance)"
       ],
-      "score": 7,
+      "score": 5,
       "confidence": 4
     },
     {
       "reviewer": "Sara Roy",
       "persona": "machine_learning_formal_verification",
-      "summary": "The ML-verification integration is deeper than typical systems, with purpose-built learning algorithms and properly composed error bounds. However, the complete absence of real-LLM validation is a critical gap. Deployment cost analysis is unrealistic, no comparison to existing evaluation frameworks, and the AALpy baseline has an unfair handicap.",
+      "summary": "Methodologically the most rigorous LLM behavioral analysis paper reviewed, with exemplary limitation disclosure and comprehensive baselines. However, empirical evaluation does not demonstrate that the sophisticated coalgebraic structure produces better results than simple alternatives: single model (gpt-4.1-nano), non-generalizing classifier (0.55-0.69 LOPO, barely above chance for 4 classes), 0.28-0.73 calibration error, insufficient scale (270 API calls, 15 prompts), statistical baselines matching detection power, and no end-to-end practical utility evaluation despite ~99K lines of code.",
       "strengths": [
-        "End-to-end error composition properly handles multi-stage ML+verification pipeline dependencies",
-        "Classifier robustness analysis is methodologically strong with 12,000 total Monte Carlo trials",
-        "PCL* is purpose-built for the coalgebraic verification pipeline, not a generic algorithm",
-        "Certificate generation provides tangible, timestamped, independently checkable output",
-        "~99K lines of code demonstrates serious implementation depth and commitment"
+        "Exemplary methodological honesty: explicitly states 'approximate behavioral testing, not formal verification' and documents all major limitations",
+        "Comprehensive six-baseline comparison with consistent evaluation metrics and statistical significance testing",
+        "Systematic ablations over distance metrics, PCL* hyperparameters, classifier variants, alphabet sensitivity, and CoalCEGAR refinement levels",
+        "Sound Bayesian UQ with Beta-Binomial posteriors and HPD intervals appropriate for small sample sizes",
+        "Substantial ~99K-line implementation with 38 property-based tests documenting mathematical structure"
       ],
       "weaknesses": [
-        "Mock LLM evaluation invalidates all practical claims \u2014 Markov chains don't represent real LLM behavior",
-        "No real-LLM experiment, even a small one with GPT-2 or a fine-tuned model",
-        "Deployment cost estimate ($200-$600) unrealistic for real LLMs with more complex behavior",
-        "No comparison to HELM, CheckList, DecodingTrust, or other established evaluation frameworks",
-        "Specification templates assume known failure modes, with no mechanism for discovering unexpected behaviors",
-        "AALpy+PRISM baseline receives manually defined alphabet while CABER discovers its own \u2014 non-controlled comparison"
+        "Single model (gpt-4.1-nano) with zero cross-model, cross-tier, or open-source model validation -- external validity is zero for all findings",
+        "Classifier non-generalization: 0.55-0.69 LOPO accuracy (random baseline ~0.25 for 4 classes) means the 'model' in model checking is a lookup table, not a behavioral model",
+        "Calibration error 0.28-0.73 undermines the graded semantics differentiator; no calibration curves, reliability diagrams, or post-hoc calibration applied",
+        "Insufficient scale: 270 API calls, 15 prompts cannot characterize LLM behavioral space; HPD interval [25%, 69.9%] illustrates massive uncertainty",
+        "Statistical baselines match detection power -- no quantitative evidence that structural advantages yield better/faster/more actionable detection",
+        "No end-to-end practical utility evaluation: no user study, no deployment case study, no decision quality comparison"
       ],
-      "score": 6,
-      "confidence": 4
+      "score": 4,
+      "confidence": 5
     },
     {
       "reviewer": "Joseph S. Chang",
       "persona": "automated_reasoning_and_logic_expert",
-      "summary": "QCTL_F model checking is technically competent but not novel \u2014 it is an acknowledged Pattinson-Schr\u00f6der instantiation. The absence of Lean 4 formalization is fundamental for a paper claiming formal guarantees. Property-based tests verify instances, not proofs, and cannot substitute for mechanized verification.",
+      "summary": "Implements the most substantive automated reasoning components of any LLM behavioral analysis framework: properly defined QCTL_F temporal logic as Pattinson-Schroeder instantiation, genuine fixed-point model-checking algorithm, and principled CoalCEGAR with explicit lattice structure. However, reasoning infrastructure has critical gaps: no mechanized proofs (corrected errors demonstrate hand proofs are error-prone), non-functorial abstraction breaks preservation theorems, safety-only fragment unnecessarily restrictive, no proof certificate export, no termination proof for [0,1]-valued fixed-point iteration, and calibration error propagation through Lukasiewicz connectives unanalyzed.",
       "strengths": [
-        "QCTL_F is appropriate for probabilistic behavioral verification with graded satisfaction degrees",
-        "Fixed-point model checking follows correct Tarski-Knaster construction for the quantitative setting",
-        "Specification templates naturally formalize real LLM safety concerns as temporal formulas",
-        "End-to-end error composition is a genuine reasoning contribution with non-trivial proof",
-        "Property-based tests cover meaningful invariants (Hoeffding bounds, bandwidth monotonicity, PAC decomposition)"
+        "Genuine model checking with formally defined QCTL_F syntax/semantics, fixed-point computation engine, and graded [0,1] Lukasiewicz semantics",
+        "QCTL_F correctly identified as Pattinson-Schroeder instantiation with proper positioning relative to PCTL* and coalgebraic modal logic literature",
+        "CoalCEGAR implements actual abstraction refinement with explicit lattice structure and Galois connection justification (Proposition 1)",
+        "Property-based tests check the right algebraic invariants: naturality, metric space properties, convergence, lattice ordering",
+        "Theorem 3's five-source additive error composition provides modular reasoning framework for end-to-end error analysis"
       ],
       "weaknesses": [
-        "No Lean 4 formalization for core theorems \u2014 property-based tests verify instances, not proofs",
-        "QCTL_F is not novel \u2014 it is an acknowledged Pattinson-Schr\u00f6der instantiation",
-        "Witness generation is underspecified with no guarantees on witness quality",
-        "Fixed-point convergence on approximate automata not analyzed at the model-checking level",
-        "No model-checking-specific optimizations (BDD, partial order reduction, symmetry reduction)",
-        "38 property tests 'bridge a gap' that should not exist \u2014 they cannot substitute for Lean formalization"
+        "No mechanized proofs; corrected O(b*n0) to O(2^b*n0), corrected CoalCEGAR bound, and corrected classifier exponent demonstrate hand proofs are error-prone -- mechanization would catch all three",
+        "Non-functorial abstraction (0-27% inconsistency) breaks the central preservation theorem: model-checking results on abstract model have no formal connection to concrete system",
+        "Safety fragment only despite <=40-state automata making full CTL* tractable; restriction is a theoretical limitation of Proposition 1's Galois connection, not computational",
+        "No termination proof for [0,1]-valued fixed-point iteration: [0,1] is not a finite lattice, so Kleene's theorem requires Scott-continuity of operators, which is not proven",
+        "No proof certificate export in any standardized format -- auditor must trust entire ~99K-line codebase rather than verifying compact proof artifacts",
+        "Calibration error 0.28-0.73 propagates through Lukasiewicz connectives: t-norm error up to e_a + e_b accumulates through temporal fixed-point unfoldings, unanalyzed"
       ],
-      "score": 6,
-      "confidence": 5
+      "score": 5,
+      "confidence": 4
     }
   ],
   "synthesis": {
     "consensus_strengths": [
-      "The coalgebraic framing of LLM behavioral verification is genuinely novel and provides the most theoretically rigorous foundation for treating LLMs as verifiable systems",
-      "CoalCEGAR has genuine CEGAR structure (abstraction lattice, Galois connections, monotonicity, termination) \u2014 a proper formal methods contribution",
-      "End-to-end error composition (Theorem 3) with five explicitly composed error sources across pipeline stages is a principled framework for multi-stage ML+verification systems",
-      "Functor bandwidth provides an elegant, novel complexity measure connecting metric entropy to behavioral diversity, enabling sublinear query complexity",
-      "The ML-verification integration is deeper than typical approaches, with purpose-built learning algorithms specifically designed for the coalgebraic verification pipeline"
+      "Most theoretically principled and technically deep application of formal methods to LLM behavioral analysis in the literature -- genuine coalgebraic framework with PCL* learning, QCTL_F model checking, CoalCEGAR refinement, and Kantorovich bisimulation distance (all 5 reviewers)",
+      "Exemplary methodological honesty: transparent reporting of PAC bound vacuity, corrected query complexity, classifier non-generalization, non-functorial abstraction, and explicit framing as 'approximate behavioral testing, not formal verification' (all 5 reviewers)",
+      "Sound Bayesian uncertainty quantification with Beta-Binomial posteriors and HPD intervals, preferred over frequentist defaults given small sample sizes (Cheng, Roy)",
+      "Comprehensive baseline battery (6 statistical baselines) and systematic ablation studies provide proper contextualization and design-choice analysis (all 5 reviewers)",
+      "Genuine model-checking implementation: well-defined QCTL_F temporal logic (correctly identified as Pattinson-Schroeder instantiation), fixed-point computation engine, and principled CoalCEGAR with explicit lattice structure (Sinha, Chang)",
+      "38 property-based tests validate the correct mathematical invariants (functor naturality, bisimulation metric properties, convergence, lattice ordering), serving as effective regression tests (all 5 reviewers)",
+      "Substantial engineering commitment: ~99K lines of Rust and Python with property-based testing documenting the mathematical structure (Roy, Chang)"
     ],
     "consensus_weaknesses": [
-      "The entire empirical validation is on stochastic mock LLMs (Markov chains with 3-6 states) \u2014 the ideal case for L*-style learning, providing no evidence of real-LLM viability",
-      "No Lean 4 formalization exists for core theorems \u2014 38 property-based tests provide instance-level evidence but cannot verify the proofs themselves",
-      "The non-functorial alphabet abstraction (embedding-based clustering) breaks the coalgebraic homomorphism theorems, undermining the theoretical guarantees at the input layer",
-      "State explosion risk is unaddressed \u2014 scaling from \u226440 states on 3-6 state mock models to real LLMs with thousands of effective behavioral states",
-      "No comparison to existing LLM evaluation frameworks (HELM, CheckList, DecodingTrust) or simpler alternatives (PDFA+PRISM) on shared tasks"
+      "Non-functorial abstraction (0-27% inconsistency) breaks the coalgebraic morphism structure and invalidates the preservation theorems that justify abstract model checking -- the theoretical foundation's central guarantee does not hold (all 5 reviewers, strongest from Sinha and Chang)",
+      "Learned automata do not generalize: 0.55-0.69 LOPO CV accuracy (barely above chance for 4 classes) means the 'model' in model checking is a memorized lookup table for observed prompts, not a behavioral model of the LLM (all 5 reviewers, strongest from Roy and Sinha)",
+      "Graded satisfaction calibration error (0.28-0.73) destroys the quantitative probabilistic semantics that differentiate CABER from binary testing -- all downstream computation consuming graded values inherits this unreliability (all 5 reviewers)",
+      "Single-model scope (gpt-4.1-nano only) with zero cross-model validation provides essentially zero external validity for any finding (Cheng, Roy, Sinha)",
+      "Statistical baselines (chi-squared, MMD) achieve comparable detection power on the same 7/15 divergent prompts -- no quantitative evidence demonstrates that coalgebraic structural advantages produce better, faster, or more actionable detection (Cheng, Roy)",
+      "No mechanized proofs for core theorems despite formal methods positioning; corrected query complexity (exponential factor), CoalCEGAR bound, and classifier exponent demonstrate hand proofs are error-prone in this domain (Sinha, Chang)",
+      "PAC bounds from Theorem 1 are vacuous at operating sample sizes (54-90 vs ~143K required), rendering the primary theoretical convergence guarantee operationally irrelevant (Cheng, Roy)"
     ],
     "controversial_points": [
-      "Whether the coalgebraic framing provides practical advantages over simpler PDFA+PRISM: Lila Zhang and Aniruddha Sinha acknowledge theoretical elegance but question whether it produces empirically different outcomes on the same mock models. The answer requires real-LLM validation.",
-      "Significance of the non-functorial alphabet abstraction: Lila Zhang views it as fundamentally undermining the theoretical guarantees, while Sara Roy and Aniruddha Sinha treat it as a known approximation with potential mitigations via continuity analysis.",
-      "Whether 38 property-based tests are an adequate substitute for Lean formalization: Joseph Chang argues they are categorically insufficient, while Aniruddha Sinha considers them a reasonable bridge pending formalization. The question is whether empirical evidence of theorem instances constitutes sufficient verification.",
-      "The overall contribution level: Aniruddha Sinha and Lila Zhang score 7/10 for theoretical elegance, while Yuan Cheng and Sara Roy score 6/10 emphasizing the practical validation gap. The split reflects whether one values theoretical ambition or empirical grounding."
+      "Whether the structural advantages (reusable automata, temporal reasoning, compositional specifications, graded satisfaction) justify the coalgebraic complexity over ~10 lines of chi-squared testing: Cheng and Roy find the marginal value undemonstrated, while Zhang and Chang see genuine structural contributions that simpler methods cannot provide",
+      "Severity of the non-functorial abstraction: Sinha and Chang view it as invalidating the theoretical foundation entirely, while Zhang frames it as a symbol-grounding problem fixable with better classifiers and Cheng notes it as one of several probabilistic issues",
+      "Whether the safety-only fragment restriction is a principled scoping decision or an unnecessary expressiveness limitation: Chang argues full CTL* is tractable for <=40-state automata, while Sinha acknowledges the theoretical justification via Proposition 1's Galois connection",
+      "Whether 270 API calls is a reasonable pilot study or an insufficient evaluation: Roy finds it fundamentally inadequate (score 4/10), while other reviewers are more tolerant given the demonstrated methodological rigor",
+      "Whether the keyword classifier's 0.55-0.69 LOPO accuracy reflects a fundamental impossibility (LLM behavioral spaces too complex for finite automata) or an addressable engineering limitation (better classifiers would fix it): Roy asks this directly, Zhang sees it as a solvable symbolic depth problem",
+      "The degree to which the corrected errors (query complexity, CoalCEGAR bound, classifier exponent) inspire confidence vs. concern: Chang views them as evidence for mechanization, Sinha views them as cautionary"
     ],
-    "overall_assessment": "CABER is the most theoretically ambitious project reviewed, with genuine contributions in coalgebraic LLM modeling, functor bandwidth, CoalCEGAR, and end-to-end error composition. The theoretical framework is internally consistent and mathematically sophisticated. However, the gap between theory and validation is the widest of all projects: no Lean formalization, no real-LLM experiments, and an acknowledged non-functorial approximation at the input layer. The work reads as a strong theoretical proposal with proof-of-concept validation on toy models. The coalgebraic framing is novel and potentially impactful, but the promises of formal behavioral guarantees for real LLMs remain unvalidated.",
+    "overall_assessment": "CABER is unambiguously the most theoretically ambitious and technically deep application of formal methods to LLM behavioral analysis. The coalgebraic framework -- PCL* learning, QCTL_F model checking, CoalCEGAR abstraction refinement, Kantorovich bisimulation distance -- represents genuine formal methods contributions applied to a genuinely important problem, with exemplary methodological honesty that sets a standard for the field. However, the consensus across all five expert reviewers is that the gap between the coalgebraic theory's formal guarantees and the empirical execution is not merely large but structurally problematic: non-functorial abstractions invalidate (rather than merely weaken) preservation theorems, non-generalizing classifiers reduce model checking to property testing on observed inputs, calibration error destroys the quantitative graded semantics, and simple statistical baselines match the framework's detection power. The work is valuable precisely because it identifies the correct formal structure for LLM behavioral verification and honestly documents where that structure breaks down in practice. The recommended path forward involves fixing the abstraction morphism (or proving approximate preservation), deepening the symbolic classification stack, mechanizing the core theorems, scaling experiments to multiple frontier models, and demonstrating concrete scenarios where the coalgebraic structure produces actionable insights that simpler methods cannot. Mean score: 4.8/10 across reviewers, reflecting a framework with the right theoretical vision but insufficient empirical execution to validate it.",
     "recommended_improvements": [
-      "Validate on at least one real LLM API (even GPT-2 or a fine-tuned model) to demonstrate meaningful behavioral structure extraction from non-Markovian systems",
-      "Prioritize Lean 4 formalization of Theorem 1 (PCL* convergence) \u2014 this is the core guarantee and the most impactful proof target",
-      "Characterize the error introduced by the non-functorial alphabet abstraction, possibly via continuity analysis or Lipschitz bounds",
-      "Demonstrate a concrete scenario where the coalgebraic machinery detects a behavioral property that PDFA+PRISM misses",
-      "Analyze state scaling: how does PCL* perform as the true number of behavioral states grows from 6 to 100 to 1000?",
-      "Ground specification templates in documented real LLM safety incidents",
-      "Provide realistic deployment cost analysis accounting for API rate limits, re-auditing frequency, and real LLM behavioral complexity",
-      "Fix the AALpy+PRISM baseline by providing both systems with the same alphabet or neither with a manual one"
+      "Fix abstraction morphism to achieve functoriality (0% inconsistency) or prove quantitative approximate preservation theorem bounding |sat_A(phi) - sat_C(phi)| as a function of inconsistency rate",
+      "Scale experiments to 1000+ API calls per configuration across at least 3 diverse models (GPT-4, Claude 3.5, Llama 3) with cross-model generalization analysis",
+      "Replace keyword classifier with semantic embedding-based classification to improve LOPO accuracy above 80% and deepen the symbolic grounding layer",
+      "Mechanize core theorems (PCL* convergence, model-checker soundness, error composition, CoalCEGAR monotonicity) in Lean 4 or Coq to catch errors and provide verifiable proof artifacts",
+      "Calibrate graded satisfaction scores using Platt scaling, temperature scaling, or isotonic regression; present reliability diagrams; analyze calibration error propagation through Lukasiewicz connectives",
+      "Provide bootstrap confidence intervals on Kantorovich bisimulation distances with sensitivity analysis on the ground metric",
+      "Demonstrate at least one concrete scenario where CABER's structural output (automaton, temporal verdict, bisimulation distance) produces an actionable insight that chi-squared/MMD testing cannot",
+      "Extend from safety fragment to full CTL* model checking, exploiting the <=40-state automata to handle liveness and fairness properties",
+      "Export model-checking results as proof certificates (invariant certificates for safety, strategy certificates for liveness) in standardized format for independent verification",
+      "Add abductive explanation capability: given a divergent prompt, identify the minimal system-prompt features whose removal eliminates the divergence",
+      "Compare against full AALpy + PRISM baseline for honest PDFA comparison rather than simplified ALERGIA",
+      "Conduct posterior predictive checks for the Dirichlet behavioral atom distributions and sensitivity analysis on prior choice"
     ]
   }
 }

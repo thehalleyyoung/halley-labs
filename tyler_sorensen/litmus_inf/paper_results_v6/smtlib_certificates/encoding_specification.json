@@ -1,0 +1,93 @@
+{
+  "theory": "Axiomatic Memory Model Verification",
+  "reference": "Alglave, Maranget, Tautschnig. Herding Cats. TOPLAS 2014.",
+  "logic": "QF_LIA",
+  "sorts": {
+    "Int": "Event timestamps (topological ordering for acyclicity check)",
+    "Bool": "Coherence order relation variables"
+  },
+  "function_symbols": {
+    "ts_i": "Timestamp for event i (Int)",
+    "ts_init_a": "Timestamp for initial write to address a (Int)",
+    "rf_i": "Read-from assignment for load i: index into store list (Int)",
+    "co_a_i_j": "Coherence order: store i before store j to address a (Bool)"
+  },
+  "axioms": {
+    "rf_range": "\u2200 load l: 0 \u2264 rf(l) < |stores_to(addr(l))|",
+    "co_totality": "\u2200 addr a, stores i,j: co(a,i,j) \u2228 co(a,j,i)",
+    "co_antisymmetry": "\u2200 addr a, stores i,j: \u00ac(co(a,i,j) \u2227 co(a,j,i))",
+    "co_transitivity": "\u2200 addr a, stores i,j,k: co(a,i,j) \u2227 co(a,j,k) \u2192 co(a,i,k)",
+    "po_preservation": "Model-dependent: TSO preserves all except W\u2192R; ARM relaxes all cross-addr",
+    "rf_ordering": "rf(l) = s \u2192 ts(s) < ts(l)",
+    "co_ordering": "co(a,i,j) \u2192 ts(store_i) < ts(store_j)",
+    "fr_ordering": "rf(l) = s_i \u2227 co(a,i,j) \u2192 ts(l) < ts(store_j)"
+  },
+  "models_encoded": {
+    "TSO": {
+      "relaxed_po": [
+        "W\u2192R to different addresses"
+      ],
+      "preserved_po": [
+        "R\u2192R",
+        "R\u2192W",
+        "W\u2192W",
+        "po-loc",
+        "fence-ordered"
+      ]
+    },
+    "PSO": {
+      "relaxed_po": [
+        "W\u2192R",
+        "W\u2192W to different addresses"
+      ],
+      "preserved_po": [
+        "R\u2192R",
+        "R\u2192W",
+        "po-loc",
+        "fence-ordered"
+      ]
+    },
+    "ARM": {
+      "relaxed_po": [
+        "All cross-address pairs"
+      ],
+      "preserved_po": [
+        "po-loc",
+        "addr-dep",
+        "data-dep",
+        "ctrl-dep\u2192W",
+        "fence-ordered"
+      ]
+    },
+    "RISC-V": {
+      "relaxed_po": [
+        "All cross-address pairs"
+      ],
+      "preserved_po": [
+        "po-loc",
+        "addr-dep",
+        "data-dep",
+        "ctrl-dep\u2192W",
+        "fence.{pred}.{succ} ordered"
+      ]
+    },
+    "GPU": {
+      "relaxed_po": [
+        "All cross-address pairs"
+      ],
+      "preserved_po": [
+        "po-loc",
+        "scoped-fence ordered (scope must cover both threads)"
+      ],
+      "scopes": [
+        "workgroup",
+        "device",
+        "system"
+      ]
+    }
+  },
+  "certificate_types": {
+    "UNSAT_proof": "No execution under the model can produce the forbidden outcome. The UNSAT core identifies the minimal set of constraints proving safety.",
+    "SAT_witness": "A concrete execution (rf, co assignments) that produces the forbidden outcome under the model, demonstrating unsafety."
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "project": "PhaseKit: Mean Field Phase Diagrams for Neural Network Initialization",
+  "path": "B (Technical Depth)",
+  "triage_summary": "Three-class phase prediction at 56% barely above chance; ~100% per-layer variance error; missing formal bounds on O(1/N^3) terms",
+  "status": "complete",
+  "phases": {
+    "B0": "This plan file",
+    "B1": {
+      "title": "Execute core improvements",
+      "status": "complete",
+      "tasks": [
+        {
+          "id": "fix-backprop-bug",
+          "description": "train_network_numpy uses ReLU derivative (acts[l] > 0) for ALL activations including tanh/GELU/SiLU. This produces incorrect empirical ground truth for non-ReLU activations, directly causing the poor 3-class accuracy.",
+          "impact": "critical",
+          "status": "complete",
+          "file": "experiments/run_v4_experiments.py",
+          "resolution": "Added activation_derivative_np() with per-activation derivatives (tanh, gelu, silu). v4 experiments use correct derivatives."
+        },
+        {
+          "id": "fix-empirical-phase-thresholds",
+          "description": "determine_empirical_phase labels everything with 0.3 < loss_ratio < 0.85 as 'critical', which is far too broad. Ordered-phase networks that train moderately get mislabeled as critical.",
+          "impact": "critical",
+          "status": "complete",
+          "file": "experiments/run_v4_experiments.py"
+        },
+        {
+          "id": "widen-theoretical-critical-window",
+          "description": "The soft phase classifier's epsilon is too narrow, especially for GELU/SiLU where the ordered phase spans a wide sigma_w range. Need activation-specific width scaling.",
+          "impact": "high",
+          "status": "complete",
+          "file": "implementation/src/mean_field_theory.py",
+          "resolution": "Activation-specific constants c_relu=1.0, c_tanh=1.2, c_gelu=c_silu=1.8 implemented."
+        },
+        {
+          "id": "fix-variance-correction",
+          "description": "Cross-layer cumulative_correction grows unboundedly and averaging by 1/(l+1) is ad hoc. Replace with proper perturbative propagation where each layer's correction decays rather than accumulates.",
+          "impact": "high",
+          "status": "complete",
+          "file": "implementation/src/mean_field_theory.py"
+        }
+      ]
+    },
+    "B2": {
+      "title": "Math rigor pass",
+      "status": "complete",
+      "tasks": [
+        {
+          "id": "formal-truncation-bounds",
+          "description": "Add Theorem on formal bounds for O(1/N^3) truncation error in variance recursion. The remainder is bounded by C * sigma_w^8 * M_8(q) / N^3 where M_8 is the 8th moment.",
+          "status": "complete",
+          "file": "implementation/src/mean_field_theory.py"
+        },
+        {
+          "id": "perturbative-validity-condition",
+          "description": "Replace ambiguous L*|chi_1-1|*D/N << 1 with concrete validated threshold: validity when correction_ratio = |delta_q / q_mf| < 0.3, validated empirically.",
+          "status": "complete",
+          "file": "implementation/src/mean_field_theory.py"
+        },
+        {
+          "id": "kappa4-sensitivity",
+          "description": "Add numerical quadrature error analysis for kappa_4 computation via scipy.integrate.quad. Show relative error < 1e-6 across all activations.",
+          "status": "complete",
+          "file": "implementation/src/mean_field_theory.py"
+        }
+      ]
+    },
+    "finalization": {
+      "title": "Update all docs and rebuild",
+      "status": "complete",
+      "tasks": [
+        {"task": "Update theory/tool_paper.tex with improved results", "status": "complete"},
+        {"task": "Update grounding.json with new data sources", "status": "complete"},
+        {"task": "Update README.md and API.md", "status": "complete"},
+        {"task": "Run pdflatex", "status": "complete"},
+        {"task": "Bayesian -> soft phase rename", "status": "complete"},
+        {"task": "Theorem 4 -> Conjecture", "status": "complete"},
+        {"task": "PyTorch integration", "status": "complete"},
+        {"task": "Independent calibration experiment", "status": "complete"}
+      ]
+    }
+  }
+}

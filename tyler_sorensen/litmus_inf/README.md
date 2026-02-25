@@ -1,118 +1,114 @@
-# LITMUS∞: Cross-Architecture Memory Model Portability Checker
+# LITMUS∞: SMT-Verified Memory Model Portability Checker
 
-**Is your concurrent C/C++ code safe to port from x86 to ARM?**
-LITMUS∞ answers in under 1ms per pattern, with per-thread minimal fence fixes, severity classification, and Z3 certificates for every result.
+Instantly check if your concurrent C/C++/CUDA code will break when ported from x86 to ARM, RISC-V, or GPU architectures. Every result has a Z3 proof certificate.
 
 ## 30-Second Quickstart
 
 ```bash
-pip install -e .   # install litmus-check CLI
-
-# Check a C++ file for x86→ARM portability issues:
-litmus-check --target arm myfile.cpp
-
-# Or use the Python API directly:
-python3 -c "
-from portcheck import check_portability
-result = check_portability('mp', target_arch='arm')
-print(result)
-"
+pip install -e .
+litmus-check --target arm myfile.c
 ```
 
 Output:
 ```
-Pattern: mp  Target: arm  Result: UNSAFE
-Severity: data_race
-Fence fix: dmb ishst (T0); dmb ishld (T1)
-Cost saving: 62.5% vs full dmb ish
-Z3 certificate: SAT (forbidden outcome reachable)
+UNSAFE: mp (data_race) → dmb ishst (T0); dmb ishld (T1)  [Z3: SAT]
+  ↳ 62.5% cheaper than full barrier
+UNSAFE: sb (data_race) → dmb ish (T0); dmb ish (T1)      [Z3: SAT]
+SAFE:   mp_fence                                           [Z3: UNSAT]
+3 patterns matched, 2 unsafe, 1 safe  (12ms)
 ```
 
-### Analyze real code:
-```python
-from ast_analyzer import ast_analyze_code
+## Most Impressive Demo
 
-result = ast_analyze_code("""
-// Thread 0
-data.store(42, std::memory_order_relaxed);
-flag.store(1, std::memory_order_release);
-// Thread 1
-r0 = flag.load(std::memory_order_acquire);
-r1 = data.load(std::memory_order_relaxed);
-""")
-print(result.patterns_found[0])  # mp (confidence=1.00)
+```bash
+# Check the full portability matrix: 75 patterns × 10 architectures = 750 pairs
+python3 portcheck.py --analyze-all
+# → 750/750 Z3 certificates in <1 second. Zero timeouts. Every result proven.
+
+# Export all proofs as standalone SMT-LIB2 files (verifiable by any solver)
+python3 smtlib_certificate_extractor.py --all
+# → 459 UNSAT proofs + 291 SAT witnesses written to paper_results_v6/smtlib_certificates/
+
+# Find what breaks when porting from ARM to RISC-V
+python3 portcheck.py --diff arm riscv
+# → mp_fence_wr: sole discriminator (asymmetric fence semantics)
+```
+
+## Real Code Analysis
+
+```python
+from ast_analyzer import ast_check_portability
+
+code = """
+// Thread 0                     // Thread 1
+data = value;                   if (flag) {
+flag = 1;                           use(data);
+                                }
+"""
+bugs = ast_check_portability(code, target_arch="arm")
+# → {'pattern': 'mp', 'safe': False, 'fence_fix': 'dmb ishst (T0); dmb ishld (T1)'}
+```
+
+Recognizes C11 atomics, GCC builtins (`__sync_synchronize`), and kernel macros (`smp_store_release`, `READ_ONCE`, `WRITE_ONCE`).
+
+## CLI Usage
+
+```bash
+litmus-check --target arm src/               # scan directory
+litmus-check --target riscv --json src/      # JSON for CI pipelines
+litmus-check --target arm --verbose src/     # include safe patterns
+
+# Reproduce all paper results
+python3 run_paper_experiments.py
+python3 run_phase_b2_experiments.py
 ```
 
 ## Key Results
 
-| Metric | Value | Notes |
-|--------|-------|-------|
-| Z3 certificate coverage | **750/750 (100%)** | Every pair machine-checked |
-| Severity classification | 228 data race, 44 security, 70 benign | 342 unsafe pairs classified |
-| DSL-to-.cat correspondence | **170/171 (99.4%)** | TSO 100%, ARM 100%, RISC-V 98.2% |
-| herd7 agreement | **228/228** | Wilson CI [98.3%, 100%] |
-| Code analyzer accuracy | 96.6% exact, 98.0% top-3 (n=203) | Wilson CI [93.1%, 98.3%] |
-| SMT consistency (CPU+GPU) | 228/228 + 108/108 | Independent Z3 validation |
-| Fence proofs | 55 UNSAT + 40 SAT | Machine-checked certificates |
-| Portability pairs | 750 (75 × 10 configs) | 4 CPU + 6 GPU scope |
-| Speed | <200ms for all 750 pairs | Sub-ms per pattern |
-
-## Usage
-
-```bash
-# Pattern-level checks
-python3 portcheck.py --pattern mp --target arm
-python3 portcheck.py --analyze-all
-python3 portcheck.py --scope-mismatch          # GPU scope bugs
-python3 portcheck.py --diff arm riscv           # model boundary
-
-# Code analysis
-litmus-check --target arm src/                  # scan directory
-litmus-check --target arm --json src/           # JSON for CI
-
-# Full experiments (Z3 certificates, severity, DSL-.cat)
-python3 run_phase_b_experiments.py              # all Phase B experiments
-python3 severity_classification.py              # severity classification
-python3 dsl_cat_correspondence.py               # DSL-.cat validation
-
-# SMT validation
-python3 smt_validation.py                       # Z3 proofs
-python3 herd7_validation.py                     # herd7 comparison
-```
-
-### Reproduce Paper Results
-
-```bash
-python3 run_phase_b_experiments.py      # all experiments (saves to paper_results_v5/)
-python3 benchmark_suite.py              # 203-snippet benchmark
-pdflatex paper.tex && pdflatex paper.tex  # compile paper
-```
+| Metric | Result | Evidence |
+|--------|--------|----------|
+| Z3 certificate coverage | **750/750 (100%)** | 459 UNSAT proofs + 291 SAT witnesses, zero timeouts |
+| SMT-LIB2 proof export | **750 .smt2 files** | Independently verifiable by any SMT-LIB solver |
+| herd7 internal consistency | **228/228** | All CPU models; Wilson CI [98.3%, 100%] |
+| GPU SMT internal consistency | **108/108** | 18 patterns × 6 models; no external oracle |
+| Machine-checked fence proofs | **55 UNSAT + 40 SAT** | Fence sufficiency / inherent observability |
+| DSL-to-.cat correspondence | **170/171 (99.4%)** | TSO, ARM, RISC-V |
+| Code analyzer accuracy | **93.0% exact, 94.0% top-3** | n=501; Wilson CI [90.4%, 94.9%] |
+| Benchmark sources | **10 projects** | Linux kernel, Folly, LLVM, Abseil, Boost, DPDK, crossbeam, + 3 more |
+| Compositional analysis | **5 multi-pattern programs** | Disjoint + shared-variable composition |
+| Severity classification | 228 data_race, 44 security, 70 benign | 342 unsafe pairs |
+| Analysis speed | **sub-second** (750 pairs) | <1ms per pattern |
 
 ## Supported Architectures
 
-| Architecture | Model | Key Feature |
+| Architecture | Model | Relaxations |
 |-------------|-------|-------------|
-| x86 / x86-64 | TSO | Only relaxes store→load |
-| SPARC | PSO | Also relaxes store→store |
-| ARM (v7/v8) | ARMv8 | All reorderings; preserves dependencies |
-| RISC-V | RVWMO | Asymmetric fences (fence pred,succ) |
+| x86 / x86-64 | TSO | Store→load only |
+| SPARC | PSO | Store→load, store→store |
+| ARM (v7/v8) | ARMv8 | All four; preserves deps |
+| RISC-V | RVWMO | All four; asymmetric fences |
 | OpenCL | WG / Device | Scoped synchronization |
 | Vulkan | WG / Device | SPIR-V memory model |
 | PTX (CUDA) | CTA / GPU | Scoped membar |
 
+Custom models: `model MyModel { relaxes W->R, W->W ... }`
+
 ## Limitations
 
-- Operates on 75 built-in litmus patterns, not arbitrary programs
-- Fence costs are analytical weights, not hardware latencies
-- SMT consistency is internal (same-author encodings); herd7 provides independent validation
-- Pattern-level safety does not compose to program-level safety (Proposition 7)
-- GPU model is a conservative approximation (1 parameterized model, 6 scope instantiations)
-- Theorems 1-3 are paper proofs, not mechanized in a proof assistant
-- DSL cannot express RISC-V asymmetric fence pred/succ (1/171 mismatch)
+- **Pattern-level only:** 75 built-in litmus test patterns, not arbitrary programs
+- **No coverage audit:** 75-pattern universe not validated against real bug databases; practical coverage unknown
+- **Compositional reasoning is conservative:** shared-variable programs flagged as potentially unsafe; exact composition only for disjoint variables; rely-guarantee extension is future work
+- **Severity taxonomy is CWE-calibrated** (CWE-362 for data races, CWE-667 for security), but not validated against specific CVE instances
+- **Fence costs are analytical weights,** not measured hardware latencies
+- **Z3 in trusted computing base:** SMT-LIB2 exports enable solver cross-checking, but no independent LFSC/Alethe proof checking
+- **SMT consistency is internal** (same-author encodings); herd7 provides independent evidence for CPU models
+- **GPU models lack external validation** (108/108 is internal consistency only, no GPU-litmus comparison)
+- **Theorems are paper proofs,** not mechanized in Coq/Isabelle/Lean
+- **Benchmark is author-sampled** (501 snippets from 10 projects); not independently curated
+- **Not published to PyPI** — install from source
 
 ## Dependencies
 
 - Python 3.8+
-- z3-solver (for SMT validation: `pip install z3-solver`)
-- tree-sitter, tree-sitter-c, tree-sitter-cpp (for AST analysis, optional)
-- herd7 (for independent validation, optional)
+- z3-solver (`pip install z3-solver`)
+- tree-sitter, tree-sitter-c, tree-sitter-cpp (optional, for AST analysis)

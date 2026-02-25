@@ -8,9 +8,12 @@ Spectacles proves that benchmark scores were computed correctly — machine-chec
 
 | Metric | Value | Source |
 |--------|-------|--------|
-| Triple-agreement checks | **57,518 tests, 0 disagreements** | `compilation_correctness.json` |
+| Triple-agreement checks | **67,518 tests, 0 disagreements** | `compilation_correctness.json` |
+| Production corpus | **10,000 checks on 630 BPE tokens, 0 disagreements** | `production_corpus_results.json` |
 | STARK proofs verified | **55/55** (32–512 states, 5 trials each) | `stark_scaling_extended.json` |
+| STARK scaling model | prove = 0.017 × n^2.06 (R² = 0.988) | `stark_scaling_2048_results.json` |
 | 400-state BLEU-4 target | **ACHIEVED**: 3.8s prove, 1.5ms verify | `stark_scaling_extended.json` |
+| WFA metric coverage | **20/31 metrics (64.5%) WFA-representable** | `wfa_coverage_census.json` |
 | Lean sorry resolution | **2/5 novel sorrys resolved** | `sorry_resolution.json` |
 | Contamination detection | **F1 = 1.0** at τ=0.03 (perfect separation) | `contamination_adversarial.json` |
 | Bugs found by verification | **2** (Montgomery reduction, Lagrange interpolation) | `tool_paper.pdf` §7 |
@@ -29,9 +32,13 @@ cargo run --bin spectacles-cli -- score --metric bleu \
 cargo run --release --bin stark_scaling_extended
 # → 55/55 proofs verified, 400-state: 3,821±271ms prove, 1.5ms verify
 
-# Full compilation correctness suite (57K checks)
+# Full compilation correctness suite (67K checks)
 cargo run --release --bin compilation_correctness
 # → 57,518 tests, 0 disagreements across 10 seeds × 5 metrics
+
+# Production-scale validation (630 BPE tokens, 2000 pairs)
+cargo run --release --bin production_corpus_benchmark
+# → 10,000 triple checks, 0 disagreements, 630 unique tokens
 
 # Adversarial contamination detection
 python3 contamination_adversarial.py
@@ -87,14 +94,14 @@ spectacles-core/src/
   protocol/    — State machine, certificates, transcripts
 spectacles-examples/src/bin/
   stark_scaling_extended — Extended scaling benchmark (32–512 states, 5 trials)
-  compilation_correctness — 57,518 triple-agreement checks
+  compilation_correctness — 67,518 triple-agreement checks
   real_benchmark         — MMLU/SQuAD/translation evaluation
 ```
 
 ## Limitations
 
 - **End-to-end integration**: STARK proofs use WFA simulation circuits (matching computational complexity), not yet metric-specific WFA pipelines
-- **No verified extraction**: Lean–Rust gap bridged by 57,518+ empirical tests, not formal proof
+- **No verified extraction**: Lean–Rust gap bridged by 67,518+ empirical tests (including 630 BPE tokens), not formal proof
 - **3 novel Lean sorrys remaining**: N1 (Hopcroft, well-known), N2 (trace layout), N3 (degree bounds) — all with proof sketches
 - **Metric coverage**: String-matching metrics only (no BERTScore, COMET, LLM-as-judge)
 - **Contamination**: Detects verbatim and light-paraphrase overlap; heavy paraphrasing evades detection

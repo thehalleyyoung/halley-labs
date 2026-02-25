@@ -1,0 +1,410 @@
+{
+  "title": "WFA Coverage Census of NLP Evaluation Metrics",
+  "description": "Survey of common NLP evaluation metrics classified by WFA (Weighted Finite Automaton) representability. Addresses the question: what fraction of NLP evaluation is WFA-expressible?",
+  "methodology": "Each metric is analyzed for whether its computation can be expressed as a rational formal power series over an appropriate semiring. A metric is WFA-representable if its core computation reduces to weighted transduction over finite-state machinery.",
+  "metrics": [
+    {
+      "metric_name": "Exact Match",
+      "category": "string matching",
+      "wfa_representable": true,
+      "semiring_type": "boolean",
+      "wfa_construction": "Single-path DFA that accepts iff the candidate string equals the reference string. The boolean semiring yields 1 (match) or 0 (no match). Constructed as a linear-chain automaton with one state per reference token plus a sink state.",
+      "limitation_notes": "Requires fixed reference string to build the automaton. Normalization (lowercasing, whitespace stripping) must be applied as a preprocessing transducer.",
+      "used_in_benchmarks": ["MMLU", "SQuAD", "TriviaQA", "NaturalQuestions", "HumanEval", "ARC", "HellaSwag", "GPQA"],
+      "spectacles_implementation": "implemented"
+    },
+    {
+      "metric_name": "Token F1",
+      "category": "overlap",
+      "wfa_representable": true,
+      "semiring_type": "counting",
+      "wfa_construction": "Two counting WFAs: one counts tokens in the candidate that appear in the reference (true positives), one counts total candidate tokens, one counts total reference tokens. F1 = 2*TP/(|candidate|+|reference|). The counting is WFA-representable; the final division is a post-processing step over the semiring values.",
+      "limitation_notes": "The division to compute F1 from precision and recall is a rational operation over counts, not itself a semiring operation. The WFA computes the raw counts; F1 is derived algebraically. Multi-set matching for repeated tokens requires careful state design.",
+      "used_in_benchmarks": ["SQuAD", "SQuAD 2.0", "NaturalQuestions", "HotpotQA", "DROP"],
+      "spectacles_implementation": "implemented"
+    },
+    {
+      "metric_name": "Token Precision",
+      "category": "overlap",
+      "wfa_representable": true,
+      "semiring_type": "counting",
+      "wfa_construction": "Counting WFA over candidate tokens, weighted by membership in the reference token set. Precision = count of matching tokens / total candidate tokens.",
+      "limitation_notes": "Same as Token F1: the division is post-processing. The WFA handles the counting.",
+      "used_in_benchmarks": ["SQuAD", "NaturalQuestions"],
+      "spectacles_implementation": "implemented"
+    },
+    {
+      "metric_name": "Token Recall",
+      "category": "overlap",
+      "wfa_representable": true,
+      "semiring_type": "counting",
+      "wfa_construction": "Counting WFA over reference tokens, weighted by membership in the candidate token set. Recall = count of matching tokens / total reference tokens.",
+      "limitation_notes": "Same as Token F1: the division is post-processing.",
+      "used_in_benchmarks": ["SQuAD", "NaturalQuestions"],
+      "spectacles_implementation": "implemented"
+    },
+    {
+      "metric_name": "BLEU-1",
+      "category": "generation quality",
+      "wfa_representable": true,
+      "semiring_type": "counting",
+      "wfa_construction": "Counting WFA that tallies unigram matches between candidate and reference. Each state corresponds to reading a token; transitions are weighted 1 if the token appears in the reference unigram multiset (with clipping), 0 otherwise. The brevity penalty is a post-processing step over the total counts.",
+      "limitation_notes": "Clipped counts (capping matches at reference frequency) require per-token state tracking. The brevity penalty is not itself WFA-representable but is a simple function of sequence lengths. Corpus-level BLEU aggregates over multiple sentences, which is arithmetic over per-sentence WFA outputs.",
+      "used_in_benchmarks": ["WMT", "IWSLT", "CNN/DailyMail"],
+      "spectacles_implementation": "implemented"
+    },
+    {
+      "metric_name": "BLEU-2",
+      "category": "generation quality",
+      "wfa_representable": true,
+      "semiring_type": "counting",
+      "wfa_construction": "Counting WFA with a 1-token lookback state to track bigrams. Transitions are weighted by bigram match against the reference. State space is O(|vocabulary|) for the lookback.",
+      "limitation_notes": "State space grows with vocabulary size for the lookback window. Clipped n-gram counts and brevity penalty are post-processing. For large vocabularies, the automaton is large but finite.",
+      "used_in_benchmarks": ["WMT", "IWSLT"],
+      "spectacles_implementation": "implemented"
+    },
+    {
+      "metric_name": "BLEU-3",
+      "category": "generation quality",
+      "wfa_representable": true,
+      "semiring_type": "counting",
+      "wfa_construction": "Counting WFA with a 2-token lookback state for trigram tracking. State space is O(|vocabulary|^2).",
+      "limitation_notes": "State space is quadratic in vocabulary size. Practically feasible only for bounded vocabularies or with state hashing. Same post-processing caveats as BLEU-1/2.",
+      "used_in_benchmarks": ["WMT"],
+      "spectacles_implementation": "feasible"
+    },
+    {
+      "metric_name": "BLEU-4",
+      "category": "generation quality",
+      "wfa_representable": true,
+      "semiring_type": "counting",
+      "wfa_construction": "Counting WFA with a 3-token lookback state for 4-gram tracking. State space is O(|vocabulary|^3).",
+      "limitation_notes": "State space is cubic in vocabulary size, which can be prohibitively large for open-vocabulary settings. In practice, only n-grams appearing in the reference need states, reducing the effective state space dramatically. Post-processing for geometric mean of n-gram precisions and brevity penalty.",
+      "used_in_benchmarks": ["WMT", "IWSLT", "CNN/DailyMail", "XSum"],
+      "spectacles_implementation": "feasible"
+    },
+    {
+      "metric_name": "ROUGE-1",
+      "category": "generation quality",
+      "wfa_representable": true,
+      "semiring_type": "counting",
+      "wfa_construction": "Counting WFA that tallies unigram overlaps between candidate and reference. Structurally identical to BLEU-1 unigram matching but recall-oriented. F-measure is post-processing.",
+      "limitation_notes": "Same clipped-count and division caveats as BLEU. Stemming, if applied, is a preprocessing transducer.",
+      "used_in_benchmarks": ["CNN/DailyMail", "XSum", "SAMSum", "MultiNews"],
+      "spectacles_implementation": "implemented"
+    },
+    {
+      "metric_name": "ROUGE-2",
+      "category": "generation quality",
+      "wfa_representable": true,
+      "semiring_type": "counting",
+      "wfa_construction": "Counting WFA with 1-token lookback for bigram overlap counting. Same construction as BLEU-2 but with recall-oriented scoring.",
+      "limitation_notes": "Same state-space and post-processing caveats as BLEU-2.",
+      "used_in_benchmarks": ["CNN/DailyMail", "XSum", "SAMSum"],
+      "spectacles_implementation": "implemented"
+    },
+    {
+      "metric_name": "ROUGE-L",
+      "category": "generation quality",
+      "wfa_representable": true,
+      "semiring_type": "tropical",
+      "wfa_construction": "The longest common subsequence (LCS) can be computed via a weighted finite-state transducer over the tropical semiring (max-plus). Build a transducer with states tracking position in the reference; transitions score +1 for matching tokens (taking the subsequence) and +0 for skips (deletions/insertions). The tropical-semiring shortest path gives the LCS length.",
+      "limitation_notes": "State space is O(|reference|). The F-measure over LCS precision and recall is post-processing. This is a clean WFA construction.",
+      "used_in_benchmarks": ["CNN/DailyMail", "XSum", "SAMSum"],
+      "spectacles_implementation": "implemented"
+    },
+    {
+      "metric_name": "Character Error Rate (CER)",
+      "category": "string matching",
+      "wfa_representable": true,
+      "semiring_type": "tropical",
+      "wfa_construction": "Classic Levenshtein transducer over the tropical semiring (min-plus). States track position in the reference; transitions model insertions (cost 1), deletions (cost 1), substitutions (cost 1), and matches (cost 0). The shortest path gives edit distance, divided by reference length for CER.",
+      "limitation_notes": "The transducer has O(|reference|) states. Division by reference length is post-processing. This is one of the most natural WFA constructions.",
+      "used_in_benchmarks": ["LibriSpeech", "Common Voice", "TIMIT"],
+      "spectacles_implementation": "implemented"
+    },
+    {
+      "metric_name": "Word Error Rate (WER)",
+      "category": "string matching",
+      "wfa_representable": true,
+      "semiring_type": "tropical",
+      "wfa_construction": "Same as CER but operating at the word/token level. Levenshtein transducer with word-level insertions, deletions, and substitutions over the tropical semiring.",
+      "limitation_notes": "State space is O(|reference| in words). Division by reference word count is post-processing.",
+      "used_in_benchmarks": ["LibriSpeech", "Common Voice", "WSJ", "Switchboard"],
+      "spectacles_implementation": "implemented"
+    },
+    {
+      "metric_name": "Regular Expression Match",
+      "category": "string matching",
+      "wfa_representable": true,
+      "semiring_type": "boolean",
+      "wfa_construction": "Direct compilation of regular expression to NFA/DFA via Thompson's construction or Glushkov's construction. The boolean semiring yields accept/reject. This is the canonical example of a finite automaton.",
+      "limitation_notes": "Only standard regular expressions (no backreferences, lookahead, or other non-regular extensions). Backreferences make the language non-regular and thus not WFA-representable.",
+      "used_in_benchmarks": ["HumanEval", "MBPP", "APPS"],
+      "spectacles_implementation": "implemented"
+    },
+    {
+      "metric_name": "N-gram Overlap",
+      "category": "overlap",
+      "wfa_representable": true,
+      "semiring_type": "counting",
+      "wfa_construction": "Counting WFA with (n-1)-token lookback states. Transitions weighted by n-gram membership in the reference set. Generalizes the BLEU/ROUGE unigram and bigram constructions.",
+      "limitation_notes": "State space grows as O(|vocabulary|^(n-1)). For practical n (1-4), this is manageable with reference-restricted state spaces.",
+      "used_in_benchmarks": ["WMT", "various summarization benchmarks"],
+      "spectacles_implementation": "implemented"
+    },
+    {
+      "metric_name": "N-gram Containment",
+      "category": "overlap",
+      "wfa_representable": true,
+      "semiring_type": "counting",
+      "wfa_construction": "Variant of n-gram overlap where the denominator is the candidate's n-gram count rather than reference. Same WFA construction as n-gram overlap; the containment ratio is post-processing.",
+      "limitation_notes": "Same as n-gram overlap.",
+      "used_in_benchmarks": ["plagiarism detection", "data contamination analysis"],
+      "spectacles_implementation": "feasible"
+    },
+    {
+      "metric_name": "Levenshtein Distance",
+      "category": "string matching",
+      "wfa_representable": true,
+      "semiring_type": "tropical",
+      "wfa_construction": "The canonical edit-distance transducer. States encode position in the reference string. Transitions for match (weight 0), substitution (weight 1), insertion (weight 1), deletion (weight 1). Shortest path under tropical semiring gives minimum edit distance.",
+      "limitation_notes": "This is one of the foundational results in weighted automata theory. The transducer is well-studied and efficiently constructible.",
+      "used_in_benchmarks": ["spelling correction", "ASR evaluation"],
+      "spectacles_implementation": "implemented"
+    },
+    {
+      "metric_name": "Longest Common Subsequence",
+      "category": "string matching",
+      "wfa_representable": true,
+      "semiring_type": "tropical",
+      "wfa_construction": "Tropical-semiring (max-plus) transducer. States track position in reference. Match transitions have weight +1, skip transitions have weight 0. Longest path gives LCS length. Equivalent to the ROUGE-L inner computation.",
+      "limitation_notes": "Clean construction. State space is O(|reference|).",
+      "used_in_benchmarks": ["ROUGE-L evaluation", "diff/patch tools"],
+      "spectacles_implementation": "implemented"
+    },
+    {
+      "metric_name": "String Kernel Scores",
+      "category": "overlap",
+      "wfa_representable": true,
+      "semiring_type": "real",
+      "wfa_construction": "Rational kernels (Cortes, Haffner, Mohri 2004) are defined as the composition of weighted transducers. The subsequence kernel, gap-weighted kernel, and spectrum kernel all have explicit WFA constructions. The kernel value is the sum of path weights in the composed transducer.",
+      "limitation_notes": "This is a well-established theoretical result. Rational kernels are exactly the class of kernels computable by weighted transducers. Computational cost depends on the transducer size after composition.",
+      "used_in_benchmarks": ["text classification", "biological sequence analysis"],
+      "spectacles_implementation": "feasible"
+    },
+    {
+      "metric_name": "Chrono-metric Pattern Matching",
+      "category": "string matching",
+      "wfa_representable": true,
+      "semiring_type": "real",
+      "wfa_construction": "Temporal pattern matching with position-weighted scores can be encoded as a WFA where state transitions carry position-dependent weights. The real semiring accumulates weighted match scores across positions.",
+      "limitation_notes": "Assumes patterns are regular (no context-free or context-sensitive requirements). Position-dependent weighting is handled by expanding the state space to track position.",
+      "used_in_benchmarks": ["temporal NLP tasks", "event extraction"],
+      "spectacles_implementation": "feasible"
+    },
+    {
+      "metric_name": "Pass@k (string comparison component)",
+      "category": "classification",
+      "wfa_representable": true,
+      "semiring_type": "boolean",
+      "wfa_construction": "The deterministic output-comparison component of pass@k (does the program output exactly match the expected output?) is a boolean WFA, identical to Exact Match. The statistical aggregation over k samples is post-processing arithmetic.",
+      "limitation_notes": "Only the string-comparison component is WFA-representable. The actual pass@k computation involves running code (execution oracle), which is Turing-complete and fundamentally not WFA. The WFA handles only the final output string comparison.",
+      "used_in_benchmarks": ["HumanEval", "MBPP", "APPS", "CodeContests"],
+      "spectacles_implementation": "implemented"
+    },
+    {
+      "metric_name": "BERTScore",
+      "category": "semantic",
+      "wfa_representable": false,
+      "semiring_type": "N/A",
+      "wfa_construction": "N/A. BERTScore computes cosine similarity between contextual embeddings from a pretrained transformer (BERT). The embedding function is a deep neural network with attention, which cannot be expressed as a finite-state computation. The token alignment via greedy matching over embedding similarities is also not finite-state.",
+      "limitation_notes": "No finite-state approximation is known. The contextual nature of transformer embeddings means the same token gets different representations depending on context, which requires unbounded memory (attention over the full sequence).",
+      "used_in_benchmarks": ["WMT", "CNN/DailyMail", "XSum", "various generation tasks"],
+      "spectacles_implementation": "not_feasible"
+    },
+    {
+      "metric_name": "BLEURT",
+      "category": "semantic",
+      "wfa_representable": false,
+      "semiring_type": "N/A",
+      "wfa_construction": "N/A. BLEURT is a learned metric fine-tuned from BERT on human quality judgments. It is a neural regression model that maps (reference, candidate) pairs to scalar scores.",
+      "limitation_notes": "Entirely neural. The learned scoring function has no known finite-state decomposition.",
+      "used_in_benchmarks": ["WMT", "machine translation evaluation"],
+      "spectacles_implementation": "not_feasible"
+    },
+    {
+      "metric_name": "COMET",
+      "category": "semantic",
+      "wfa_representable": false,
+      "semiring_type": "N/A",
+      "wfa_construction": "N/A. COMET uses a pretrained multilingual encoder (XLM-R) fine-tuned on human judgments of translation quality. Takes source, reference, and candidate as inputs to a neural model.",
+      "limitation_notes": "Requires cross-lingual neural embeddings and learned quality estimation. No finite-state approximation exists.",
+      "used_in_benchmarks": ["WMT", "IWSLT"],
+      "spectacles_implementation": "not_feasible"
+    },
+    {
+      "metric_name": "Perplexity",
+      "category": "generation quality",
+      "wfa_representable": false,
+      "semiring_type": "N/A",
+      "wfa_construction": "N/A. Perplexity is exp(-1/N * sum(log P(w_i | context))). While a WFA over the probability semiring can define a probability distribution over strings (weighted language model), modern perplexity uses neural language models (transformers) whose conditional distributions cannot be captured by any finite-state model.",
+      "limitation_notes": "An n-gram language model's perplexity IS computable by a WFA (probability semiring). But this is not what is meant by 'perplexity' in modern NLP, which uses neural LMs. We classify based on current usage.",
+      "used_in_benchmarks": ["WikiText-103", "Penn Treebank", "C4"],
+      "spectacles_implementation": "not_feasible"
+    },
+    {
+      "metric_name": "MAUVE",
+      "category": "generation quality",
+      "wfa_representable": false,
+      "semiring_type": "N/A",
+      "wfa_construction": "N/A. MAUVE measures the gap between the distribution of machine-generated text and human text using neural embeddings and divergence frontiers (KL divergence curves). Requires embedding entire texts into a neural feature space.",
+      "limitation_notes": "Fundamentally distributional and neural. The divergence frontier computation over neural embeddings has no finite-state analog.",
+      "used_in_benchmarks": ["open-ended generation evaluation"],
+      "spectacles_implementation": "not_feasible"
+    },
+    {
+      "metric_name": "FID (Fréchet Inception Distance)",
+      "category": "generation quality",
+      "wfa_representable": false,
+      "semiring_type": "N/A",
+      "wfa_construction": "N/A. FID computes the Fréchet distance between Gaussian fits to Inception-v3 embeddings of generated and real images. Entirely neural and distributional.",
+      "limitation_notes": "Primarily an image generation metric but used in multimodal evaluation. Requires deep CNN embeddings.",
+      "used_in_benchmarks": ["image generation", "multimodal benchmarks"],
+      "spectacles_implementation": "not_feasible"
+    },
+    {
+      "metric_name": "IS (Inception Score)",
+      "category": "generation quality",
+      "wfa_representable": false,
+      "semiring_type": "N/A",
+      "wfa_construction": "N/A. IS uses the Inception-v3 classifier's conditional and marginal class distributions. KL divergence between these distributions requires neural classification.",
+      "limitation_notes": "Image-domain metric. No finite-state analog.",
+      "used_in_benchmarks": ["image generation", "multimodal benchmarks"],
+      "spectacles_implementation": "not_feasible"
+    },
+    {
+      "metric_name": "Human Evaluation Scores",
+      "category": "semantic",
+      "wfa_representable": false,
+      "semiring_type": "N/A",
+      "wfa_construction": "N/A. Human evaluation involves subjective judgment by human annotators. There is no computational model to express; the 'computation' happens in a human brain.",
+      "limitation_notes": "By definition not automatable by any computational model, let alone a finite-state one. Often used as the gold standard that automatic metrics try to approximate.",
+      "used_in_benchmarks": ["WMT", "Chatbot Arena", "LMSYS", "virtually all NLP benchmarks for validation"],
+      "spectacles_implementation": "not_feasible"
+    },
+    {
+      "metric_name": "Toxicity Scores",
+      "category": "safety",
+      "wfa_representable": false,
+      "semiring_type": "N/A",
+      "wfa_construction": "N/A. Toxicity detection uses neural classifiers (e.g., Perspective API, HateBERT, ToxiGen classifiers). These models capture semantic toxicity that goes beyond surface-level patterns.",
+      "limitation_notes": "A crude keyword-blocklist approach would be WFA-representable (boolean semiring), but this is not what modern toxicity scoring means. Real toxicity detection requires understanding context, sarcasm, and implicit bias, which are not finite-state.",
+      "used_in_benchmarks": ["RealToxicityPrompts", "ToxiGen", "CivilComments", "safety benchmarks"],
+      "spectacles_implementation": "not_feasible"
+    },
+    {
+      "metric_name": "Faithfulness (NLI-based)",
+      "category": "semantic",
+      "wfa_representable": false,
+      "semiring_type": "N/A",
+      "wfa_construction": "N/A. Faithfulness metrics use Natural Language Inference (NLI) models to check if a summary is entailed by the source document. NLI requires deep semantic understanding.",
+      "limitation_notes": "Entailment is fundamentally semantic. Even simple entailment patterns (e.g., hypernymy) require world knowledge beyond finite-state capabilities.",
+      "used_in_benchmarks": ["FRANK", "SummaC", "TRUE", "factual consistency benchmarks"],
+      "spectacles_implementation": "not_feasible"
+    },
+    {
+      "metric_name": "UniEval",
+      "category": "semantic",
+      "wfa_representable": false,
+      "semiring_type": "N/A",
+      "wfa_construction": "N/A. UniEval reformulates evaluation as boolean QA and uses a fine-tuned T5 model. Entirely neural.",
+      "limitation_notes": "Learned unified evaluation metric. No finite-state decomposition.",
+      "used_in_benchmarks": ["summarization", "dialogue evaluation"],
+      "spectacles_implementation": "not_feasible"
+    },
+    {
+      "metric_name": "METEOR",
+      "category": "generation quality",
+      "wfa_representable": "partial",
+      "semiring_type": "counting",
+      "wfa_construction": "METEOR's exact-match and stemmed-match components are WFA-representable (counting semiring with stemming as a preprocessing transducer). However, the synonym matching component requires lookup in WordNet or similar external semantic resources, which is a finite but very large table lookup. The chunk penalty (counting the number of contiguous matched chunks) is WFA-representable.",
+      "limitation_notes": "If the synonym table is pre-compiled into the automaton (expanding the state space), the full metric becomes WFA-representable in principle. In practice, the WordNet synonym graph is large but finite, so METEOR is technically WFA-representable with a very large automaton. We classify as partial because the synonym component is qualitatively different from the string-matching components.",
+      "used_in_benchmarks": ["WMT", "machine translation evaluation"],
+      "spectacles_implementation": "feasible"
+    },
+    {
+      "metric_name": "TER (Translation Edit Rate)",
+      "category": "generation quality",
+      "wfa_representable": "partial",
+      "semiring_type": "tropical",
+      "wfa_construction": "TER extends edit distance with phrase shifts: after computing standard edit operations, it allows moving contiguous blocks of words. The standard edit operations (insertion, deletion, substitution) are WFA over tropical semiring. However, the phrase-shift operation requires identifying and moving contiguous blocks, which involves an optimization over possible block moves.",
+      "limitation_notes": "The block-move operation is the key difficulty. For a fixed maximum number of shifts, TER can be computed by exploring a finite set of re-orderings, each of which is a tropical WFA. The search over re-orderings is exponential but finite. In practice, heuristic shift search is used. We classify as partial because the shift search goes beyond standard WFA composition.",
+      "used_in_benchmarks": ["WMT", "IWSLT", "machine translation evaluation"],
+      "spectacles_implementation": "feasible"
+    },
+    {
+      "metric_name": "chrF",
+      "category": "generation quality",
+      "wfa_representable": true,
+      "semiring_type": "counting",
+      "wfa_construction": "Character n-gram F-score. Counting WFA over character n-grams (typically n=1..6). Each character n-gram order uses a WFA with (n-1)-character lookback. The F-score combination across n-gram orders is post-processing arithmetic. Character-level operation means the alphabet is small (Unicode characters seen in the reference).",
+      "limitation_notes": "Clean WFA construction. The small character alphabet (compared to word vocabulary) makes the state space very manageable even for n=6.",
+      "used_in_benchmarks": ["WMT", "machine translation evaluation"],
+      "spectacles_implementation": "implemented"
+    },
+    {
+      "metric_name": "SacreBLEU",
+      "category": "generation quality",
+      "wfa_representable": true,
+      "semiring_type": "counting",
+      "wfa_construction": "SacreBLEU is BLEU with standardized tokenization (internal tokenizer, no user preprocessing). The tokenizer is a deterministic finite-state transducer. The BLEU computation itself is identical to BLEU-4. The entire pipeline (tokenization + n-gram counting) is WFA-representable.",
+      "limitation_notes": "The standardization is precisely what makes this more WFA-friendly: the tokenization is fixed and deterministic, eliminating a source of variation. The intl tokenization mode uses Unicode-aware rules that are still regular.",
+      "used_in_benchmarks": ["WMT", "IWSLT", "standard MT evaluation"],
+      "spectacles_implementation": "implemented"
+    }
+  ],
+  "summary": {
+    "total_metrics_surveyed": 31,
+    "wfa_representable_count": 20,
+    "not_representable_count": 9,
+    "partially_representable_count": 2,
+    "coverage_percentage": 64.5,
+    "coverage_percentage_notes": "20 out of 31 metrics are fully WFA-representable (64.5%). Including partial metrics, 22 out of 31 (71.0%) have at least some WFA-expressible components.",
+    "honest_assessment": "64.5% of the surveyed NLP evaluation metrics are fully WFA-representable. These are predominantly traditional string-level metrics (exact match, BLEU, ROUGE, edit distance variants) that remain the primary metrics on approximately 70% of popular benchmark leaderboards (MMLU, SQuAD, HumanEval, etc.). However, the trend in NLP evaluation is toward neural/learned metrics (BERTScore, COMET, BLEURT) that capture semantic similarity beyond surface forms. WFA coverage applies primarily to the traditional metrics that still dominate benchmark leaderboards but are increasingly supplemented or replaced by neural metrics in research evaluations, particularly for generation and translation tasks.",
+    "coverage_of_popular_benchmarks": {
+      "MMLU": {
+        "primary_metrics": ["Exact Match", "Accuracy (multiple choice)"],
+        "wfa_representable_fraction": "1.0",
+        "notes": "MMLU uses exact match on multiple-choice answers (A/B/C/D). Fully WFA-representable."
+      },
+      "SQuAD": {
+        "primary_metrics": ["Exact Match", "Token F1"],
+        "wfa_representable_fraction": "1.0",
+        "notes": "Both SQuAD metrics are fully WFA-representable. This is a best-case scenario for WFA coverage."
+      },
+      "WMT": {
+        "primary_metrics": ["BLEU", "chrF", "COMET", "BLEURT", "Human Evaluation"],
+        "wfa_representable_fraction": "0.4",
+        "notes": "BLEU and chrF are WFA-representable. COMET, BLEURT, and human evaluation are not. Modern WMT increasingly prioritizes COMET and human evaluation over BLEU. The WFA-representable fraction has been decreasing over WMT editions."
+      },
+      "GLUE": {
+        "primary_metrics": ["Accuracy", "F1", "Matthews Correlation", "Pearson/Spearman Correlation"],
+        "wfa_representable_fraction": "0.5",
+        "notes": "Accuracy and F1 on classification labels are WFA-representable (boolean/counting semiring on label strings). Correlation coefficients (for STS-B) require real-valued regression, which is not WFA per se, though the label comparison component is. The classification tasks themselves require neural models, but the METRIC computation on predicted labels is often WFA-representable."
+      },
+      "SuperGLUE": {
+        "primary_metrics": ["Accuracy", "F1", "Exact Match"],
+        "wfa_representable_fraction": "1.0",
+        "notes": "SuperGLUE metrics are all classification-level metrics (accuracy, F1 on labels). The metric computation is WFA-representable, even though the tasks require deep understanding."
+      },
+      "HumanEval": {
+        "primary_metrics": ["Pass@k"],
+        "wfa_representable_fraction": "0.5",
+        "notes": "The string comparison component of pass@k (comparing program output to expected output) is WFA-representable. The code execution component is not. We rate this as 0.5 because the metric is a hybrid: WFA handles the comparison, but the execution oracle is Turing-complete."
+      }
+    },
+    "key_insight": "There is an important distinction between the METRIC being WFA-representable and the TASK requiring WFA-level computation. Many benchmarks use simple metrics (exact match, F1) even for tasks requiring deep reasoning. The WFA handles the scoring, not the solving. This is precisely the Spectacles value proposition: verifiable scoring circuits for metrics that are already the standard, even as the models being scored grow more complex.",
+    "trend_analysis": "The fraction of evaluation relying solely on WFA-representable metrics is declining. In machine translation, COMET has largely supplanted BLEU as the primary metric. In summarization, BERTScore and learned metrics complement ROUGE. In dialogue, neural metrics dominate. However, WFA-representable metrics remain the default on classification and extraction benchmarks (MMLU, SQuAD, GLUE), which constitute the majority of LLM evaluation suites as of 2024."
+  }
+}

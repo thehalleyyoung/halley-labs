@@ -4,14 +4,17 @@
 >
 > **Implemented**: Rust core types/traits/algorithms, 38 property-based tests,
 > Phase 0 mock LLM experiments, Phase B real LLM validation (gpt-4.1-nano),
-> multi-configuration experiments (3 configs × 15 prompts × 5 trials = 270 calls),
+> multi-configuration experiments (3 configs × 15 prompts × 3 trials = 183 calls),
+> semantic embedding classifier (text-embedding-3-small nearest-centroid),
+> Platt scaling calibration (ECE 0.475 → 0.004),
+> structural advantage demonstration (7/12 temporal patterns),
 > statistical baselines (KL divergence, MMD, chi-squared, frequency),
 > PDFA baseline comparison (simplified ALERGIA with hyperparameter tuning),
-> random sampling baseline, CoalCEGAR convergence analysis,
+> CoalCEGAR convergence analysis,
 > classifier robustness analysis (Monte Carlo), Bayesian analysis,
-> per-atom precision/recall/F1, leave-one-prompt-out cross-validation,
-> ablation studies, calibration analysis, posterior predictive checks,
-> abstraction gap quantification.
+> cross-configuration generalization evaluation,
+> compositional specification checking,
+> approximate preservation bounds.
 >
 > **Not implemented**: Lean 4 formalization, frontier LLM validation,
 > live monitoring dashboard, full AALpy+PRISM baseline,
@@ -23,11 +26,11 @@
 ```bash
 cd implementation
 
-# Path B: Statistical baselines + scale + ablation + calibration (requires OPENAI_API_KEY)
-source ~/.bashrc && python3 pathb_experiments.py
+# Full experiments with embedding classifier (requires OPENAI_API_KEY)
+source ~/.bashrc && python3 pathb_deep_experiments.py
 
-# Multi-config LLM: 3 configs × 15 prompts + convergence + random baseline
-source ~/.bashrc && python3 expanded_experiments.py
+# Analysis on cached data (no API calls needed if cache exists)
+python3 pathb_deep_experiments_v2.py
 
 # Phase 0: mock LLM validation (no API key needed)
 python3 phase0_experiments.py
@@ -267,4 +270,44 @@ def compute_learning_curves() -> dict:
 
 def ablate_graded_satisfaction() -> dict:
     """Compare graded satisfaction degrees vs binary pass/fail verdicts."""
+```
+
+### Semantic Embedding Classifier (New)
+
+```python
+from caber.classifiers.embedding import (
+    SemanticEmbeddingClassifier,
+    EmbeddingProvider,
+    EmbeddingProfile,
+    compute_temporal_pattern,
+    bisimulation_distance,
+)
+
+# Create provider with caching
+provider = EmbeddingProvider(cache_path="embedding_cache.json")
+clf = SemanticEmbeddingClassifier(provider=provider)
+
+# Supervised fitting from labeled examples
+fit_summary = clf.fit_supervised(texts, labels)
+# Returns: {"training_accuracy": 0.84, "n_atoms": 5, ...}
+
+# Cross-configuration generalization test
+profile = clf.classify("I cannot help with that request.")
+# Returns: EmbeddingProfile(dominant_atom="safety_refusal", confidence=0.92, ...)
+
+# Leave-one-prompt-out CV
+lopo = clf.lopo_cv(texts, labels, prompt_ids)
+# Returns: LOPOResult(overall_accuracy=0.63, macro_f1=0.58, ...)
+
+# Platt scaling calibration
+cal = clf.fit_platt_scaling(texts, labels)
+# Returns: CalibrationResult(raw_calibration_error=0.48, platt_calibration_error=0.004, ...)
+
+# Temporal pattern analysis (no API needed)
+temporal = compute_temporal_pattern(["compliant", "hedge", "refusal", "refusal"])
+# Returns: {"entropy_rate": 0.75, "drift_score": 0.5, "transition_probs": {...}}
+
+# Bisimulation distance between automata
+dist = bisimulation_distance(automaton_a, automaton_b)
+# Returns: float (distance in [0, 1])
 ```

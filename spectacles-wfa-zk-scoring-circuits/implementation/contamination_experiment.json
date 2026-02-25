@@ -1,0 +1,201 @@
+{
+  "timestamp": "2026-02-25T10:11:08.058607+00:00",
+  "description": "End-to-end contamination detection experiment with PSI-based n-gram overlap detection. Tests whether the pipeline can distinguish clean training data from contaminated training data at varying contamination levels (0-100%).",
+  "scenarios": [
+    {
+      "name": "clean",
+      "description": "No test data in training set",
+      "contamination_fraction": 0.0,
+      "num_test_items": 20,
+      "num_training_items": 20,
+      "num_contaminated_items": 0,
+      "psi_result": {
+        "intersection_cardinality": 0,
+        "set_a_cardinality": 96,
+        "set_b_cardinality": 64,
+        "jaccard": 0.0,
+        "containment_a": 0.0,
+        "contamination_score": 0.0,
+        "runtime_ms": 0
+      },
+      "detection_correct": true
+    },
+    {
+      "name": "minimal_5pct",
+      "description": "5% of test data leaked into training",
+      "contamination_fraction": 0.05,
+      "num_test_items": 20,
+      "num_training_items": 21,
+      "num_contaminated_items": 1,
+      "psi_result": {
+        "intersection_cardinality": 3,
+        "set_a_cardinality": 96,
+        "set_b_cardinality": 67,
+        "jaccard": 0.01875,
+        "containment_a": 0.03125,
+        "contamination_score": 0.03125,
+        "runtime_ms": 0
+      },
+      "detection_correct": false
+    },
+    {
+      "name": "low_10pct",
+      "description": "10% of test data leaked",
+      "contamination_fraction": 0.1,
+      "num_test_items": 20,
+      "num_training_items": 22,
+      "num_contaminated_items": 2,
+      "psi_result": {
+        "intersection_cardinality": 9,
+        "set_a_cardinality": 96,
+        "set_b_cardinality": 73,
+        "jaccard": 0.05625,
+        "containment_a": 0.09375,
+        "contamination_score": 0.09375,
+        "runtime_ms": 0
+      },
+      "detection_correct": true
+    },
+    {
+      "name": "moderate_25pct",
+      "description": "25% of test data leaked",
+      "contamination_fraction": 0.25,
+      "num_test_items": 20,
+      "num_training_items": 25,
+      "num_contaminated_items": 5,
+      "psi_result": {
+        "intersection_cardinality": 26,
+        "set_a_cardinality": 96,
+        "set_b_cardinality": 90,
+        "jaccard": 0.1625,
+        "containment_a": 0.2708333333333333,
+        "contamination_score": 0.2708333333333333,
+        "runtime_ms": 0
+      },
+      "detection_correct": true
+    },
+    {
+      "name": "high_50pct",
+      "description": "50% of test data leaked",
+      "contamination_fraction": 0.5,
+      "num_test_items": 20,
+      "num_training_items": 30,
+      "num_contaminated_items": 10,
+      "psi_result": {
+        "intersection_cardinality": 47,
+        "set_a_cardinality": 96,
+        "set_b_cardinality": 111,
+        "jaccard": 0.29375,
+        "containment_a": 0.4895833333333333,
+        "contamination_score": 0.4895833333333333,
+        "runtime_ms": 0
+      },
+      "detection_correct": true
+    },
+    {
+      "name": "severe_75pct",
+      "description": "75% of test data leaked",
+      "contamination_fraction": 0.75,
+      "num_test_items": 20,
+      "num_training_items": 35,
+      "num_contaminated_items": 15,
+      "psi_result": {
+        "intersection_cardinality": 69,
+        "set_a_cardinality": 96,
+        "set_b_cardinality": 133,
+        "jaccard": 0.43125,
+        "containment_a": 0.71875,
+        "contamination_score": 0.71875,
+        "runtime_ms": 0
+      },
+      "detection_correct": true
+    },
+    {
+      "name": "total_100pct",
+      "description": "All test data leaked",
+      "contamination_fraction": 1.0,
+      "num_test_items": 20,
+      "num_training_items": 40,
+      "num_contaminated_items": 20,
+      "psi_result": {
+        "intersection_cardinality": 96,
+        "set_a_cardinality": 96,
+        "set_b_cardinality": 160,
+        "jaccard": 0.6,
+        "containment_a": 1.0,
+        "contamination_score": 1.0,
+        "runtime_ms": 0
+      },
+      "detection_correct": true
+    }
+  ],
+  "threshold_analysis": {
+    "thresholds": [
+      0.0,
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
+      0.7000000000000001,
+      0.8,
+      0.9,
+      1.0
+    ],
+    "true_positive_rates": [
+      1.0,
+      0.6666666666666666,
+      0.6666666666666666,
+      0.5,
+      0.5,
+      0.3333333333333333,
+      0.3333333333333333,
+      0.3333333333333333,
+      0.16666666666666666,
+      0.16666666666666666,
+      0.0
+    ],
+    "false_positive_rates": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "best_threshold": 0.0,
+    "best_f1": 1.0,
+    "auc_estimate": 0.0
+  },
+  "scoring_impact": {
+    "clean_scores": {
+      "exact_match": 0.0,
+      "token_f1": 0.29100732600732593,
+      "bleu": 0.34801005607288726
+    },
+    "contaminated_scores": {
+      "exact_match": 1.0,
+      "token_f1": 1.0,
+      "bleu": 1.0
+    },
+    "score_inflation": {
+      "exact_match": 1.0,
+      "token_f1": 0.7089926739926741,
+      "bleu": 0.6519899439271127
+    }
+  },
+  "summary": {
+    "total_scenarios": 7,
+    "detection_accuracy": 0.8571428571428571,
+    "separation_achieved": true,
+    "clean_max_contamination_score": 0.0,
+    "contaminated_min_contamination_score": 0.03125,
+    "separation_gap": 0.03125
+  }
+}

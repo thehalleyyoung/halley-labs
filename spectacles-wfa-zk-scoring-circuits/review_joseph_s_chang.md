@@ -1,56 +1,45 @@
-# Review: Spectacles — Contamination-Certified Evaluation Certificates
+# Review: Spectacles — Verified Compiler from Semiring-Weighted Automata to Zero-Knowledge Scoring Circuits
 
 **Reviewer:** Joseph S. Chang
-**Persona:** Automated Reasoning and Logic Expert
-**Expertise:** Formal verification, proof theory, decidability, compilation correctness, theorem proving methodology
+**Persona:** Automated Reasoning & Logic Expert
+**Expertise:** SMT solvers, automated theorem proving, proof certificates, decision procedures, solver engineering, formal logic
 
 ---
 
 ## Summary
 
-Spectacles compiles NLP scoring functions into STARK arithmetic circuits via WFA over semirings, aiming to produce machine-checkable proofs of score correctness. The WFA decomposition insight is theoretically interesting and the Lean 4 formalization of semiring axioms demonstrates commitment to rigor. However, the formalization covers only the foundational algebraic layer — the critical compilation correctness theorem (WFA semantics preserved by circuit translation) is unproved. The "sorry" count (12 routine + 5 novel) in the Lean development is concerning, particularly since the 5 novel instances include the most important proof obligations.
+Spectacles constructs a verified compiler from weighted finite automata (WFA) over typed semirings to STARK arithmetic circuits, with Lean 4 formalization of compilation soundness (Theorems 6.1/6.2). From an automated reasoning perspective, this project contributes a genuine decision procedure (WFA equivalence via Hopcroft minimization), mechanized soundness proofs, and reusable Lean 4 tactics (kleene_dec, wfa_equiv). However, the formalization is incomplete (15 sorrys), the proof certificate format is non-standard (STARK-specific, not LFSC/Alethe/DRAT), and several load-bearing mathematical claims — particularly the comparison gadget correctness over F_p for [0, 2^62) and transducer composition associativity — remain unproved axioms in the formal development.
 
 ## Strengths
 
-1. **WFA-to-circuit compilation as a verified compilation problem is well-framed.** Treating the metric computation as a formal language problem and the circuit generation as compilation creates a clean verification target. The compilation should preserve denotational semantics, and the target (arithmetic circuits) has a clear operational semantics.
-
-2. **Two-tier compilation strategy handles algebraic complexity correctly.** The distinction between F_p-embeddable (homomorphism-based) and non-embeddable (gadget-assisted) semirings is the right decomposition. The Tier 2 soundness proof with the T·w_max < 2^63 precondition is careful and correct.
-
-3. **Comparison gadget soundness and completeness proofs are non-trivial.** The soundness proof (gadget computes min(a,b) for values in [0, 2^63)) and completeness proof (unique satisfying witness) are proper formal results with careful precondition analysis. The edge case at 2^63-1 is explicitly handled.
-
-4. **Sorry categorization shows self-awareness.** Distinguishing routine sorries (~12, targetable by omega/decide) from novel ones (~5, requiring new proof techniques) demonstrates understanding of the formalization challenges and enables targeted effort.
-
-5. **Cross-language validation adds independent checking.** Python implementations of semiring axioms providing an independent verification layer beyond Lean and Rust is a sound methodology.
+1. **Genuine decision procedure for WFA equivalence.** The equivalence checker via Hopcroft minimization and coalgebraic bisimulation is a real decision procedure with known complexity bounds (O(n log n) for minimization), not an ad-hoc heuristic. Validation against brute-force enumeration on all strings up to length 20 for 1K random WFA pairs provides strong empirical support.
+2. **Mechanized soundness proofs (Theorems 6.1/6.2).** The sorry-free proofs of circuit_sound_algebraic and circuit_sound_tropical in Lean 4 establish that STARK proof acceptance implies WFA acceptance — a non-trivial formal guarantee connecting cryptographic verification to automata-theoretic semantics.
+3. **Two-tier proof architecture with honest separation.** Tier 1 (algebraic compilation via injective semiring homomorphism ι: S → F_p) and Tier 2 (gadget-assisted compilation with bit-decomposition for tropical min) are cleanly separated, with different proof strategies for each. This avoids false uniformity claims.
+4. **Reusable proof automation.** The kleene_dec tactic (equational Kleene algebra via NFA equivalence) and wfa_equiv tactic (automaton equivalence via minimization) extend Lean 4's automation capabilities and have value independent of Spectacles.
 
 ## Weaknesses
 
-1. **The critical compilation correctness theorem is unproved.** The theorem "for all WFA W and inputs x, execute_wfa(W, x) = evaluate_circuit(compile(W), x)" is the linchpin of the verification chain. Without this theorem, the differential testing (800K pairs, 0 disagreements) provides strong empirical evidence but not a formal guarantee. This theorem is listed among the 5 novel sorry instances.
+1. **15 sorrys constitute unacceptable verification debt for "verified" claims.** In automated reasoning, a sorry is semantically equivalent to an axiom: it can introduce unsoundness. The 3 novel sorrys with proof sketches are particularly troubling because proof sketches are precisely the informal arguments that mechanized verification is supposed to replace. The 12 "routine" sorrys (closable by omega/simp/ring) are less dangerous but their continued presence suggests the proof development is unfinished. A paper claiming "verified compilation" with 15 sorrys would be rejected at a top formal methods venue (CPP, ITP, POPL) without qualification. The honest framing should be "partially verified" or "verified modulo 15 axioms."
 
-2. **Lean formalization scope is narrower than the presentation suggests.** Semiring axioms are foundational but algebraically simple. The hard verification targets (Hopcroft minimization correctness, WFA-to-AIR compilation, STARK proof generation) are not formalized. The paper's "verified specification" framing is honest but readers may overestimate the formalization depth.
+2. **Transducer composition associativity is an unproved load-bearing axiom.** Transducer composition is used in metric decomposition — BLEU-4 decomposes into four composed n-gram computations. The associativity of this composition is an explicitly deferred sorry. If associativity fails (and it can fail for certain transducer classes — cf. Berstel & Reutenauer's Rational Series, §III.3), the decomposition-based proof strategy becomes unsound. This is not a routine sorry; it is a mathematical claim that requires careful proof, and its failure would invalidate the compositional verification approach.
 
-3. **STARK proof generation correctness is taken on faith.** The STARK proving component computes proofs of arithmetic circuit satisfiability, but the STARK implementation itself is not verified. A bug in the STARK prover could produce invalid proofs that pass verification. The paper does not discuss STARK implementation trust.
+3. **Proof certificates are STARK-specific and non-interoperable.** The generated certificates are FRI-based STARK proofs, not in any standardized proof format (LFSC, Alethe, DRAT, CPC). This means: (a) no existing proof checker outside the STARK ecosystem can verify them, (b) no certificate translation to other proof systems is possible, and (c) the "trust base" includes the entire STARK verifier implementation, which is itself unverified Rust code. In the proof certificate community, a certificate's value depends on the simplicity and trustworthiness of its checker — a STARK verifier is vastly more complex than a DRAT checker.
 
-4. **Proof size analysis is asymptotic, not concrete.** The O(λ·log²(T|Q|)) proof size bound is useful for scalability analysis but the constants matter for practical deployment. The 45-750 KiB estimates use a formula with specific constants, but these are not validated against a real STARK prover.
+4. **Comparison gadget correctness over F_p is assumed, not proved.** The comparison gadget (used in Tier 2 tropical compilation for min/max operations) is claimed correct for values in [0, 2^62) within the Goldilocks field F_p (p = 2^64 − 2^32 + 1). This correctness relies on bit-decomposition constraints enforcing range, but the formal proof that these constraints are both sound (every satisfying assignment represents a valid comparison) and complete (every valid comparison has a satisfying assignment) is not provided in the Lean formalization. The bit-decomposition proof is exactly the kind of fiddly arithmetic reasoning where bugs hide.
 
-5. **No proof-theoretic analysis of the verification certificate.** What exactly does the STARK proof prove? It proves that there exists a witness (execution trace) consistent with the circuit constraints. But are the circuit constraints sound? This requires the unproved compilation correctness theorem. The proof-theoretic chain is: circuit constraints ← compilation ← WFA semantics ← metric specification. Only the last link (WFA ← metric) has some Lean coverage.
+5. **No proof complexity analysis or tight bounds.** The circuit width scales as O(|Q|² × |Σ|) per WFA step, and total proof size scales with trace length × circuit width. No tight bounds on proof generation complexity as a function of WFA parameters are proved or empirically characterized beyond 512 states. For an automated reasoning audience, understanding the computational complexity of the proof procedure is essential — is proof generation in P? NP? PSPACE? The FRI-based STARK prover has quasi-linear proving time in circuit size, but the circuit size itself may scale super-linearly in the WFA parameters.
 
-6. **No formal treatment of the Goldilocks field.** The p = 2^64 - 2^32 + 1 field is used for arithmetic circuits, and two bugs were found and fixed. The field axioms should be Lean-verified (they are straightforward), and the fixed implementations should be proved correct against the axioms.
+6. **wfa_equiv tactic completeness is unproved.** The WFA equivalence tactic is sound (validated by testing) but its completeness — that every truly equivalent WFA pair is recognized as equivalent — is formally deferred. Without completeness, the tactic may reject equivalent specifications as distinct, producing false negatives in metric equivalence checking. For a decision procedure, soundness without completeness means you have a semi-decision procedure, not a decision procedure.
 
-## Novelty Assessment
+## Questions for Authors
 
-The WFA decomposition is a genuinely novel insight. The compilation pipeline from specification to circuit is an original contribution. The Lean formalization, while incomplete, represents a serious attempt at formal verification. **High novelty for the WFA approach, moderate novelty for the formalization methodology.**
-
-## Suggestions
-
-1. Prove the compilation correctness theorem — this should be the #1 priority for the Lean development.
-2. Lean-verify the Goldilocks field axioms and the fixed Montgomery/Lagrange implementations.
-3. Analyze the STARK implementation trust: use a verified STARK library or provide independent verification.
-4. Provide concrete proof size measurements from a real STARK prover, not just asymptotic estimates.
-5. State the proof-theoretic chain explicitly and mark which links are formally verified.
+- Can the 12 routine sorrys be closed by a single automated pass (e.g., `aesop` with custom simp lemmas, or `omega` after appropriate unfolding)? If so, why hasn't this been done?
+- Is transducer composition associativity provable for the specific transducer class used in Spectacles (e.g., subsequential or functional transducers), even if it fails for general transducers?
+- Have you considered generating proof certificates in a standardized format (e.g., LFSC or Alethe) alongside the STARK proofs, enabling independent verification by a trusted kernel?
 
 ## Overall Assessment
 
-Spectacles has the most intellectually interesting insight (NLP metrics as WFA over semirings) and the most ambitious verification goal (machine-checkable proofs of score correctness). The Lean formalization demonstrates commitment to rigor, and the sorry categorization shows self-awareness. However, the critical compilation correctness theorem is unproved, reducing the formal guarantee to semiring axioms. The STARK prover and protocol layer are unverified. With the compilation theorem and Goldilocks field formalization, this would be a significantly stronger contribution.
+Spectacles makes the most substantive automated reasoning contribution of the projects reviewed: a genuine decision procedure, mechanized soundness proofs, and reusable proof tactics. The two-tier compilation architecture and KleeneSemiring formalization demonstrate real proof engineering sophistication. However, the 15 remaining sorrys — particularly the unproved transducer composition associativity and the assumed comparison gadget correctness — create genuine soundness risks that the paper underemphasizes. The non-standard proof certificate format limits interoperability and inflates the trust base. The unproved completeness of wfa_equiv downgrades the "decision procedure" to a semi-decision procedure. The formalization is impressive _for a work in progress_ but does not yet meet the standard of "verified" as understood by the automated reasoning community.
 
 **Score:** 7/10
 **Confidence:** 5/5

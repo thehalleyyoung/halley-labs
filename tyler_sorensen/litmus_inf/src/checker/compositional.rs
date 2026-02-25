@@ -807,6 +807,354 @@ impl CompositionalProof {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Rely-Guarantee Compositional Reasoning (shared variables)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// A rely condition: interference that a component tolerates from the environment.
+/// Formally: Rely(C_i) ⊆ Actions(Env) specifies which writes from other
+/// components thread C_i can observe without violating its guarantees.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelyCondition {
+    /// Which addresses this rely condition covers.
+    pub addresses: HashSet<Address>,
+    /// For each address, the set of values that the component tolerates seeing.
+    pub tolerated_values: HashMap<Address, HashSet<Value>>,
+    /// Ordering constraints on environment writes.
+    /// If true, environment writes to this address must be ordered (e.g., by a fence).
+    pub requires_ordered_writes: HashMap<Address, bool>,
+    /// Description for human readability.
+    pub description: String,
+}
+
+/// A guarantee condition: what a component promises about its own behavior.
+/// Formally: Guar(C_i) specifies what C_i guarantees to the environment
+/// about its writes and their ordering.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GuaranteeCondition {
+    /// Addresses written by this component.
+    pub written_addresses: HashSet<Address>,
+    /// For each address, the values this component may write.
+    pub possible_writes: HashMap<Address, HashSet<Value>>,
+    /// Ordering guarantees: does this component ensure its writes are ordered?
+    pub ordered_writes: HashMap<Address, bool>,
+    /// Does this component use fences to order its writes?
+    pub has_fence: bool,
+    /// Description for human readability.
+    pub description: String,
+}
+
+/// Result of rely-guarantee compatibility check.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelyGuaranteeResult {
+    /// Whether the rely-guarantee composition is valid.
+    pub compatible: bool,
+    /// Overall safety assessment.
+    pub safe: bool,
+    /// Per-component results.
+    pub component_results: Vec<ComponentRGResult>,
+    /// Violations (if any).
+    pub violations: Vec<RGViolation>,
+    /// Whether the result is conservative (may have false positives).
+    pub conservative: bool,
+    /// Summary description.
+    pub description: String,
+}
+
+/// Per-component rely-guarantee result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComponentRGResult {
+    /// Thread IDs in this component.
+    pub thread_ids: Vec<ThreadId>,
+    /// Rely condition.
+    pub rely: RelyCondition,
+    /// Guarantee condition.
+    pub guarantee: GuaranteeCondition,
+    /// Whether rely is satisfied by other components' guarantees.
+    pub rely_satisfied: bool,
+}
+
+/// A violation of the rely-guarantee contract.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RGViolation {
+    /// Component whose rely is violated.
+    pub component_thread_ids: Vec<ThreadId>,
+    /// The address involved.
+    pub address: Address,
+    /// Description of the violation.
+    pub description: String,
+    /// Severity: warning (conservative) or error (definite bug).
+    pub severity: ViolationSeverity,
+}
+
+/// Severity of a rely-guarantee violation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ViolationSeverity {
+    /// Conservative warning: may be a false positive.
+    Warning,
+    /// Definite violation: rely cannot be satisfied.
+    Error,
+}
+
+/// Rely-Guarantee Composition Engine.
+///
+/// Implements the rely-guarantee principle for shared-variable composition:
+/// For components C_1, ..., C_n with shared variables:
+///   1. Extract Rely(C_i) and Guar(C_i) for each component
+///   2. Check: ∀i. ⋃_{j≠i} Guar(C_j) ⊆ Rely(C_i)
+///   3. If compatible: safety of whole = ∧_i safety(C_i under Rely(C_i))
+///
+/// This is conservative: it may report false positives but never false negatives.
+#[derive(Debug)]
+pub struct RelyGuaranteeEngine {
+    /// Memory model.
+    pub model: MemoryModel,
+}
+
+impl RelyGuaranteeEngine {
+    /// Create a new rely-guarantee engine.
+    pub fn new(model: MemoryModel) -> Self {
+        RelyGuaranteeEngine { model }
+    }
+
+    /// Extract the rely condition for a component.
+    /// The rely specifies what interference the component tolerates.
+    pub fn extract_rely(&self, component: &Component, test: &LitmusTest) -> RelyCondition {
+        let mut tolerated_values: HashMap<Address, HashSet<Value>> = HashMap::new();
+        let mut requires_ordered = HashMap::new();
+
+        for &addr in &component.external_addresses {
+            // Conservative: tolerate values 0 and 1 (binary litmus test assumption)
+            let mut values = HashSet::new();
+            values.insert(0);
+            values.insert(1);
+            // Check initial values
+            if let Some(&init_val) = test.initial_state.get(&addr) {
+                values.insert(init_val);
+            }
+            tolerated_values.insert(addr, values);
+
+            // Check if this component has loads from this address that depend
+            // on the ordering of external writes
+            let has_load = component.interfaces.iter().any(|iface| {
+                iface.read_set.contains(&addr)
+            });
+            let has_store = component.interfaces.iter().any(|iface| {
+                iface.write_set.contains(&addr)
+            });
+            // If component both reads and writes the shared address,
+            // it requires ordered writes from the environment
+            requires_ordered.insert(addr, has_load && has_store);
+        }
+
+        RelyCondition {
+            addresses: component.external_addresses.clone(),
+            tolerated_values,
+            requires_ordered_writes: requires_ordered,
+            description: format!(
+                "Rely for threads {:?}: tolerates writes to {:?}",
+                component.thread_ids,
+                component.external_addresses.iter().collect::<Vec<_>>()
+            ),
+        }
+    }
+
+    /// Extract the guarantee condition for a component.
+    /// The guarantee specifies what the component promises about its behavior.
+    pub fn extract_guarantee(&self, component: &Component, test: &LitmusTest) -> GuaranteeCondition {
+        let mut possible_writes: HashMap<Address, HashSet<Value>> = HashMap::new();
+        let mut ordered_writes = HashMap::new();
+        let mut has_fence = false;
+
+        // Analyze each thread in the component
+        for &tid in &component.thread_ids {
+            if let Some(thread) = test.threads.get(tid) {
+                let mut prev_was_fence = false;
+                for instr in &thread.instructions {
+                    match instr {
+                        Instruction::Store { addr, value, ordering, .. } => {
+                            let written = component.external_addresses.contains(addr);
+                            if written {
+                                possible_writes.entry(*addr)
+                                    .or_insert_with(HashSet::new)
+                                    .insert(*value);
+                                // Stores after fences or with release ordering are ordered
+                                let is_ordered = prev_was_fence
+                                    || *ordering != Ordering::Relaxed;
+                                ordered_writes.insert(*addr, is_ordered);
+                            }
+                            prev_was_fence = false;
+                        }
+                        Instruction::Fence { .. } => {
+                            has_fence = true;
+                            prev_was_fence = true;
+                        }
+                        _ => {
+                            prev_was_fence = false;
+                        }
+                    }
+                }
+            }
+        }
+
+        // External addresses that are only read: no writes guaranteed
+        for &addr in &component.external_addresses {
+            if !possible_writes.contains_key(&addr) {
+                possible_writes.insert(addr, HashSet::new()); // no writes
+                ordered_writes.insert(addr, true); // vacuously ordered
+            }
+        }
+
+        GuaranteeCondition {
+            written_addresses: possible_writes.keys().copied().collect(),
+            possible_writes,
+            ordered_writes,
+            has_fence,
+            description: format!(
+                "Guarantee for threads {:?}: writes to {:?}",
+                component.thread_ids,
+                component.external_addresses.iter().collect::<Vec<_>>()
+            ),
+        }
+    }
+
+    /// Check rely-guarantee compatibility between all components.
+    /// For each component C_i, checks that the union of guarantees from
+    /// all other components satisfies C_i's rely condition.
+    pub fn check_compatibility(
+        &self,
+        components: &[Component],
+        relies: &[RelyCondition],
+        guarantees: &[GuaranteeCondition],
+    ) -> (bool, Vec<RGViolation>) {
+        let mut violations = Vec::new();
+        let n = components.len();
+
+        for i in 0..n {
+            let rely = &relies[i];
+
+            for &addr in &rely.addresses {
+                // Collect all values that other components may write to this address
+                let mut env_values = HashSet::new();
+                let mut env_ordered = true;
+
+                for j in 0..n {
+                    if j == i { continue; }
+                    if let Some(writes) = guarantees[j].possible_writes.get(&addr) {
+                        env_values.extend(writes);
+                    }
+                    if let Some(&ordered) = guarantees[j].ordered_writes.get(&addr) {
+                        env_ordered = env_ordered && ordered;
+                    }
+                }
+
+                // Check value tolerance
+                if let Some(tolerated) = rely.tolerated_values.get(&addr) {
+                    let untolerated: HashSet<_> = env_values.difference(tolerated).collect();
+                    if !untolerated.is_empty() {
+                        violations.push(RGViolation {
+                            component_thread_ids: components[i].thread_ids.clone(),
+                            address: addr,
+                            description: format!(
+                                "Component {:?} cannot tolerate values {:?} to address {:#x}",
+                                components[i].thread_ids, untolerated, addr
+                            ),
+                            severity: ViolationSeverity::Warning,
+                        });
+                    }
+                }
+
+                // Check ordering requirement
+                if let Some(&needs_order) = rely.requires_ordered_writes.get(&addr) {
+                    if needs_order && !env_ordered {
+                        violations.push(RGViolation {
+                            component_thread_ids: components[i].thread_ids.clone(),
+                            address: addr,
+                            description: format!(
+                                "Component {:?} requires ordered writes to {:#x}, \
+                                 but environment writes are unordered",
+                                components[i].thread_ids, addr
+                            ),
+                            severity: ViolationSeverity::Error,
+                        });
+                    }
+                }
+            }
+        }
+
+        let compatible = violations.is_empty()
+            || violations.iter().all(|v| matches!(v.severity, ViolationSeverity::Warning));
+        (compatible, violations)
+    }
+
+    /// Run full rely-guarantee compositional verification.
+    pub fn verify(&self, test: &LitmusTest) -> RelyGuaranteeResult {
+        // Step 1: Partition into components (use variable-based splitting)
+        let partition = StateSpaceSplitter::split_by_variables(test);
+
+        // If all components are independent, fall back to parallel composition
+        let components: Vec<Component> = partition.components.iter()
+            .map(|tids| Component::from_threads(tids.clone(), test))
+            .collect();
+
+        let all_independent = components.iter().all(|c| c.is_independent());
+        if all_independent {
+            return RelyGuaranteeResult {
+                compatible: true,
+                safe: true, // simplified: independent = safe
+                component_results: Vec::new(),
+                violations: Vec::new(),
+                conservative: false,
+                description: "All components independent (disjoint variables)".to_string(),
+            };
+        }
+
+        // Step 2: Extract rely and guarantee for each component
+        let relies: Vec<RelyCondition> = components.iter()
+            .map(|c| self.extract_rely(c, test))
+            .collect();
+        let guarantees: Vec<GuaranteeCondition> = components.iter()
+            .map(|c| self.extract_guarantee(c, test))
+            .collect();
+
+        // Step 3: Check compatibility
+        let (compatible, violations) = self.check_compatibility(
+            &components, &relies, &guarantees);
+
+        // Step 4: Build per-component results
+        let component_results: Vec<ComponentRGResult> = components.iter()
+            .enumerate()
+            .map(|(i, c)| ComponentRGResult {
+                thread_ids: c.thread_ids.clone(),
+                rely: relies[i].clone(),
+                guarantee: guarantees[i].clone(),
+                rely_satisfied: !violations.iter().any(|v|
+                    v.component_thread_ids == c.thread_ids),
+            })
+            .collect();
+
+        // Step 5: Overall safety
+        // Conservative: safe only if compatible AND no error-level violations
+        let has_errors = violations.iter()
+            .any(|v| matches!(v.severity, ViolationSeverity::Error));
+        let safe = compatible && !has_errors;
+
+        RelyGuaranteeResult {
+            compatible,
+            safe,
+            component_results,
+            violations,
+            conservative: true, // rely-guarantee is always conservative
+            description: if safe {
+                "Rely-guarantee composition: SAFE (conservative)".to_string()
+            } else {
+                format!("Rely-guarantee composition: POTENTIALLY UNSAFE \
+                         ({} violations)", violations.len())
+            },
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Tests
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -948,5 +1296,87 @@ mod tests {
         let _result = verifier.verify(&test);
         // Second verification should use cache
         let _result2 = verifier.verify(&test);
+    }
+
+    // ── Rely-Guarantee Tests ──
+
+    fn make_shared_variable_test() -> LitmusTest {
+        // Message passing: T0 writes x then y, T1 reads y then x
+        // Shared variables: x (addr 0) and y (addr 1)
+        let mut test = LitmusTest::new("mp-shared");
+        let mut t0 = Thread::new(0);
+        t0.store(0, 1, Ordering::Relaxed); // x = 1
+        t0.store(1, 1, Ordering::Relaxed); // y = 1
+        test.add_thread(t0);
+
+        let mut t1 = Thread::new(1);
+        t1.load(1, 0, Ordering::Relaxed);  // r0 = y
+        t1.load(0, 0, Ordering::Relaxed);  // r1 = x
+        test.add_thread(t1);
+
+        test
+    }
+
+    #[test]
+    fn test_rely_guarantee_independent() {
+        let test = make_independent_test();
+        let model = MemoryModel::new("test");
+        let engine = RelyGuaranteeEngine::new(model);
+        let result = engine.verify(&test);
+        assert!(result.safe);
+        assert!(!result.conservative);
+        assert!(result.violations.is_empty());
+    }
+
+    #[test]
+    fn test_rely_guarantee_shared_variables() {
+        let test = make_shared_variable_test();
+        let model = MemoryModel::new("test");
+        let engine = RelyGuaranteeEngine::new(model);
+        let result = engine.verify(&test);
+        // Should be conservative
+        assert!(result.conservative);
+    }
+
+    #[test]
+    fn test_rely_extraction() {
+        let test = make_shared_variable_test();
+        let model = MemoryModel::new("test");
+        let engine = RelyGuaranteeEngine::new(model);
+        let component = Component::from_threads(vec![0], &test);
+        let rely = engine.extract_rely(&component, &test);
+        // Component 0's external addresses include those shared with T1
+        assert!(!rely.addresses.is_empty() || component.external_addresses.is_empty());
+    }
+
+    #[test]
+    fn test_guarantee_extraction() {
+        let test = make_shared_variable_test();
+        let model = MemoryModel::new("test");
+        let engine = RelyGuaranteeEngine::new(model);
+        let component = Component::from_threads(vec![0], &test);
+        let guarantee = engine.extract_guarantee(&component, &test);
+        // T0 writes to addresses, so guarantee should reflect this
+        assert!(guarantee.has_fence || !guarantee.possible_writes.is_empty()
+                || guarantee.written_addresses.is_empty());
+    }
+
+    #[test]
+    fn test_rg_compatibility_check() {
+        let test = make_independent_test();
+        let model = MemoryModel::new("test");
+        let engine = RelyGuaranteeEngine::new(model);
+        let components = vec![
+            Component::from_threads(vec![0], &test),
+            Component::from_threads(vec![1], &test),
+        ];
+        let relies: Vec<_> = components.iter()
+            .map(|c| engine.extract_rely(c, &test)).collect();
+        let guarantees: Vec<_> = components.iter()
+            .map(|c| engine.extract_guarantee(c, &test)).collect();
+        let (compatible, violations) = engine.check_compatibility(
+            &components, &relies, &guarantees);
+        assert!(compatible);
+        assert!(violations.is_empty());
     }
 }

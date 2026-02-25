@@ -1,0 +1,64 @@
+{
+  "experiment": "z3_fixed_point_convergence",
+  "all_passed": true,
+  "n_theorems": 5,
+  "n_passed": 5,
+  "n_sub_properties": 14,
+  "n_sub_passed": 14,
+  "results": [
+    {
+      "property": "relu_variance_contraction",
+      "description": "\u03c3_w\u00b2 < 2 \u27f9 ReLU variance map f(q)=\u03c3_w\u00b2q/2+\u03c3_b\u00b2 is a contraction with unique non-negative fixed point",
+      "sub_results": {
+        "lipschitz_lt_1": "unsat",
+        "contraction_inequality": "unsat",
+        "fixed_point_correctness": "unsat",
+        "fixed_point_nonnegative": "unsat",
+        "convergence_rate": "unsat"
+      },
+      "all_unsat": true,
+      "passed": true,
+      "mathematical_significance": "This is the foundation of mean-field phase classification: \u03c3_w\u00b2 < 2 defines the ordered phase for ReLU, where variance converges to a unique stable fixed point. The Banach contraction theorem guarantees exponential convergence at rate (\u03c3_w\u00b2/2)^L."
+    },
+    {
+      "property": "relu_chaotic_expansion",
+      "description": "\u03c3_w\u00b2 > 2 \u27f9 ReLU variance map is expansive (chaotic phase)",
+      "result": "unsat",
+      "passed": true
+    },
+    {
+      "property": "leaky_relu_variance_contraction",
+      "description": "\u03c3_w\u00b2 < 2/(1+\u03b1\u00b2) \u27f9 LeakyReLU(\u03b1) variance map is a contraction with unique fixed point",
+      "sub_results": {
+        "contraction_inequality": "unsat",
+        "threshold_correctness": "unsat",
+        "fixed_point_uniqueness": "unsat",
+        "alpha_0.01_threshold": "unsat"
+      },
+      "all_unsat": true,
+      "passed": true,
+      "mathematical_significance": "Extends contraction verification beyond ReLU to the LeakyReLU family. The critical weight \u03c3_w* = \u221a(2/(1+\u03b1\u00b2)) smoothly interpolates between ReLU (\u03b1=0, \u03c3_w*=\u221a2) and linear (\u03b1=1, \u03c3_w*=1)."
+    },
+    {
+      "property": "contraction_implies_convergence",
+      "description": "Contraction mapping with c < 1 implies exponential convergence of variance recursion",
+      "sub_results": {
+        "inductive_step": "unsat",
+        "relu_convergence_rate": "unsat"
+      },
+      "passed": true,
+      "mathematical_significance": "Connects the contraction property to depth-dependent convergence: variance deviation from fixed point decays as (\u03c3_w\u00b2/2)^L for ReLU. This is the formal basis for the depth scale \u03be = 1/|ln(\u03c3_w\u00b2/2)|."
+    },
+    {
+      "property": "depth_scale_phase_correspondence",
+      "description": "Contraction rate c = \u03c3_w\u00b2/2 determines phase: c<1 ordered, c=1 critical, c>1 chaotic",
+      "sub_results": {
+        "ordered_finite_xi": "unsat",
+        "chaotic_divergent": "unsat",
+        "critical_at_2": "unsat"
+      },
+      "passed": true
+    }
+  ],
+  "timestamp": "2026-02-24 18:12:44"
+}

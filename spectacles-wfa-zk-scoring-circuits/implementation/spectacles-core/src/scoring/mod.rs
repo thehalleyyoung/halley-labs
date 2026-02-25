@@ -23,7 +23,7 @@ pub use bleu::{BleuScorer, SmoothingMethod, BleuConfig};
 pub use rouge::{RougeNScorer, RougeLScorer, RougeConfig};
 pub use regex_match::{RegexMatchScorer, RegexCompiler};
 pub use pass_at_k::{PassAtKScorer, PassAtKConfig};
-pub use differential::{DifferentialTester, DifferentialResult, AgreementReport};
+pub use differential::{DifferentialTester, DifferentialResult, AgreementReport, CorpusStats};
 
 use serde::{Serialize, Deserialize};
 
