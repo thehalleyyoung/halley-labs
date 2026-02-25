@@ -5,15 +5,26 @@ functions in the `spectacles-core` crate. All items documented below
 are implemented and tested.
 
 **Scope note.** This documents the Rust implementation only. The Lean 4
-formalization covers semiring axioms and core compilation theorems but
-does not have a verified extraction to this Rust codebase.
+formalization covers semiring axioms (sorry-free) and states compilation
+soundness theorems (with 17 sorrys; see `sorry_audit.json` and paper
+Appendix~I). No verified extraction exists from Lean to this Rust
+codebase; the gap is bridged by property-based testing (57,518
+differential checks + 9,839 property tests, 0 disagreements).
 
 **What has been empirically validated:**
 - Scoring module: 57,518 differential tests, 0 disagreements
 - WFA module: Semiring axioms (125 unit tests), automaton evaluation (81 tests)
-- Circuit module: STARK prove+verify demonstrated on real data (9 proofs, all verified)
-- Proof sizes: ~36–73 KiB measured on real proofs; full metric circuit proofs are future work
-- PSI module: Detects n-gram overlap only, not paraphrase memorization
+- Circuit module: STARK prove+verify on 21 proofs (up to 128-state WFA), all verified
+- Proof performance: 128-state WFA in 198ms prove, 1.0ms verify, 144 KiB
+- PSI module: Expanded contamination detection (21 levels, 5 trials, F1=0.98 at τ=0.02 with 95% CIs; baseline comparison)
+- Property-based tests: 14 algebraic properties, 9,839 instances, Lean-Rust correspondence
+- FRI parameters: blowup=8, queries=38, 16 grinding bits, BLAKE3, 128-bit security
+- Ablation: 6-component structured analysis; triple verification identified as highest-impact (+2 bugs found)
+
+**Known limitations:**
+- Full BLEU-4 (~400 states) and ROUGE-L (~500 states) STARK proofs: projected ~609–760ms but not yet end-to-end demonstrated
+- PSI detects verbatim n-gram overlap only, not paraphrase memorization
+- Lean 4 sorry audit: 5 novel sorrys (4 on critical path, effort ~6–10 weeks to close)
 
 ## Table of Contents
 
@@ -3189,3 +3200,15 @@ if !random_report.failing_indices.is_empty() {
 | Constant | Value | Location | Description |
 |----------|-------|----------|-------------|
 | `GOLDILOCKS_MODULUS` | `0xFFFFFFFF00000001` | `scoring/mod.rs`, `circuit/goldilocks.rs` | Goldilocks prime field modulus (2⁶⁴ − 2³² + 1) |
+
+---
+
+## Example Binaries
+
+| Binary | Description | Command |
+|--------|-------------|---------|
+| `stark_scaling` | STARK scaling benchmark (4–128 state WFAs, 21 proofs) | `cargo run --release --bin stark_scaling` |
+| `contamination_experiment` | End-to-end PSI contamination detection (7 scenarios) | `cargo run --release --bin contamination_experiment` |
+| `property_tests` | 14 algebraic property tests with Lean-Rust correspondence | `cargo run --release --bin property_tests` |
+| `compilation_correctness` | Differential testing (57,518 triple checks) | `cargo run --release --bin compilation_correctness` |
+| `real_benchmark` | MMLU/SQuAD/translation benchmark (2,825 checks) | `cargo run --release --bin real_benchmark` |

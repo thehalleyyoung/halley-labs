@@ -1,80 +1,70 @@
-# Spectacles: Score-Verified Evaluation Certificates
+# Spectacles
 
-**Verified NLP benchmark scoring via weighted finite automata, arithmetic circuits, and STARK proofs, with optional n-gram overlap detection.**
+**Score-verified evaluation certificates for NLP benchmarks via weighted finite automata and zero-knowledge proofs.**
+
+NLP scoring functions (exact match, BLEU, ROUGE, Token F1) decompose into **weighted finite automata over semirings**, providing formal semantics via Schützenberger's theory of rational power series and a natural compilation target for STARK proof circuits. Every metric score is computed three independent ways (reference, WFA, circuit) and checked for agreement.
 
 ## 30-Second Quickstart
 
 ```bash
-cd implementation
-cargo build --release
+cd implementation && cargo build --release
 
-# Score a candidate against a reference with triple verification
-cargo run -p spectacles-cli -- score --metric exact_match \
-  --candidate "Paris" --reference "Paris"
-# Output: score=1.0, reference=automaton=circuit ✓
+# Triple-verify a score (reference + WFA + circuit must agree)
+cargo run --bin spectacles-cli -- score --metric exact_match \
+  --candidate "the cat sat on the mat" --reference "the cat sat on the mat"
+# → Score: 1.0 | Reference: 1 | WFA: 1 | Circuit: 1 | MATCH ✓
 
-# Run differential testing (100K pairs per metric, 800K total)
-cargo run -p spectacles-cli -- differential-test --count 100000
+# Generate and verify STARK proofs (up to 128-state WFA circuits)
+cargo run --release --bin stark_scaling
+# → 21/21 proofs verified | 128-state WFA: 198ms prove, <1ms verify
 
-# Run the full test suite
-cargo test -p spectacles-integration
+# Run full compilation correctness suite
+cargo run --release --bin compilation_correctness
+# → 57,518 tests, 0 disagreements across 10 seeds × 5 metrics
 ```
 
-## What This Does
+## Most Impressive Result
 
-Spectacles recognizes that NLP scoring functions (BLEU, ROUGE, F1, etc.) decompose into **weighted finite automata over semirings**, then compiles them to **STARK arithmetic circuits** and optionally composes with **OPRF-based private set intersection** for n-gram overlap detection. Every metric is implemented three times — as a reference algorithm, a WFA, and an arithmetic circuit — with differential testing that cross-validates all three. The result is a cryptographic certificate proving score correctness, with an optional overlap attestation.
-
-**Verification paradigm:** Spectacles is a *verified specification with comprehensively tested implementation*. Lean 4 proofs cover semiring axioms and compilation soundness theorems. The full pipeline is verified empirically (57K+ differential testing checks, 37 property-based axiom tests, cross-language validation), not by machine-checked extraction.
-
-**Contamination detection scope:** The PSI component detects literal n-gram overlap between test and training data. It does **not** detect paraphrase memorization, indirect contamination, or fine-tuning-based leakage. The certificate attests to n-gram separation, not to absence of all forms of contamination.
+The triple verification methodology (reference × WFA × circuit) found **2 real math bugs** during development—a Montgomery reduction constant error and a Lagrange interpolation denominator error—that would have silently produced wrong scores. These were caught by cross-representation disagreement, not by conventional testing.
 
 ## Key Results
 
-| Result | Value |
+| Metric | Value |
 |--------|-------|
-| Differential testing | 100% agreement across 57K+ test checks (5 metrics × 10 seeds × 1015 pairs + properties) |
-| Semiring axiom verification | 38/38 properties pass (proptest + Python cross-validation) |
-| Metrics supported | 7 (exact match, token F1, BLEU, ROUGE-N, ROUGE-L, regex, pass@k) |
-| WFA-proved computation | 65–100% per metric (Table 2 in paper) |
-| Math bugs found & fixed | 2 (Montgomery inverse, Lagrange interpolation) |
-| End-to-end benchmarks | MMLU, SQuAD, translation pipelines pass |
-| Proof sizes | 45–750 KiB per metric, verification under 20ms |
+| Compilation correctness | 57,518 checks, **0 disagreements** |
+| Benchmark evaluation | 2,825 triple checks (MMLU/SQuAD/translation/random), **0 disagreements** |
+| STARK proofs | **21/21 verified**, up to 128-state WFA, 198ms prove, <1ms verify |
+| Contamination detection | F1 0.98 at τ=0.02 (expanded: 21 levels, 5 trials, 95% CIs) |
+| Semiring axiom tests | 125 Rust + 22 Python + Lean 4 sorry-free |
+| Property-based tests | 14 properties, 9,839 instances, Lean↔Rust correspondence |
 
-## Architecture
+## Supported Metrics
 
-```
- EvalSpec DSL → WFA over semiring → STARK circuit → Certificate
-                                          ↕
-                                   PSI contamination check
-```
+| Metric | Semiring | WFA Coverage |
+|--------|----------|-------------|
+| Exact Match | Boolean | 100% WFA |
+| Token F1 | Counting | 70% WFA + harmonic mean gadget |
+| BLEU-4 | Counting | 60% WFA + geo. mean + BP gadgets |
+| ROUGE-1/2 | Counting | 80% WFA + F-measure gadget |
+| ROUGE-L | Tropical | 65% WFA + F-measure gadget |
 
-Six layers: **Specification** (EvalSpec DSL, type system) → **Automata** (WFA engine, minimization, equivalence) → **Circuit** (WFA→AIR compilation, STARK proving, FRI) → **Protocol** (commit-reveal-verify state machine) → **Privacy** (PSI contamination detection, OPRF) → **Scoring** (7 NLP metrics, triple implementation).
+Partial WFA coverage (60–80% for most metrics) means the formal algebraic story covers the core computation; post-processing gadgets (geometric mean, F-measure, brevity penalty) are empirically tested but not formally proved.
 
-## Most Impressive Demo: Score-Verified Evaluation
+## Honest Limitations
 
-```bash
-# Full pipeline: score + contamination check + certificate
-cargo run -p spectacles-cli -- certify \
-  --metric bleu --n 4 \
-  --candidate "the cat sat on the mat" \
-  --reference "the cat sat on a mat" \
-  --training-ngrams "path/to/training_ngrams.txt" \
-  --threshold 0.05
-
-# Output:
-# BLEU-4 score: 0.6389
-# Triple verification: reference ✓ automaton ✓ circuit ✓
-# PSI contamination check: overlap < τ=0.05 ✓
-# Certificate: 130 KiB STARK proof + PSI attestation
-# Verification time: 12ms
-```
+- **Scaling gap**: STARK proofs demonstrated up to 128-state WFA; full BLEU-4 (~400 states) projected at ~609ms but not yet end-to-end demonstrated. Quadratic effects could increase actual times to ~1.5–2× projections.
+- **Lean 4 sorrys**: 17 total (12 routine, 5 novel); semiring axiom proofs are sorry-free. Sorry dependency analysis in paper Appendix H shows no sorry can invalidate core axiom proofs.
+- **No verified extraction**: Lean-to-Rust gap bridged by 57,518 differential tests + 9,839 property-based tests with formal correspondence, not machine-checked proof. This is the largest verification gap.
+- **Contamination detection**: PSI detects verbatim n-gram overlap only (not paraphrase memorization). Expanded experiment (21 levels, 5 trials, F1 0.98 at τ=0.02). Baseline comparison against zlib and substring matching shows similar detection; PSI's advantage is privacy.
+- **Ablation analysis**: Triple verification is highest-impact component (+2 real bugs found). WFA equivalence provides unique all-inputs specification checking. Lean formalization provides mathematical certainty for axioms but does not replace testing.
+- **Metric coverage**: String-matching metrics only; no embedding-based metrics (BERTScore, COMET).
 
 ## Documentation
 
-- [API Reference](implementation/api.md) — full module and type documentation
-- [Paper](implementation/tool_paper.pdf) — formal foundations and evaluation
-- [EvalSpec Formal Specification](implementation/spectacles-core/EVALSPEC_FORMAL.md) — BNF grammar, typing rules, denotational semantics
+- [Implementation README](implementation/README.md) — build, test, project structure
+- [API Reference](implementation/api.md) — implemented public types and functions
+- [Paper](implementation/tool_paper.pdf) — formal foundations, proofs, and evaluation (27 pages)
 
 ## License
 
-Research use. See [problem statement](problem_statement.md) for threat model and scope.
+Research use only.
