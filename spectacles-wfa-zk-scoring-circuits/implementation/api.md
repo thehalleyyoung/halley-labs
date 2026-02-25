@@ -7,7 +7,7 @@ are implemented and tested.
 **Scope note.** This documents the Rust implementation only. The Lean 4
 formalization covers semiring axioms (sorry-free) and states compilation
 soundness theorems (with 17 sorrys; see `sorry_audit.json` and paper
-Appendix~I). No verified extraction exists from Lean to this Rust
+Appendix I). No verified extraction exists from Lean to this Rust
 codebase; the gap is bridged by property-based testing (57,518
 differential checks + 9,839 property tests, 0 disagreements).
 
