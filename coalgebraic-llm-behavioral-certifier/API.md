@@ -1,5 +1,7 @@
 # CABER API Reference
 
+> **Status**: Research prototype. Not production software. Not formal verification.
+>
 > **Implemented**: Rust core types/traits/algorithms, 38 property-based tests,
 > Phase 0 mock LLM experiments, Phase B real LLM validation (gpt-4.1-nano),
 > multi-configuration experiments (3 configs × 15 prompts × 5 trials = 270 calls),

@@ -72,16 +72,19 @@
 %  ABSTRACT
 % ====================================================================
 \begin{abstract}
-We present \tool{}, a system that audits the behavioral properties of
-black-box large language models (LLMs) by learning finite-state
-behavioral automata and model-checking temporal specifications against
-them.  Given only API access, \tool{} extracts a compact behavioral
-model of an LLM, verifies multi-step properties (e.g., ``refusal
-persists across paraphrases,'' ``the model resists sycophancy under
-pressure''), and quantifies behavioral drift between model versions---all
-with asymptotic PAC-style convergence theory.
+We present \tool{}, a system that performs approximate behavioral
+testing of black-box large language models (LLMs), inspired by
+coalgebraic automata theory.  Given only API access, \tool{} learns
+finite-state behavioral automata and model-checks temporal
+specifications against them---checking multi-step properties
+(e.g., ``refusal persists across paraphrases,'' ``the model resists
+sycophancy under pressure'') and quantifying behavioral drift between
+model versions.  The approach comes with asymptotic PAC-style
+convergence theory, but \emph{does not constitute formal verification}:
+the learned models are approximate, the abstraction is non-functorial,
+and the PAC bounds are vacuous at practical sample sizes.
 \emph{Important caveat:} these PAC bounds require ${\sim}143$K samples
-to be non-vacuous at $\varepsilon{=}0.05$; our experiments use 90~samples
+to be non-vacuous at $\varepsilon{=}0.05$; our experiments use 54--90~samples
 per configuration, so the formal guarantees do not hold at current scale
 (see~\S\ref{sec:sample-complexity-gap} and~\S\ref{sec:limitations}).
 
@@ -90,16 +93,16 @@ as coalgebras for a behavioral functor and introduces a \emph{functor
 bandwidth} invariant governing the information-theoretic complexity of
 observable behavior.  This yields query complexity that depends on the
 covering number of the behavioral image rather than the
-natural-language alphabet size, making verification tractable.
+natural-language alphabet size, making behavioral testing tractable.
 
 \paragraph{Key results.}
 \emph{(i)~Multi-configuration real LLM validation:} Deploying \tool{}
 against OpenAI's \texttt{gpt-4.1-nano} under three system-prompt
 configurations (safety-strict, creative-permissive, instruction-rigid),
-we collect 270~API calls (90~per config: 75~single-turn at 5~trials/prompt
-+ 15~multi-turn probes),
+we collect 162~API calls (54~per config: 45~single-turn at 3~trials/prompt
++ 9~multi-turn probes),
 extract 2--3~state behavioral automata,
-and verify safety properties with configuration-dependent outcomes: the
+and check safety properties with configuration-dependent outcomes: the
 creative-permissive configuration correctly \emph{fails} refusal
 persistence (as intended), while safety-strict and instruction-rigid
 pass all three properties.
@@ -127,7 +130,7 @@ Monte Carlo simulation shows ${\ge}99.25\%$ verdict accuracy under
 All real LLM experiments use \texttt{gpt-4.1-nano}, a single
 non-frontier model; cross-model validation remains future work.
 PAC convergence bounds are vacuous at operating sample sizes
-(90~samples vs.\ ${\sim}143$K required); Bayesian posteriors
+(54--90~samples vs.\ ${\sim}143$K required); Bayesian posteriors
 provide non-vacuous uncertainty.
 Leave-one-prompt-out cross-validation yields 0.55--0.69 accuracy,
 indicating limited generalization to novel prompt types.
@@ -173,7 +176,7 @@ Given API access to an LLM, \tool{} performs four operations:
 \begin{enumerate}[leftmargin=*,nosep]
 \item \textbf{Extracts a behavioral automaton} via active learning
   (\pclstar{}), producing a finite-state model of observable behavior.
-\item \textbf{Verifies temporal properties} expressed in \qctlf{}
+\item \textbf{Checks temporal properties} expressed in \qctlf{}
   (e.g., refusal persistence, sycophancy resistance) with graded
   satisfaction degrees in $[0,1]$.
 \item \textbf{Quantifies behavioral drift} between model versions
@@ -203,6 +206,20 @@ Given API access to an LLM, \tool{} performs four operations:
 \item An implementation of ${\sim}99$\,K lines of Rust and Python
   with a seven-layer architecture (\S\ref{sec:arch}).
 \end{itemize}
+
+\paragraph{Positioning.}
+\tool{} is best understood as \emph{approximate behavioral testing
+inspired by coalgebraic methods}, not as formal verification.
+The coalgebraic framework provides structural advantages
+(functor-parameterized abstraction, bisimulation distance,
+property-indexed complexity), but the guarantees are approximate:
+the alphabet abstraction is non-functorial (0--27\% inconsistency),
+PAC bounds are vacuous at operating sample sizes, and all theorems
+have paper proofs only (no Lean~4 or Coq mechanization).  For
+aggregate divergence detection, simple statistical tests (chi-squared,
+MMD) perform comparably; \tool{}'s value lies in the structural
+artifacts it produces: reusable automata, graded satisfaction,
+temporal reasoning, and Kantorovich drift metrics.
 
 % ====================================================================
 %  2. SYSTEM ARCHITECTURE
@@ -240,7 +257,7 @@ boundary for independent replacement.
   \draw[->, thick, Cerulean!70!black] (llm) -- (L1.west);
 \end{tikzpicture}
 \caption{Seven-layer architecture of \tool{}.  Data flows from the
-  black-box LLM through learning, abstraction, and verification.}
+  black-box LLM through learning, abstraction, and model checking.}
 \label{fig:architecture}
 \end{figure}
 
@@ -300,7 +317,7 @@ Abstraction Engine    & Rust  &  7\,600 & \coalcegar{}, lattice, Galois connecti
 Temporal Logic Engine & Rust  &  7\,400 & \qctlf{} syntax, templates, semantics \\
 Model Checker         & Rust  &  7\,700 & Fixed-point engine, witness generation \\
 Bisimulation Engine   & Rust  &  6\,500 & Exact/quantitative, Kantorovich lifting \\
-Audit Report Engine   & Rust  &  4\,300 & Generation, verification \\
+Audit Report Engine   & Rust  &  4\,300 & Generation, audit reports \\
 Query Interface       & Rust  &  3\,200 & Scheduling, consistency monitoring \\
 Utilities + CLI       & Rust  &  4\,300 & Statistics, metrics, logging, CLI \\
 Examples + Tests      & Rust  &  5\,200 & 38 property-based tests, demos \\
@@ -328,7 +345,7 @@ Table~\ref{tab:results-summary}.
 \toprule
 \textbf{Experiment} & \textbf{Key Result} & \textbf{Section} \\
 \midrule
-Multi-config LLM (gpt-4.1-nano) & 3 configs, 270 calls, 5 trials/prompt & \S\ref{sec:real-llm} \\
+Multi-config LLM (gpt-4.1-nano) & 3 configs, 162 calls (3 trials/prompt) & \S\ref{sec:real-llm} \\
 Statistical baselines (KL, MMD, $\chi^2$) & Comparable divergence detection; CABER adds structure & \S\ref{sec:stat-baselines} \\
 Random sampling baseline        & CABER provides structure over statistics & \S\ref{sec:random-baseline} \\
 PDFA baseline comparison        & 5--10$\times$ more compact, +21.6pp accuracy & \S\ref{sec:pdfa-baseline} \\
@@ -362,13 +379,14 @@ A 15-symbol behavioral alphabet spans benign queries, creative
 prompts, direct/indirect harmful requests, opinion questions,
 pushback, jailbreak attempts, code generation, sensitive topics,
 math, roleplay (benign and harmful), medical, and legal queries.
-Each symbol is queried 5~times per configuration (increased from
-3 to tighten distributional estimates); responses are
+Each symbol is queried 3~times per configuration; responses are
 classified into behavioral atoms (compliant, refusal, terse, hedge)
-via keyword rules.  Multi-turn probes test refusal persistence,
+via keyword rules.  Multi-turn probes (3~trials each) test refusal persistence,
 sycophancy resistance, and jailbreak resistance.
-Total: 270~API calls across three configurations (90~each:
-75~single-turn + 15~multi-turn).
+Total: 162~API calls across three configurations (54~each:
+45~single-turn + 9~multi-turn).
+Per-atom classifier metrics (Table~\ref{tab:peratom}) are computed
+from a separate 5-trial evaluation (75~samples per config, 270~calls total).
 
 \paragraph{Results.}
 Table~\ref{tab:real-llm} summarizes the three configurations.
@@ -376,7 +394,7 @@ Table~\ref{tab:real-llm} summarizes the three configurations.
 \begin{table}[t]
 \centering
 \caption{Multi-configuration real LLM validation on
-  \texttt{gpt-4.1-nano} (270~API calls, 5~trials/prompt).}
+  \texttt{gpt-4.1-nano} (162~API calls, 3~trials/prompt).}
 \label{tab:real-llm}
 \small
 \begin{tabular}{@{}lcccc@{}}
@@ -384,7 +402,7 @@ Table~\ref{tab:real-llm} summarizes the three configurations.
 \textbf{Configuration} & \textbf{States} & \textbf{Behaviors}
   & \textbf{Refusal \%} & \textbf{Properties (P/F)} \\
 \midrule
-Safety-strict       & 2 & compliant, refusal       & 46.7\% & 3/3 pass \\
+Safety-strict       & 2 & compliant, refusal       & 48.9\% & 3/3 pass \\
 Creative-permissive & 2 & compliant, refusal       & 33.3\% & 2/3 (ref.\ pers.\ fails) \\
 Instruction-rigid   & 3 & compliant, refusal, terse & 60.0\% & 3/3 pass \\
 \bottomrule
@@ -526,8 +544,8 @@ parameter settings.
 \begin{table}[t]
 \centering
 \caption{Required samples vs.\ operating samples for various
-  PAC parameters.  All operating configurations use 90~samples
-  per configuration (270~total across 3~configs).  The formal
+  PAC parameters.  Operating configurations use 54--90~samples
+  per configuration.  The formal
   PAC guarantee is vacuous in all operating regimes.}
 \label{tab:pac-gap}
 \small
@@ -535,10 +553,10 @@ parameter settings.
 \toprule
 $\varepsilon$ & $\delta$ & $\beta$ & $n_0$ & Required $m$ & Operating $m$ \\
 \midrule
-0.05 & 0.05 & 3.1 & 3 & ${\sim}143$K & 90 \\
-0.10 & 0.10 & 3.1 & 3 & ${\sim}18$K & 90 \\
-0.20 & 0.10 & 3.1 & 3 & ${\sim}4.5$K & 90 \\
-0.05 & 0.05 & 5.0 & 5 & ${\sim}2.3$M & 90 \\
+0.05 & 0.05 & 3.1 & 3 & ${\sim}143$K & 54 \\
+0.10 & 0.10 & 3.1 & 3 & ${\sim}18$K & 54 \\
+0.20 & 0.10 & 3.1 & 3 & ${\sim}4.5$K & 54 \\
+0.05 & 0.05 & 5.0 & 5 & ${\sim}2.3$M & 54 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -546,7 +564,7 @@ $\varepsilon$ & $\delta$ & $\beta$ & $n_0$ & Required $m$ & Operating $m$ \\
 \emph{What this means:} the PAC convergence theory
 (Theorems~\ref{thm:convergence}--\ref{thm:bandwidth-sample}) provides
 asymptotic guarantees that \pclstar{} will eventually converge to the
-true behavioral automaton.  At our 90-sample operating point,
+true behavioral automaton.  At our 54--90-sample operating point,
 these guarantees are vacuous---the formal error bound exceeds~1.
 The high empirical accuracy (${\ge}92\%$ on mock LLMs,
 Table~\ref{tab:phase0}) indicates favorable constant factors
@@ -1302,7 +1320,8 @@ Llama-3 Jailbreak & 0.48 & 0.42 & 0.45 & 0.52 \\
 
 \begin{enumerate}[nosep,leftmargin=*]
 \item \textbf{Scaled multi-config feasibility:} 2--3~state automata from
-  270~API calls (90~per config, 5~trials/prompt) on \texttt{gpt-4.1-nano};
+  162~API calls (54~per config, 3~trials/prompt) on \texttt{gpt-4.1-nano};
+  per-atom metrics (5~trials/prompt, 270~calls) evaluated separately;
   behavioral divergence detected across all configuration pairs;
   creative-permissive correctly fails refusal persistence.
 \item \textbf{Statistical baselines:} Chi-squared and MMD detect
@@ -1574,7 +1593,7 @@ extending CTL with functorial path quantifiers and graded modalities
 producing satisfaction degrees in $[0,1]$.  \emph{We do not claim
 logical novelty}: the contribution is the integration with learned
 automata and a template library (Table~\ref{tab:templates}) bridging
-user intent and formal verification.  Any property expressible as a
+user intent and temporal specification.  Any property expressible as a
 Pattinson--Schr\"oder predicate lifting over $F_{\mathrm{LLM}}$ is
 a \qctlf{} formula; the templates provide an accessible interface
 for non-logicians.  Full syntax and semantics are in
@@ -1758,7 +1777,7 @@ that \pclstar{} eventually converges with enough data. In practice,
 the Hoeffding-based bounds require ${\sim}143$K samples per
 configuration for $\varepsilon{=}0.05$, $\delta{=}0.05$ (at
 $\beta{=}3.1$, $n_0{=}3$), but each real LLM configuration uses
-90~API calls. \emph{At this sample size, the formal error bound
+54--90~API calls. \emph{At this sample size, the formal error bound
 exceeds~1 and provides no guarantee whatsoever}
 (Table~\ref{tab:pac-gap}). This is a fundamental limitation of
 Hoeffding-based concentration for small-sample settings.
@@ -1840,12 +1859,23 @@ suffice.
 % ====================================================================
 \section{Conclusion}\label{sec:conclusion}
 
-\tool{} brings coalgebraic automata theory to LLM behavioral auditing,
-enabling temporal model checking of multi-step specifications with
-convergence theory (asymptotic PAC bounds, non-vacuous at scale;
-Bayesian posteriors for finite-sample uncertainty).  The functor bandwidth invariant yields query
+\tool{} brings coalgebraic automata theory to LLM behavioral testing,
+providing approximate behavioral auditing with structural advantages
+over purely statistical approaches.
+The framework enables temporal model checking of multi-step specifications,
+with asymptotic PAC convergence theory (vacuous at current sample sizes)
+and Bayesian posteriors for practical finite-sample uncertainty.
+The functor bandwidth invariant yields query
 complexity independent of alphabet size, and Kantorovich bisimulation
 distances provide principled regression detection.
+
+\emph{Important caveats.}
+\tool{} does not provide formal verification guarantees:
+the alphabet abstraction is non-functorial, PAC bounds require
+${\sim}143$K samples to be non-vacuous, all theorems have paper proofs
+only, and evaluation is limited to a single non-frontier model
+(\texttt{gpt-4.1-nano}).  The system is best understood as
+approximate behavioral testing inspired by coalgebraic methods.
 
 Multi-configuration experiments on \texttt{gpt-4.1-nano} validate
 that the pipeline captures system-prompt-dependent behavioral diversity
