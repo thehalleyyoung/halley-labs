@@ -43,7 +43,7 @@ print(result[0].fence_recommendation)  # "dmb ishst (T0); dmb ishld (T1)"
 |-----------|------|-------------|
 | `pattern_name` | `str` | Litmus test name (75 built-in) |
 | `source_arch` | `str` | Source architecture (default `"x86"`) |
-| `target_arch` | `str` or `None` | Target architecture. `None` = all 10. |
+| `target_arch` | `str` or `None` | Target architecture. `None` = all (4 CPU + 6 GPU scope instantiations). |
 
 **Returns:** `List[PortabilityResult]` with fields: `safe`, `fence_recommendation`, `compression_ratio`.
 
@@ -160,20 +160,20 @@ Run all automated cross-validation checks.
 from differential_testing import run_all_differential_tests
 
 results = run_all_differential_tests()
-# results keys: monotonicity (342), fence_soundness (60), determinism (2280),
-#               custom_model (39), litmus_roundtrip (57)
+# results keys: monotonicity (450), fence_soundness (60), determinism (3000),
+#               custom_model (57), litmus_roundtrip (75)
 ```
 
 **Test categories:**
 | Category | Checks | Description |
 |----------|--------|-------------|
-| **Meaningful semantic checks** | **498** | |
-| Monotonicity | 342 | Stricter model ⊆ weaker model |
+| **Meaningful semantic checks** | **642** | |
+| Monotonicity | 450 | Stricter model ⊆ weaker model |
 | Fence soundness | 60 | Adding fences never makes safe → unsafe |
-| Custom model | 39 | DSL vs built-in cross-validation (39/39 agree) |
-| Litmus round-trip | 57 | Export → re-import consistency |
-| **Trivial stability checks** | **2,280** | |
-| Determinism | 2,280 | Same input → same output (5 runs) |
+| Custom model | 57 | DSL vs built-in cross-validation (57/57 agree) |
+| Litmus round-trip | 75 | Export → re-import consistency |
+| **Trivial stability checks** | **3,000** | |
+| Determinism | 3,000 | Same input → same output (5 runs) |
 
 ---
 
@@ -269,7 +269,7 @@ from herd7_validation import validate_against_herd7
 
 results = validate_against_herd7()
 print(f"Agreement: {results['agreements']}/{results['total_checks']}")
-# 50/50, Wilson CI [92.9%, 100%]
+# 228/228, Wilson CI [98.3%, 100%]
 ```
 
 ### `export_all_litmus(output_dir, fmt='C') → (List[str], List[Tuple])`
@@ -282,15 +282,15 @@ Export all 75 patterns as .litmus files.
 
 ### `run_false_negative_analysis() → Dict`
 
-Classify all 18 near-miss benchmark cases to verify zero false negatives.
+Classify all 7 non-exact-match benchmark cases to verify zero false negatives.
 
 ```python
 from false_negative_analysis import run_false_negative_analysis
 
 results = run_false_negative_analysis()
-print(f"SAFE: {results['safe_count']}")     # 9
-print(f"NEUTRAL: {results['neutral_count']}") # 9
-print(f"UNSAFE: {results['unsafe_count']}")   # 0
+print(f"SAFE: {results['safe_conservative']}")     # 4
+print(f"NEUTRAL: {results['neutral_identical']}") # 3
+print(f"UNSAFE: {results['unsafe_missed']}")   # 0
 # Zero false negatives: 100% effective safety rate
 ```
 

@@ -81,20 +81,32 @@ def extract_concurrency_snippets(filepath, max_lines=60):
     return snippets
 
 
-def check_snippet(analyzer, code, target_arch, source_arch='x86'):
+def check_snippet(analyzer, code, target_arch, source_arch='x86',
+                  warn_unrecognized=False):
     """Check a single code snippet for portability issues."""
     results = analyzer.check_portability(code, target_arch=target_arch)
+
+    # Get coverage info if warnings requested
+    coverage_info = None
+    if warn_unrecognized:
+        analysis = analyzer.analyze(code)
+        coverage_info = {
+            'coverage_confidence': analysis.coverage_confidence,
+            'warnings': [w for w in analysis.warnings
+                         if 'UnrecognizedPatternWarning' in w],
+            'unrecognized_ops': analysis.unrecognized_ops,
+        }
+
     # Filter to best match only
     if results:
-        # Group by pattern, take highest confidence per pattern
         seen = set()
         filtered = []
         for r in results:
             if r['pattern'] not in seen:
                 seen.add(r['pattern'])
                 filtered.append(r)
-        return filtered
-    return []
+        return filtered, coverage_info
+    return [], coverage_info
 
 
 def format_result(result, filepath=None, start_line=None, verbose=False):
@@ -145,6 +157,11 @@ def main():
                         help='Show detailed output')
     parser.add_argument('--no-color', action='store_true',
                         help='Disable colored output')
+    parser.add_argument('--fail-on-unsafe', action='store_true', default=True,
+                        help='Exit non-zero when unsafe patterns detected (default: always on)')
+    parser.add_argument('--warn-unrecognized', '-w', action='store_true',
+                        help='Warn when code contains concurrent operations '
+                             'that do not match any known pattern')
 
     args = parser.parse_args()
 
@@ -154,16 +171,20 @@ def main():
 
     analyzer = ASTAnalyzer()
     all_results = []
+    coverage_warnings = []
     n_files = 0
     n_issues = 0
 
     if args.stdin:
         code = sys.stdin.read()
-        results = check_snippet(analyzer, code, args.target, args.source)
+        results, cov = check_snippet(analyzer, code, args.target, args.source,
+                                     args.warn_unrecognized)
         for r in results:
             all_results.append({'file': '<stdin>', 'start_line': None, **r})
             if not r['safe']:
                 n_issues += 1
+        if cov and cov['warnings']:
+            coverage_warnings.extend(cov['warnings'])
         n_files = 1
     elif args.paths:
         files = []
@@ -175,8 +196,9 @@ def main():
             if snippets:
                 n_files += 1
             for snip in snippets:
-                results = check_snippet(analyzer, snip['code'],
-                                        args.target, args.source)
+                results, cov = check_snippet(analyzer, snip['code'],
+                                             args.target, args.source,
+                                             args.warn_unrecognized)
                 for r in results:
                     all_results.append({
                         'file': snip['file'],
@@ -185,6 +207,9 @@ def main():
                     })
                     if not r['safe']:
                         n_issues += 1
+                if cov and cov['warnings']:
+                    for w in cov['warnings']:
+                        coverage_warnings.append(f"{snip['file']}:{snip['start_line']}: {w}")
     else:
         parser.error('Provide source files/directories or use --stdin')
 
@@ -211,6 +236,11 @@ def main():
 
             print(f'\nSummary: {len(all_results)} pattern(s) checked, '
                   f'{n_issues} issue(s) across {n_files} file(s)')
+
+            if coverage_warnings:
+                print(f'\n\033[33m⚠ Coverage warnings ({len(coverage_warnings)}):\033[0m')
+                for w in coverage_warnings:
+                    print(f'  {w}')
 
     sys.exit(1 if n_issues > 0 else 0)
 
