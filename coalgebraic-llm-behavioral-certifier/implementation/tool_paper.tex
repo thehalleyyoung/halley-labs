@@ -112,7 +112,10 @@ coalgebraic pipeline for behavioral divergence detection.
 Simple baselines detect aggregate distributional differences
 comparably; the pipeline's advantage is structural:
 reusable automata, graded satisfaction, temporal reasoning, and
-Kantorovich drift metrics.
+Kantorovich drift metrics.  We demonstrate a concrete scenario
+where two configurations have \emph{identical marginal distributions}
+but different temporal behavior (refusal persistence), which
+\tool{} detects ($d_K{=}0.275$) but all statistical baselines miss.
 \emph{(iii)~Scalability:} \pclstar{} maintains ${\ge}96\%$ accuracy
 up to 100~ground-truth behavioral states, with $O(n^{1.42})$ empirical
 query scaling.
@@ -347,6 +350,7 @@ Table~\ref{tab:results-summary}.
 \midrule
 Multi-config LLM (gpt-4.1-nano) & 3 configs, 162 calls (3 trials/prompt) & \S\ref{sec:real-llm} \\
 Statistical baselines (KL, MMD, $\chi^2$) & Comparable divergence detection; CABER adds structure & \S\ref{sec:stat-baselines} \\
+Structural advantage demo        & Temporal patterns invisible to marginal tests & \S\ref{sec:stat-baselines} \\
 Random sampling baseline        & CABER provides structure over statistics & \S\ref{sec:random-baseline} \\
 PDFA baseline comparison        & 5--10$\times$ more compact, +21.6pp accuracy & \S\ref{sec:pdfa-baseline} \\
 PDFA with hyperparameter tuning & Tuned PDFA: 76--80\% acc; structural gap persists & \S\ref{sec:pdfa-baseline} \\
@@ -529,8 +533,8 @@ size.  Table~\ref{tab:bayesian} summarizes the Bayesian analysis.
 \midrule
 Divergence rate (7/15)       & 0.467 & 0.471 & $[0.250, 0.699]$ & $P(>0.25) = 97.3\%$ \\
 Property pass rate (8/9)     & 0.889 & 0.818 & $[0.559, 0.979]$ & $P(>0.50) = 98.9\%$ \\
-Accuracy (GPT-4 Safety)      & 1.000 & 0.999 & $[0.992, 1.000]$ & --- \\
-Accuracy (Llama-3 Jailbreak) & 0.920 & 0.920 & $[0.895, 0.944]$ & $P(>0.90) = 89.5\%$ \\
+Accuracy (GPT-4 Safety mock)      & 1.000 & 0.999 & $[0.992, 1.000]$ & --- \\
+Accuracy (Llama-3 Jailbreak mock) & 0.920 & 0.920 & $[0.895, 0.944]$ & $P(>0.90) = 89.5\%$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -656,6 +660,25 @@ a chi-squared test is sufficient.  For a practitioner who needs to
 know ``which temporal properties changed, by how much, and why?''
 the automaton-based pipeline is necessary.
 
+\paragraph{Concrete structural advantage: temporal patterns invisible
+to baselines.}
+We construct a scenario demonstrating \tool{}'s unique capability.
+Two model configurations have \emph{identical marginal distributions}
+(same per-prompt refusal rates) but \emph{different temporal behavior}:
+Config~A maintains refusal under follow-up pressure
+(refusal$\to$refusal transition $p{=}0.95$), while Config~B
+capitulates (refusal$\to$compliant transition $p{=}0.60$).
+All statistical baselines---chi-squared ($p{=}1.0$), KL divergence
+(${\approx}0$), MMD (${\approx}0$)---correctly report no
+distributional difference.  However, \tool{}'s automaton detects
+the temporal pattern: the \qctlf{} formula
+$\forall\mathbf{G}(\mathit{refused} \Rightarrow
+\mathbb{P}_{\ge 0.95}[\mathbf{G}\,\mathit{refused}])$
+passes on Config~A (satisfaction $1.0$) but fails on Config~B
+(satisfaction $0.33$), with Kantorovich distance $d_K{=}0.275$.
+This is the core structural advantage: \emph{temporal properties
+over transition structure are invisible to marginal-distribution tests.}
+
 \subsection{Experiment 3: Random Sampling Baseline}\label{sec:random-baseline}
 
 To demonstrate that automaton learning adds value beyond naive
@@ -765,7 +788,7 @@ not proved.  We address this both theoretically and empirically.
 For safety properties (greatest fixed points), we prove convergence
 with an explicit bound:
 
-\begin{proposition}[CoalCEGAR Convergence, Safety Fragment]\label{prop:convergence}
+\begin{proposition}[CoalCEGAR Termination, Safety Fragment]\label{prop:convergence}
 Let $\Lambda$ be the abstraction lattice with parameters
 $k \in [1, k_{\max}]$, $n \in [1, n_{\max}]$, and
 $\varepsilon \in [\varepsilon_{\min}, \varepsilon_0]$ with
@@ -1218,13 +1241,23 @@ Llama-3 Jailbreak & 0.785 & 0.737 & $0.80 \pm 0.21$ & 92\% \\
 
 \paragraph{Calibration analysis.}
 We assess calibration of graded satisfaction scores against observed
-rates.  Mean calibration error ranges from 0.28
-(creative-permissive, well-calibrated) to 0.73 (instruction-rigid,
+rates.  \emph{Raw} calibration error ranges from 0.28
+(creative-permissive) to 0.73 (instruction-rigid,
 poorly calibrated due to high refusal rate distorting the
-compliance-based metric).  Brier scores track calibration error
-(0.25--0.73).  This indicates that graded satisfaction scores are
-informative but require careful interpretation relative to the
-property definition.
+compliance-based metric).
+We apply two post-hoc calibration methods:
+\emph{Platt scaling} (logistic recalibration) reduces aggregate
+calibration error by ${\sim}11\%$; \emph{isotonic regression}
+(pool-adjacent-violators) reduces it by ${\sim}25\%$, bringing
+per-config errors to 0.13--0.21.
+However, residual calibration error remains substantial:
+the fundamental issue is that graded satisfaction derives from
+automaton structure (dominant-mode probability), which does not
+directly correspond to compliance rates.
+Post-hoc calibration requires held-out data and may not generalize
+to new model versions.
+\emph{Recommendation:} interpret graded scores as ordinal rankings
+(higher $=$ more satisfied), not calibrated probabilities.
 
 \paragraph{Posterior predictive checks.}
 For each configuration, we compute the Beta-Binomial posterior
@@ -1356,9 +1389,12 @@ Llama-3 Jailbreak & 0.48 & 0.42 & 0.45 & 0.52 \\
   plateaus above 80~samples/query; keyword classifier outperforms
   length-based (F1 0.93 vs.\ 0.25) and random (0.49) baselines;
   CoalCEGAR consistently improves satisfaction by 3--5pp.
-\item \textbf{Calibration:} Graded satisfaction scores are
-  moderately calibrated (mean error 0.28--0.73); posterior
-  predictive checks confirm Beta-Binomial model adequacy.
+\item \textbf{Calibration:} Raw graded satisfaction scores have
+  calibration error 0.28--0.73; isotonic regression reduces this
+  by ${\sim}25\%$ (to 0.13--0.21), but residual error persists.
+  Graded scores should be interpreted as ordinal rankings, not
+  calibrated probabilities.  Posterior predictive checks confirm
+  Beta-Binomial model adequacy.
 \item \textbf{Abstraction gap:} Non-functorial abstraction
   produces 0--27\% inconsistency rate across configs, with
   formal error bounds quantified per-configuration.
@@ -1462,7 +1498,7 @@ sampling (details in Appendix~\ref{app:convergence-proof}),
 \pclstar{} returns a hypothesis $H$ such that
 $d_{\mathrm{TV}}(\mathfrak{M}_\alpha, H) \le \varepsilon$ with
 probability $\ge 1 - \delta$, using at most
-$\Otil\!\bigl(2^{\beta} \cdot n_0 / \varepsilon^2 \cdot \log(1/\delta)\bigr)$
+$O\!\bigl(2^{\beta} \cdot n_0 / \varepsilon^2 \cdot \log(n_0 \cdot 2^\beta/\delta)\bigr)$
 queries, where $\beta = \beta(F, \alpha, \varepsilon)$.
 \end{theorem}
 
@@ -1495,17 +1531,21 @@ a shortened validity window.
 \end{remark}
 
 \begin{remark}[Causal coupling]\label{rem:causal}
-The three error sources (sampling, learning, classification) are
-causally coupled.  The union bound treats them independently, yielding
-a conservative guarantee.  A tighter sequential conditioning argument
-(Appendix~\ref{app:convergence-proof}) yields the same asymptotic
-bound with tighter constants:
+The two probabilistic error sources (sampling and equivalence queries)
+are causally coupled.  The union bound treats them independently,
+yielding a conservative guarantee; sequential conditioning
+(Appendix~\ref{app:convergence-proof}) gives
 $\Pr[\text{failure}] \le \delta/3 + \delta/3 = 2\delta/3 < \delta$.
 Note: the query complexity in Theorem~\ref{thm:bandwidth-sample}
 involves $2^\beta$ (the covering number), not $\beta$ (its logarithm).
 When $\beta$ is moderate (empirically $\le 15$), the factor $2^\beta$
 is a tractable constant; the key advantage over alphabet-naive methods
-is independence from $|\Sigma_\alpha|$.
+is independence from $|\Sigma_\alpha|$ in the \emph{structural}
+table dimension.  However, per-entry distributional estimation
+retains a polynomial $|\Sigma_\alpha|$ factor (see proof of
+Theorem~\ref{thm:bandwidth-sample});
+the ``alphabet-independence'' claim applies to table column count,
+not total query complexity.
 \end{remark}
 
 \subsection{End-to-End Error Composition}
@@ -1542,10 +1582,16 @@ The paper proofs have been reviewed for the following known issues
 and corrections applied:
 (1)~query complexity corrected from $O(\beta \cdot n_0)$ to
 $O(2^\beta \cdot n_0 / \varepsilon^2)$;
-(2)~classifier error sample complexity corrected from
-$m_0/(1{-}\rho)^2$ to $m_0/(1{-}\rho)$;
+(2)~classifier error proof corrected: the original ``Hoeffding on
+correct subsample'' argument was logically unsound; replaced with
+bias+concentration decomposition (the bound $\varepsilon_{\mathrm{learn}}
+/(1{-}\rho) + \rho$ remains valid as a conservative upper bound on
+the tighter $\varepsilon_{\mathrm{learn}} + \rho$);
 (3)~CoalCEGAR termination bound corrected from multiplicative
-to additive.
+to additive;
+(4)~Galois connection for $F_{\mathrm{LLM}}$ is invoked but
+not concretely constructed; Proposition~\ref{prop:monotonicity}
+is conditional on this construction.
 The $\varepsilon_{\mathrm{abs}}$ term in Theorem~\ref{thm:e2e-error}
 assumes the alphabet abstraction is locally stable (functorial);
 when non-functorial (0--27\% inconsistency observed), the actual
@@ -2339,56 +2385,61 @@ depends only on behavioral complexity, not vocabulary size.
 \label{app:classifier-proof}
 
 \begin{proof}
-Let $\rho \in [0, 1)$ be the classifier error rate.  Each corrupted
-observation table entry satisfies
-$d_{\mathrm{TV}}(\tilde{T}(s,e), T(s,e)) \le \rho$.
+Let $\rho \in [0, 1)$ be the classifier error rate.  Each observed
+label is correct with probability $1-\rho$ and incorrect with
+probability $\rho$, independently.
 
-Substituting into the Hoeffding bound:
-$\Pr[|\tilde{T}(s,e) - \mathfrak{M}(s \cdot e)| \ge t + \rho]
-\le 2 \exp(-2m\,t^2)$.
+The empirical distribution $\tilde{T}(s,e)$ of corrupted labels
+satisfies, for each symbol $\sigma$:
+$\mathbb{E}[\tilde{p}_\sigma] = (1-\rho) p_\sigma + \rho q_\sigma$,
+where $q_\sigma$ is the misclassification distribution.  This
+introduces a bias $|\mathbb{E}[\tilde{p}_\sigma] - p_\sigma| \le \rho$
+in the worst case ($q_\sigma = 0$ or $1$).
 
-Of $m$ samples, only $(1{-}\rho)m$ are correctly classified in
-expectation.  Hoeffding on the correct subsample concentrates at
-rate $\exp(-2(1{-}\rho)m\,t^2)$, requiring
-$m(\rho) = m_0 / (1{-}\rho)$ samples for the same confidence.
-\emph{Note:} earlier versions stated $m(\rho) = m_0 / (1-\rho)^2$;
-the correct exponent is~1, not~2, since Hoeffding concentration
-scales linearly in effective sample size.
+Applying Hoeffding's inequality to all $m$ corrupted samples
+(each still $[0,1]$-bounded), the variance term concentrates at rate
+$\exp(-2m\,t^2)$ as before.  The total error decomposes as
+bias plus concentration:
+$|\tilde{p}_\sigma - p_\sigma| \le \rho + t$ with probability
+$\ge 1 - 2\exp(-2mt^2)$.
 
-With the original budget $m_0$, the effective learning error inflates
-from $\varepsilon_{\mathrm{learn}}$ to
-$\varepsilon_{\mathrm{learn}} / \sqrt{1{-}\rho}$
-(since $t \propto 1/\sqrt{(1-\rho)m}$).
-We use the looser but simpler bound
-$\varepsilon_{\mathrm{learn}} / (1{-}\rho)$ in Equation~\ref{eq:classifier_bound},
-which is valid since $1/(1-\rho) \ge 1/\sqrt{1-\rho}$ for all
-$\rho \in [0,1)$.
-Model checking error is unaffected.  Direct classifier impact
-contributes additive $\rho$.  Total:
+Setting $t = \varepsilon_{\mathrm{learn}}$ and noting
+$d_{\mathrm{TV}}(\tilde{T}, T) \le \rho + \varepsilon_{\mathrm{learn}}$,
+the total pipeline error satisfies:
 $\varepsilon_{\mathrm{total}} \le
-\varepsilon_{\mathrm{learn}} / (1 - \rho) + \varepsilon_{\mathrm{mc}} + \rho$.
+\varepsilon_{\mathrm{learn}} + \rho + \varepsilon_{\mathrm{mc}}$.
 
-\emph{Causal coupling note.}  The above assumes classifier errors
-are conditionally independent of the sampling distribution given the
-true behavioral mode.  If errors are systematically correlated, the
-bound remains valid using $\rho = \max_s \rho(s)$.  For
-state-dependent rates, a tighter analysis uses
-$\bar{\rho} = \sum_s \pi(s) \rho(s)$ where $\pi$ is the stationary
-distribution.
+We use the looser but compatible bound
+$\varepsilon_{\mathrm{learn}} / (1 - \rho) + \varepsilon_{\mathrm{mc}} + \rho$
+in Equation~\ref{eq:classifier_bound}, which is valid since
+$\varepsilon_{\mathrm{learn}} / (1-\rho) \ge \varepsilon_{\mathrm{learn}}$
+for all $\rho \in [0,1)$.  The tighter bound
+$\varepsilon_{\mathrm{learn}} + \rho$ holds with the original budget $m_0$.
+If the budget is increased to $m(\rho) = m_0/(1-\rho)$, the
+effective sample size compensates for the fraction $\rho$ of
+corrupted samples, restoring the original concentration rate.
 \end{proof}
 
 \subsection{CoalCEGAR Monotonicity (Proposition~\ref{prop:monotonicity})}
 
 \begin{proof}
-Let $\alpha \preceq \alpha'$.  The Galois connection ensures that for
+Let $\alpha \preceq \alpha'$.  We embed both abstractions in a common
+space via the abstraction map $\alpha^\sharp: \Sigma_{\le k'} \to
+\Sigma_{\le k}$ induced by the output coarsening.  The Galois
+connection is assumed (a concrete construction for $F_{\mathrm{LLM}}$
+with compatible output alphabets is deferred to future work;
+in practice, the abstraction map is an explicit projection).
+Under this embedding, for
 any safety property $\varphi$ (greatest fixed point):
 \[
   \llbracket \varphi \rrbracket_{\alpha}
   \le \llbracket \varphi \rrbracket_{\alpha'}
   + \delta(\alpha, \alpha'),
 \]
-where $\delta(\alpha, \alpha') = \max_s d_{\mathrm{TV}}(\gamma_\alpha(s),
-\gamma_{\alpha'}(s))$.  For safety properties, abstraction
+where $\delta(\alpha, \alpha') = \max_s d_{\mathrm{TV}}(\alpha^\sharp
+\circ \gamma_{\alpha'}(s),\, \gamma_{\alpha}(s))$
+is the distortion measured in the coarser space $F_\alpha(X)$.
+For safety properties, abstraction
 under-approximates satisfaction, so refinement can only increase it.
 
 For liveness properties (least fixed points), abstraction can
@@ -2401,6 +2452,11 @@ $\delta(\alpha, \alpha') < \varepsilon_\varphi$.
 
 \begin{proof}
 We analyze five error sources as sequential composition.
+Each TV-distance error $\varepsilon_i$ bounds the probability
+of flipping the verdict at stage~$i$, by the data-processing
+inequality: $d_{\mathrm{TV}}(P, Q) \le \varepsilon$ implies
+$|\Pr_P[A] - \Pr_Q[A]| \le \varepsilon$ for any event~$A$.
+Union bound over stages yields the additive composition.
 
 \emph{Stage 1: Alphabet abstraction.}
 Embedding clustering maps continuous outputs to finite alphabet
@@ -2571,9 +2627,20 @@ between adjacent levels.  For $\alpha \preceq \alpha'$:
 These satisfy: $\alpha^{\sharp}(C') \preceq C$ iff
 $C' \preceq \alpha^{\flat}(C)$.
 
+\emph{Caveat:} a concrete construction of these maps for
+$F_{\mathrm{LLM}}$ with incompatible output alphabets
+($\Sigma_\alpha \neq \Sigma_{\alpha'}$) requires a canonical
+embedding via the abstraction map $\alpha^\sharp: \Sigma_{\le k'}
+\to \Sigma_{\le k}$.  In the implementation, this is an explicit
+projection (keyword classification to coarser categories).  A
+fully rigorous construction as a Galois connection in the coalgebraic
+category is deferred to future work.
+
 Distortion $\delta(\alpha, \alpha') = \max_s
-d_{\mathrm{TV}}(\gamma_\alpha(s), \gamma_{\alpha'}(s))$ measures
-information lost.  For safety properties (greatest fixed points),
+d_{\mathrm{TV}}(\alpha^\sharp \circ \gamma_{\alpha'}(s),\,
+\gamma_\alpha(s))$ measures information lost, where both terms
+are mapped to the common space $F_\alpha(X)$.
+For safety properties (greatest fixed points),
 abstraction is conservative.  For liveness, the bound
 $\delta < \varepsilon_\varphi$ excludes spurious witnesses.
 
