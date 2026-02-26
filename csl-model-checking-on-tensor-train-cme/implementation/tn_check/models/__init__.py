@@ -15,6 +15,11 @@ from tn_check.models.library import (
     repressilator,
     cascade,
     schlogl,
+    gene_expression,
+    exclusive_switch,
+    sir_epidemic,
+    michaelis_menten_enzyme,
+    multi_species_cascade,
 )
 
 __all__ = [
@@ -23,4 +28,9 @@ __all__ = [
     "repressilator",
     "cascade",
     "schlogl",
+    "gene_expression",
+    "exclusive_switch",
+    "sir_epidemic",
+    "michaelis_menten_enzyme",
+    "multi_species_cascade",
 ]

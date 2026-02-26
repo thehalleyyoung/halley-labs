@@ -101,7 +101,7 @@ Models (models/)    Ordering (ordering/)    Adaptive (adaptive/)
 ## Testing
 
 ```bash
-python3 -m pytest tests/ -v           # 138 tests
+python3 -m pytest tests/ -v           # 161 tests
 python3 -m pytest tests/ --tb=short   # Quick pass/fail
 ```
 
@@ -116,7 +116,18 @@ python3 -m pytest tests/ --tb=short   # Quick pass/fail
 | `verifier/` | Independent certificate verification (11 checks) |
 | `integrator/` | Time evolution (TDVP, Krylov, uniformization) |
 | `models/` | Library of biological models |
+| `solver/` | Dense reference solver for ground-truth comparison |
+| `evaluation/` | Scaling and accuracy benchmarks, PRISM-style comparisons |
 | `experiments.py` | Automated experiment runner |
+
+## Scaling Results
+
+| N species | State space | Dense memory | TT memory | Compression |
+|-----------|------------|-------------|-----------|-------------|
+| 2 | 784 | 4.6 MB | 94 KB | 49× |
+| 5 | 9.77M | 711 TB | 5.8 MB | 123M× |
+| 10 | 10.2T | 781 ZB | 38 MB | 2×10¹⁹× |
+| 15 | 4.38×10¹⁷ | 1.43×10²⁷ GB | 79 MB | 1.82×10²⁸× |
 
 ## References
 

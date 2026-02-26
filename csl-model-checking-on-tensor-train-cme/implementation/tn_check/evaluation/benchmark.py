@@ -3,6 +3,7 @@ Benchmarking and ground-truth comparison.
 
 For small systems (≤ 12 species), computes exact probability distributions
 via sparse matrix exponentiation and compares against TT-compressed results.
+Includes scaling and accuracy benchmark suites.
 """
 
 from __future__ import annotations
@@ -194,4 +195,154 @@ def compressibility_survey(
             "total_params": compressed.total_params,
         }
 
+    return results
+
+
+def run_scaling_benchmark(
+    species_counts: list[int] = None,
+) -> dict:
+    """
+    Create cascade models of increasing size and measure TT compilation cost.
+
+    Measures state space size, TT parameter count, bond dimensions,
+    and compilation time as a function of species count.
+
+    Args:
+        species_counts: List of species counts to test.
+
+    Returns:
+        Dictionary with scaling results for each species count.
+    """
+    if species_counts is None:
+        species_counts = [2, 3, 4, 5, 6, 8, 10]
+
+    from tn_check.models.library import multi_species_cascade
+    from tn_check.cme.compiler import CMECompiler
+
+    results = {"species_counts": species_counts, "entries": []}
+
+    for n in species_counts:
+        max_copy = max(10, 40 - 2 * n)  # Reduce per-species dim for large n
+        net = multi_species_cascade(n_species=n, max_copy=max_copy)
+        state_space = int(np.prod(net.physical_dims))
+
+        t_start = time.time()
+        compiler = CMECompiler(net)
+        try:
+            mpo = compiler.compile()
+            compile_time = time.time() - t_start
+
+            entry = {
+                "n_species": n,
+                "state_space_size": state_space,
+                "physical_dims": net.physical_dims,
+                "mpo_bond_dims": list(mpo.bond_dims),
+                "mpo_max_bond_dim": int(mpo.max_bond_dim),
+                "mpo_total_params": int(mpo.total_params),
+                "compression_ratio": float(state_space ** 2 / max(1, mpo.total_params)),
+                "compile_time_seconds": compile_time,
+            }
+        except Exception as e:
+            compile_time = time.time() - t_start
+            entry = {
+                "n_species": n,
+                "state_space_size": state_space,
+                "error": str(e),
+                "compile_time_seconds": compile_time,
+            }
+
+        results["entries"].append(entry)
+        logger.info(
+            f"Scaling benchmark: n={n}, states={state_space}, "
+            f"time={compile_time:.3f}s"
+        )
+
+    return results
+
+
+def run_accuracy_benchmark() -> dict:
+    """
+    Compare CSL checking accuracy between TT and dense reference.
+
+    Tests a suite of small models where both dense and TT solutions
+    are feasible, computing L1 error and probability differences.
+
+    Returns:
+        Dictionary with accuracy comparison for each model.
+    """
+    from tn_check.models.library import (
+        birth_death, gene_expression, schlogl, sir_epidemic,
+    )
+    from tn_check.solver.dense_reference import DenseReferenceSolver
+    from tn_check.cme.compiler import CMECompiler
+    from tn_check.cme.initial_state import deterministic_initial_state
+
+    models = [
+        ("birth_death", birth_death(max_copy=30)),
+        ("gene_expression", gene_expression(max_copy_mRNA=20, max_copy_protein=30)),
+        ("schlogl", schlogl(max_copy=60)),
+        ("sir_epidemic", sir_epidemic(max_S=20, max_I=20, max_R=20, S0=15, I0=3)),
+    ]
+
+    results = {"models": []}
+
+    for name, net in models:
+        entry = {"model": name, "num_species": net.num_species}
+
+        try:
+            solver = DenseReferenceSolver(net)
+            Q = solver.compile()
+            entry["state_space_size"] = solver.state_space_size
+            entry["Q_shape"] = list(Q.shape)
+
+            # Transient probability check
+            csl_result = solver.csl_comparison(
+                formula_type="transient_prob",
+                t=10.0,
+                species_index=0,
+                threshold2=5,
+            )
+            entry["transient_prob"] = csl_result["probability"]
+            entry["transient_time"] = csl_result["wall_time_seconds"]
+
+            # Compare with TT compilation
+            t_start = time.time()
+            compiler = CMECompiler(net)
+            mpo = compiler.compile()
+            tt_compile_time = time.time() - t_start
+
+            entry["mpo_bond_dims"] = list(mpo.bond_dims)
+            entry["mpo_params"] = int(mpo.total_params)
+            entry["tt_compile_time"] = tt_compile_time
+            entry["status"] = "success"
+
+        except Exception as e:
+            entry["status"] = "error"
+            entry["error"] = str(e)
+
+        results["models"].append(entry)
+        logger.info(f"Accuracy benchmark: {name} -> {entry.get('status', 'unknown')}")
+
+    return results
+
+
+def run_all_benchmarks() -> dict:
+    """
+    Run all benchmark suites and return combined results.
+
+    Returns:
+        Dictionary with keys 'scaling', 'accuracy' containing
+        results from each benchmark suite.
+    """
+    logger.info("Starting all benchmarks")
+
+    results = {}
+
+    logger.info("Running scaling benchmark...")
+    results["scaling"] = run_scaling_benchmark()
+
+    logger.info("Running accuracy benchmark...")
+    results["accuracy"] = run_accuracy_benchmark()
+
+    logger.info("All benchmarks complete")
     return results

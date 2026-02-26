@@ -12,6 +12,7 @@ import dataclasses
 import logging
 from typing import Any, Callable, Optional, Sequence
 
+import math
 import numpy as np
 from numpy.typing import NDArray
 
@@ -117,8 +118,8 @@ class MassActionPropensity(PropensityFunction):
                     for j in range(stoich):
                         val *= max(0, n - j)
                     if stoich >= 2:
-                        val /= np.math.factorial(stoich)
-                        val *= np.math.factorial(stoich)  # mass-action convention
+                        val /= math.factorial(stoich)
+                        val *= math.factorial(stoich)  # mass-action convention
                     f[n] = val
                 factors.append(f)
             else:

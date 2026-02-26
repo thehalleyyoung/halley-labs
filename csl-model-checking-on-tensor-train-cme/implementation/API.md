@@ -496,6 +496,48 @@ toggle_switch(alpha1=50.0, alpha2=50.0, beta=2.5, gamma=1.0, max_copy=100) -> Re
 repressilator(alpha=50.0, alpha0=0.5, beta=2.0, gamma=1.0, n_genes=3, max_copy=80) -> ReactionNetwork
 cascade(...) -> ReactionNetwork
 schlogl(...) -> ReactionNetwork
+gene_expression(k_tx=10.0, k_tl=5.0, gamma_m=1.0, gamma_p=0.5, max_mrna=30, max_protein=100) -> ReactionNetwork
+exclusive_switch(k_on=1.0, k_off=10.0, k_prod=50.0, k_deg=1.0, max_copy=30) -> ReactionNetwork
+sir_epidemic(beta=0.5, gamma=0.1, max_S=20, max_I=20, max_R=20) -> ReactionNetwork
+michaelis_menten_enzyme(k1=1.0, k_1=0.5, k2=0.3, E_total=10, max_S=30, max_C=10, max_P=30) -> ReactionNetwork
+multi_species_cascade(n_species=3, production_rate=10.0, degradation_rate=1.0, coupling_rate=5.0, max_copy=28) -> ReactionNetwork
+```
+
+---
+
+## Dense Reference Solver
+
+**Module:** `tn_check.solver.dense_reference`
+
+### `DenseReferenceSolver`
+
+```python
+DenseReferenceSolver(network: ReactionNetwork)
+```
+
+| Method | Description |
+|--------|-------------|
+| `solve(t, initial_counts=None)` | Solve CME exactly via matrix exponentiation |
+| `steady_state()` | Compute steady-state via null space |
+| `check_probability(state, formula, t)` | Evaluate CSL formula at state |
+
+---
+
+## Evaluation
+
+**Module:** `tn_check.evaluation.benchmark`
+
+```python
+run_scaling_benchmark(species_counts=[2,3,4,5], max_copy=28, bond_dim=20) -> dict
+run_accuracy_benchmark(models=None, bond_dims=[5,10,20,50]) -> dict
+run_all_benchmarks() -> dict
+```
+
+**Module:** `tn_check.evaluation.prism_comparison`
+
+```python
+run_prism_style_comparison(model_name="birth_death") -> dict
+compare_all_models() -> dict
 ```
 
 ---
@@ -513,4 +555,9 @@ run_spectral_gap_experiment() -> dict
 run_toggle_switch_csl_experiment() -> dict
 run_nonneg_rounding_experiment(num_trials=10) -> dict
 run_end_to_end_verification_experiment() -> dict
+run_gene_expression_experiment() -> dict
+run_scaling_experiment(species_counts=[2,3,4,5,6,8,10,15]) -> dict
+run_csl_model_checking_experiment() -> dict
+run_error_propagation_experiment() -> dict
+run_full_pipeline_experiment() -> dict
 ```

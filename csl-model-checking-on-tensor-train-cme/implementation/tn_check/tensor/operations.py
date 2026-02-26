@@ -270,24 +270,14 @@ def mpo_mps_contraction(mpo: MPO, mps: MPS) -> MPS:
         D_l, d_in, d_out, D_r = W.shape
         chi_l, _, chi_r = A.shape
 
-        # Contract over the physical input index
-        # Result shape: (D_l, d_out, D_r, chi_l, chi_r)
+        # Contract over d_in: W[a,i,o,b] x A[c,i,e] -> [a,o,b,c,e]
         contracted = oe.contract(
-            "abcd,ebc->adec",
+            "aiob,cie->aobce",
             W, A,
             optimize="optimal",
         )
-        # contracted: (D_l, d_out, chi_l, chi_r) -- wait, let me redo the einsum
-        # W[D_l, d_in, d_out, D_r], A[chi_l, d_in, chi_r]
-        # contract d_in: result[D_l, d_out, D_r, chi_l, chi_r]
-        contracted = oe.contract(
-            "aiod,cir->aocdr",
-            W, A,
-            optimize="optimal",
-        )
-        # contracted shape: (D_l, d_out, chi_l, D_r, chi_r)
-        # Reshape to (D_l*chi_l, d_out, D_r*chi_r)
-        new_core = contracted.transpose(0, 2, 1, 3, 4).reshape(
+        # Transpose to (D_l, chi_l, d_out, D_R, chi_r) then reshape
+        new_core = contracted.transpose(0, 3, 1, 2, 4).reshape(
             D_l * chi_l, d_out, D_r * chi_r
         )
         cores.append(new_core)
@@ -403,9 +393,10 @@ def mps_zip_up(
         chi_l, _, chi_r = A.shape
 
         # Local contraction over physical input index
-        # local[D_l, d_out, D_r, chi_l, chi_r] or similar
-        local = np.einsum("aiod,cid->acodr", W, A)
-        # local shape: (D_l, chi_l, d_out, D_r, chi_r)
+        # W[a,i,o,b] = (D_l, d_in, d_out, D_r), A[c,i,e] = (chi_l, d_in, chi_r)
+        # Contract i -> result[a,c,o,b,e] = (D_l, chi_l, d_out, D_R, chi_r)
+        local = np.einsum("aiob,cie->acobe", W, A)
+        # local shape: (D_l, chi_l, d_out, D_R, chi_r)
 
         if carry is not None:
             # carry shape: (new_chi_prev, D_l * chi_l)
