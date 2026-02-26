@@ -1,0 +1,69 @@
+{
+  "project": "certified-bio-phase-cartographer",
+  "title": "Certified Phase Atlases for Biological ODE Models: Machine-Checkable Regime Classification via Validated Numerics, SMT Certificates, and Adaptive Parameter-Space Refinement",
+  "synthesis_date": "2026-02-26",
+  "average_score": 6.8,
+  "score_range": [5, 8],
+  "reviewers": [
+    {
+      "name": "Yuan Cheng",
+      "persona": "probabilistic_modeling_researcher",
+      "score": 6,
+      "key_strength": "Clean separation between deterministic certified pipeline and optional GP exploration preserves soundness of all regime claims.",
+      "key_weakness": "No probabilistic framework for grading regime confidence near bifurcation boundaries, leading to binary certified/uncertified gaps that waste coverage.",
+      "review_file": "review_yuan_cheng.md"
+    },
+    {
+      "name": "Aniruddha Sinha",
+      "persona": "model_checking_ai_applicant",
+      "score": 8,
+      "key_strength": "Tiered verification architecture with graceful degradation (Tier 1 always, Tier 2/3 where feasible) is an exemplary design pattern for the formal-methods-for-science community.",
+      "key_weakness": "The scalability cliff from 2-state (100% coverage) to 3-state models (25% coverage on Repressilator) reveals exponential scaling that adaptive refinement does not adequately address.",
+      "review_file": "review_aniruddha_sinha.md"
+    },
+    {
+      "name": "Lila Zhang",
+      "persona": "symbolic_reasoning_ai_expert",
+      "score": 7,
+      "key_strength": "The delta-Soundness Bound provides a concrete, computable sufficient condition for when delta-complete verification implies exact regime correctness.",
+      "key_weakness": "Tier 2 (dReal) and Tier 3 (Z3) are not exercised in any benchmark, leaving the most distinctive SMT contributions entirely unvalidated.",
+      "review_file": "review_lila_zhang.md"
+    },
+    {
+      "name": "Sara Roy",
+      "persona": "machine_learning_formal_verification",
+      "score": 5,
+      "key_strength": "GP-guided adaptive exploration correctly separates learning (where to look) from verification (what to certify) without compromising soundness.",
+      "key_weakness": "Minimal ML content—the optional GP layer is standard Bayesian optimization with no contribution to learning-augmented verification or the ML-verification intersection.",
+      "review_file": "review_sara_roy.md"
+    },
+    {
+      "name": "Joseph S. Chang",
+      "persona": "automated_reasoning_and_logic_expert",
+      "score": 8,
+      "key_strength": "MiniCheck (878 LoC) as an independent TCB verifier with 100% pass rate is the gold standard for building trust in certified computation results.",
+      "key_weakness": "The delta-Soundness Bound and Tier 3 exact verification are proven but not empirically exercised, leaving the strongest formal-guarantee claims unvalidated.",
+      "review_file": "review_joseph_s_chang.md"
+    }
+  ],
+  "consensus_strengths": [
+    "First system to produce machine-checkable certified phase diagrams for biological ODE models, establishing a new class of scientific artifact",
+    "Tiered verification architecture with graceful degradation guarantees every claim has at least one independent verification path",
+    "MiniCheck independent verifier (878 LoC) with 100% pass rate provides gold-standard TCB reduction",
+    "Hallucination audit in grounding.json demonstrates unusual intellectual honesty (48K to 10,760 LoC, 5 to 4 models, at least 95% to 84-100% coverage)"
+  ],
+  "consensus_weaknesses": [
+    "Tier 2 (dReal) and Tier 3 (Z3) SMT verification are not exercised in any benchmark, leaving the most distinctive contributions unvalidated",
+    "Coverage drops precipitously from 2-state models (84-100%) to 3-state models (25% on Repressilator), exposing exponential scaling in state dimension",
+    "No probabilistic framework for parameter uncertainty—deterministic set-membership approach wastes effort on low-probability parameter regions",
+    "Minimal ML content limits contribution to the learning-augmented verification community",
+    "Goodwin oscillator benchmark is missing from implementation, reducing the evaluation suite to 4 of 5 planned models"
+  ],
+  "actionable_recommendations": [
+    "Execute Milestone 0 dReal feasibility benchmarking immediately to validate or descope the SMT certificate generation pipeline",
+    "Implement anisotropic refinement guided by eigenvalue sensitivity to address the 25% coverage gap on the Repressilator and other 3-state models",
+    "Add a probabilistic qualification layer that assigns confidence levels to regime claims near bifurcation boundaries, converting binary gaps to graded assessments",
+    "Complete the Goodwin oscillator benchmark and add at least one DSGRN comparison to fulfill the evaluation plan commitments",
+    "Consider a learned refinement strategy (e.g., predicting promising cells from eigenvalue patterns across previous certifications) to improve scalability without compromising soundness"
+  ]
+}

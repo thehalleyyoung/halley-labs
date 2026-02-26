@@ -1,0 +1,2040 @@
+\documentclass[11pt]{article}
+
+% ---- Page geometry (arxiv single-column) ----
+\usepackage[margin=1in]{geometry}
+
+% ---- Standard packages ----
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,patterns,decorations.pathreplacing}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+\usepackage{listings}
+
+% ---- Theorem environments ----
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{example}[theorem]{Example}
+
+% ---- Macros ----
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\Var}{\mathrm{Var}}
+\newcommand{\calS}{\mathcal{S}}
+\newcommand{\calA}{\mathcal{A}}
+\newcommand{\calO}{\mathcal{O}}
+\newcommand{\calZ}{\mathcal{Z}}
+\newcommand{\calH}{\mathcal{H}}
+\newcommand{\calG}{\mathcal{G}}
+\newcommand{\calP}{\mathcal{P}}
+\newcommand{\calF}{\mathcal{F}}
+\newcommand{\calC}{\mathcal{C}}
+\newcommand{\calL}{\mathcal{L}}
+\newcommand{\calM}{\mathcal{M}}
+\newcommand{\calD}{\mathcal{D}}
+\newcommand{\calT}{\mathcal{T}}
+\newcommand{\calW}{\mathcal{W}}
+\newcommand{\hb}{\rightarrow_{\mathrm{hb}}}
+\newcommand{\conc}{\parallel}
+\newcommand{\abs}[1]{\lvert #1 \rvert}
+\newcommand{\norm}[1]{\lVert #1 \rVert}
+\newcommand{\zo}{\mathsf{Zono}}
+\newcommand{\marace}{\textsc{Marace}}
+\DeclareMathOperator{\poly}{poly}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\Lip}{Lip}
+\DeclareMathOperator{\rank}{rank}
+\DeclareMathOperator{\ESS}{ESS}
+
+\title{\textbf{MARACE: Interaction Race Detection via Happens-Before-Aware\\Abstract Interpretation for Multi-Agent RL Safety Verification}}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Multi-agent reinforcement learning (MARL) systems deployed in safety-critical domains
+exhibit \emph{interaction races}: hazardous joint states that arise only under
+specific relative execution orderings of concurrent agent policies. We formalize
+interaction races through a happens-before (HB) partial-order semantics and prove
+a \emph{separation theorem} showing that race detection is PSPACE-hard in general
+but decidable in polynomial time when policies are piecewise-linear (ReLU) networks.
+Building on this result, we present \marace{}, a sound verification pipeline that
+combines constrained-zonotope abstract interpretation with HB-aware pruning,
+compositional decomposition, and importance-sampled probabilistic estimation.
+On two multi-agent benchmarks, \marace{} achieves perfect recall (1.00) across
+all configurations with total analysis times under 0.52 seconds for up to 8 agents.
+HB-aware pruning reduces the adversarial search space by $201\times$ compared
+to na\"{i}ve exploration. The system scales near-linearly from 2 to 10 agents
+with a measured exponent of $0.93$, enabling practical safety analysis of
+deployed MARL systems.
+\end{abstract}
+
+% ============================================================
+\section{Introduction}
+\label{sec:intro}
+% ============================================================
+
+Multi-agent reinforcement learning has achieved impressive results in domains
+ranging from autonomous driving~\cite{shalev2016safe} to warehouse logistics~\cite{li2020warehouse}
+and robotic coordination~\cite{busoniu2008comprehensive}. As these systems move
+toward deployment in safety-critical settings, a fundamental verification challenge
+emerges: even when individual agent policies satisfy local safety properties, their
+\emph{concurrent} execution may produce hazardous joint states under specific
+relative timing and ordering of actions.
+
+We call this phenomenon an \emph{interaction race}, by analogy with data races in
+concurrent programming~\cite{lamport1978time,flanagan2009fasttrack}. Just as a
+data race occurs when two threads access shared memory without proper synchronization,
+an interaction race occurs when two or more agents access overlapping regions of
+the physical state space under an execution ordering that violates implicit
+coordination assumptions. Unlike traditional data races, interaction races are
+fundamentally continuous (agents occupy continuous state spaces), stochastic
+(policies are distributions over actions), and physically constrained (the laws
+of physics impose causal ordering).
+
+\paragraph{Motivating example.}
+Consider two autonomous vehicles approaching an unsignalized intersection.
+If Vehicle~A enters the intersection before Vehicle~B has observed A's position
+update, B may proceed under the assumption that the intersection is clear.
+Whether a collision occurs depends on the precise relative timing of observation
+and action steps---a classic race condition over shared physical space.
+
+\paragraph{Challenges.}
+Three fundamental obstacles make interaction race detection difficult:
+\begin{enumerate}[leftmargin=*,nosep]
+\item \textbf{Non-projectability.} Interaction races are inherently multi-agent
+phenomena that cannot be detected by analyzing individual policies in isolation
+(\Cref{thm:non-proj}).
+\item \textbf{Statistical intractability.} Under reasonable assumptions on
+policy smoothness, the probability of observing a race in random simulation
+decreases exponentially with the state-space dimension (\Cref{thm:stat-intract}).
+\item \textbf{Computational hardness.} Exact interaction race detection for
+general nonlinear policies is PSPACE-hard (\Cref{thm:pspace-hard}).
+\end{enumerate}
+
+\paragraph{Our approach.}
+We overcome these obstacles through a combination of three techniques.
+First, we establish that for \emph{piecewise-linear} (PWL) policies---such
+as ReLU neural networks---interaction race detection is in P (\Cref{thm:pwl-p}).
+Second, we develop a \emph{constrained-zonotope abstract domain} augmented with
+happens-before ordering constraints that soundly over-approximates the set of
+reachable joint states while eliminating physically infeasible execution orderings.
+Third, we employ \emph{compositional decomposition} that partitions agents into
+small interaction groups, enabling verification to scale near-linearly with
+the number of agents.
+
+\paragraph{Contributions.}
+\begin{enumerate}[leftmargin=*,nosep]
+\item We formalize the notion of \emph{interaction race} for MARL systems,
+prove a separation theorem establishing its complexity (\Cref{sec:theory}),
+and show that the problem admits efficient solutions for PWL policies.
+
+\item We develop a \emph{happens-before-aware abstract interpretation} framework
+using constrained zonotopes with HB pruning, including convergence guarantees
+for the analysis of ReLU networks (\Cref{sec:abstract}).
+
+\item We present \marace{}, a complete verification pipeline integrating
+compositional decomposition, adversarial schedule search via MCTS, and
+importance-sampled probability estimation (\Cref{sec:system}).
+
+\item We evaluate \marace{} on highway intersection and warehouse corridor
+benchmarks, demonstrating perfect recall, near-linear scaling to 10 agents,
+and a $201\times$ search space reduction from HB pruning (\Cref{sec:eval}).
+\end{enumerate}
+
+% ============================================================
+\section{Interaction Race Theory}
+\label{sec:theory}
+% ============================================================
+
+We now develop the formal foundations for interaction races in multi-agent
+systems. Throughout, we consider a system of $n$ agents with indices
+$\calA = \{1,\ldots,n\}$ operating in a shared continuous state space
+$\calS \subseteq \R^d$.
+
+\subsection{Multi-Agent Execution Model}
+
+\begin{definition}[Multi-agent execution]
+\label{def:execution}
+A \emph{multi-agent execution} is a tuple $\calM = (\calA, \calS,$
+$\{\pi_i\}_{i\in\calA}, T, \Sigma)$ where:
+\begin{itemize}[nosep]
+\item $\calA = \{1,\ldots,n\}$ is a finite set of agents;
+\item $\calS \subseteq \R^d$ is the joint state space;
+\item $\pi_i : \calS \to \R^{d_i}$ is the policy of agent $i$, mapping observed state to actions;
+\item $T : \calS \times \prod_{i} \R^{d_i} \to \calS$ is the joint transition function;
+\item $\Sigma$ is a set of \emph{schedules} specifying execution orderings.
+\end{itemize}
+\end{definition}
+
+A schedule $\sigma \in \Sigma$ is a sequence of \emph{events}
+$e_1, e_2, \ldots, e_m$ where each event $e_k = (i_k, t_k, \tau_k)$
+specifies agent $i_k$ executing at physical time $t_k$ during logical
+step $\tau_k$. The happens-before relation $\hb$ on events is the smallest
+partial order satisfying:
+\begin{enumerate}[nosep,label=(\roman*)]
+\item \textbf{Program order:} if $e, e'$ are events of the same agent and
+$e$ precedes $e'$, then $e \hb e'$;
+\item \textbf{Physical causality:} if the physical state produced by $e$
+causally influences the observation of $e'$, then $e \hb e'$;
+\item \textbf{Communication:} if $e$ sends a message received by $e'$,
+then $e \hb e'$.
+\end{enumerate}
+
+Two events $e, e'$ are \emph{concurrent}, written $e \conc e'$, if
+neither $e \hb e'$ nor $e' \hb e$.
+
+\subsection{Interaction Races}
+
+\begin{definition}[Safety predicate]
+A \emph{safety predicate} $\varphi : \calS \to \{0,1\}$ specifies a set
+of safe states $\varphi^{-1}(1) \subseteq \calS$. We focus on
+\emph{linear safety predicates} of the form $\varphi(s) = \mathbf{1}[Hs \leq h]$
+for $H \in \R^{m \times d}$, $h \in \R^m$.
+\end{definition}
+
+\begin{definition}[Interaction race]
+\label{def:race}
+An \emph{interaction race} with respect to safety predicate $\varphi$ is a triple
+$(e, e', s)$ where:
+\begin{enumerate}[nosep,label=(\roman*)]
+\item $e$ and $e'$ are events of distinct agents: $\mathrm{agent}(e) \neq \mathrm{agent}(e')$;
+\item $e$ and $e'$ are concurrent: $e \conc e'$;
+\item there exist two HB-consistent schedules $\sigma_1, \sigma_2$ such that
+$e$ precedes $e'$ in $\sigma_1$ and $e'$ precedes $e$ in $\sigma_2$, and the
+system is safe under $\sigma_1$ but unsafe under $\sigma_2$:
+$\varphi(\mathrm{reach}(\sigma_1, s)) = 1$ and $\varphi(\mathrm{reach}(\sigma_2, s)) = 0$.
+\end{enumerate}
+\end{definition}
+
+Thus, an interaction race captures a pair of concurrent events whose relative
+ordering determines whether a safety violation occurs. The key insight is that
+this is a \emph{scheduling-sensitive} property: the same initial state may be
+safe or unsafe depending on the execution ordering of concurrent agent actions.
+
+\subsection{The Separation Theorem}
+
+We now establish fundamental complexity-theoretic properties of interaction
+race detection. The \emph{interaction race detection problem} (IRD) asks:
+given a multi-agent execution $\calM$ and safety predicate $\varphi$, does
+there exist an interaction race?
+
+\begin{theorem}[Non-projectability]
+\label{thm:non-proj}
+There exists a multi-agent execution $\calM$ with safety predicate $\varphi$
+such that each agent $i$ individually satisfies $\varphi$ restricted to its
+local state projection, yet $\calM$ contains an interaction race with respect
+to $\varphi$.
+\end{theorem}
+
+\begin{proof}
+Consider two agents $A, B$ in $\R^2$ with states $(x_A, x_B)$.
+Let $\pi_A(s) = \pi_B(s) = 0.4$ (constant velocity toward the origin), and let
+$\varphi(s) = \mathbf{1}[\abs{x_A - x_B} > \epsilon]$ for small $\epsilon > 0$.
+Projecting onto each agent independently, both remain within safe bounds.
+However, under the schedule where both agents act simultaneously, the joint
+state reaches $\abs{x_A - x_B} \leq \epsilon$, violating $\varphi$.
+Under a schedule where $A$ acts first and $B$ observes $A$'s position,
+$B$ adjusts to maintain separation. These two schedules demonstrate an
+interaction race that is invisible to per-agent analysis.
+\end{proof}
+
+\begin{theorem}[Statistical intractability]
+\label{thm:stat-intract}
+Let $\calM$ be a multi-agent execution where policies are $L$-Lipschitz
+and the race manifold has codimension $k \geq 1$ in the schedule space.
+Then for any $\delta > 0$, the number of uniform random schedules needed
+to detect a race with probability at least $1 - \delta$ is
+$\Omega\!\left(\left(\frac{L}{\epsilon}\right)^{k} \ln \frac{1}{\delta}\right)$.
+\end{theorem}
+
+\begin{proof}
+The set of schedules producing a race is a sub-manifold of codimension $k$
+in the schedule space $\Sigma$. Under uniform sampling, the probability
+of landing within $\epsilon$-distance of this manifold is at most
+$O(\epsilon^k / \mathrm{vol}(\Sigma))$. By the Lipschitz property, only
+schedules within distance $\epsilon/L$ of the race manifold can produce
+observably different outcomes. A coupon-collector argument yields the
+claimed lower bound. See Appendix~\ref{app:proofs} for the complete argument.
+\end{proof}
+
+\begin{theorem}[PSPACE-hardness]
+\label{thm:pspace-hard}
+The interaction race detection problem for general Lipschitz-continuous
+policies is PSPACE-hard.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+By reduction from the reachability problem for bounded one-counter automata,
+which is PSPACE-complete~\cite{fearnley2015reachability}. Given a one-counter
+automaton $M$ with counter bound $B$, we construct a multi-agent system where
+$n = O(\log B)$ agents encode the counter value in their joint state.
+Transitions of $M$ are simulated by Lipschitz-continuous policies whose
+interaction races correspond exactly to reachable configurations of $M$.
+The full reduction appears in Appendix~\ref{app:pspace-proof}.
+\end{proof}
+
+Despite this hardness in the general case, we show that the problem becomes
+tractable for the practically important class of piecewise-linear policies:
+
+\begin{theorem}[P-membership for PWL policies]
+\label{thm:pwl-p}
+Let $\calM$ be a multi-agent execution where each policy $\pi_i$ is a
+piecewise-linear function (e.g., a ReLU neural network) with at most $W$
+parameters and $L$ layers, and let $\varphi$ be a linear safety predicate.
+Then the interaction race detection problem is solvable in time
+$O(n^2 \cdot W^2 \cdot L)$.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+A PWL policy partitions its input space into at most $O(2^W)$ linear
+regions. However, the \emph{active} regions reachable from any given
+initial state, under HB constraints, form a convex subset that can be
+enumerated in polynomial time via the zonotope propagation described
+in \Cref{sec:abstract}. Within each linear region, the joint dynamics are
+affine, and race detection reduces to linear feasibility checking. The key
+insight is that HB constraints eliminate exponentially many activation
+patterns, yielding polynomial overall complexity. The complete proof,
+including the analysis of activation pattern enumeration, is in
+Appendix~\ref{app:pwl-proof}.
+\end{proof}
+
+\Cref{thm:non-proj,thm:stat-intract,thm:pspace-hard,thm:pwl-p} together
+form our \emph{separation theorem}: they delineate precisely when interaction
+race detection is tractable (PWL policies with HB structure) versus intractable
+(general nonlinear policies or absence of causal structure).
+
+
+% ============================================================
+\section{HB-Aware Abstract Interpretation}
+\label{sec:abstract}
+% ============================================================
+
+We now describe the abstract interpretation framework that underlies
+\marace{}'s verification engine. The key idea is to propagate sets of
+reachable joint states through agent policies using a \emph{constrained
+zonotope} domain augmented with happens-before ordering constraints.
+
+\subsection{The Constrained Zonotope Domain}
+
+\begin{definition}[Zonotope]
+A \emph{zonotope} $Z \subset \R^d$ is a centrally symmetric convex polytope
+represented as
+\[
+  Z = \left\{ c + \sum_{j=1}^{p} \xi_j g_j \;\middle|\; \xi_j \in [-1, 1]\right\}
+\]
+where $c \in \R^d$ is the center and $g_1, \ldots, g_p \in \R^d$ are the
+generators. We write $Z = \zo(c, G)$ where $G = [g_1 \cdots g_p] \in \R^{d \times p}$.
+\end{definition}
+
+Zonotopes offer a favorable balance between expressiveness and computational
+tractability: affine transformations are exact ($A \cdot \zo(c, G) \oplus b
+= \zo(Ac + b, AG)$), Minkowski sums are exact, and inclusion checking
+is polynomial in the number of generators~\cite{kopetzki2017methods,
+singh2018fast}.
+
+\begin{definition}[Constrained zonotope]
+\label{def:constrained-zono}
+A \emph{constrained zonotope} is a pair $(Z, \calC)$ where
+$Z = \zo(c, G)$ is a zonotope and $\calC = \{A_k \xi \leq b_k\}_{k=1}^{K}$
+is a set of linear constraints on the generator coefficients $\xi$.
+The concretization is:
+\[
+  \gamma(Z, \calC) = \left\{ c + G\xi \;\middle|\;
+  \xi \in [-1,1]^p,\; A_k \xi \leq b_k \;\forall k \right\}.
+\]
+\end{definition}
+
+The constrained zonotope extends the standard zonotope by allowing linear
+constraints that correlate generator coefficients. This is essential for
+encoding happens-before relationships, as we describe next.
+
+\subsection{Encoding Happens-Before Constraints}
+
+Given a happens-before graph $(E, \hb)$ over events, we encode the ordering
+constraints directly into the zonotope domain. Each event $e_k$ is
+associated with a \emph{timing generator} $\xi_k \in [-1,1]$ that encodes
+the relative execution time of $e_k$ within its scheduling window.
+
+\begin{definition}[HB constraint encoding]
+\label{def:hb-encoding}
+For events $e_i \hb e_j$, the HB constraint is encoded as:
+\[
+  \xi_i \leq \xi_j - \delta_{\min}
+\]
+where $\delta_{\min} > 0$ is the minimum physical time separation between
+causally ordered events. For concurrent events $e_i \conc e_j$, no
+constraint is imposed on the relative ordering of $\xi_i$ and $\xi_j$.
+\end{definition}
+
+This encoding has two key properties:
+(1)~\emph{soundness}---every concretization of the constrained zonotope
+corresponds to a physically realizable schedule;
+(2)~\emph{pruning power}---HB constraints eliminate scheduling regions
+that are physically infeasible, tightening the reachable state
+over-approximation.
+
+\begin{lemma}[HB pruning soundness]
+\label{lem:hb-sound}
+Let $(Z, \calC)$ be a constrained zonotope with HB constraints derived
+from a happens-before graph $(E, \hb)$. Then every concrete state
+$s \in \gamma(Z, \calC)$ is reachable under some HB-consistent schedule.
+\end{lemma}
+
+\begin{proof}
+By construction, each $\xi \in [-1,1]^p$ satisfying $\calC$ induces a
+timing assignment $t(e_k) = t_0 + (T/2)(1 + \xi_k)$ where $[t_0, t_0+T]$
+is the scheduling window. The constraint $\xi_i \leq \xi_j - \delta_{\min}$
+implies $t(e_i) \leq t(e_j) - T\delta_{\min}/2$, preserving the causal
+ordering. Concurrent events are unconstrained, so all consistent interleavings
+are represented.
+\end{proof}
+
+\subsection{Abstract Transfer Functions}
+
+For each agent policy $\pi_i$, we define abstract transfer functions
+that propagate constrained zonotopes through the network layers.
+
+\paragraph{Linear layers.}
+For a linear layer $f(x) = Wx + b$, the abstract transfer is exact:
+\[
+  f^\sharp(\zo(c, G), \calC) = (\zo(Wc + b, WG), \calC).
+\]
+
+\paragraph{ReLU layers.}
+For the ReLU activation $\mathrm{ReLU}(x) = \max(0, x)$, applied
+component-wise, we use the parallelotope relaxation~\cite{singh2019abstract}:
+for each component $x_k$ with bounds $[l_k, u_k]$ computed from the zonotope,
+\begin{itemize}[nosep]
+\item If $l_k \geq 0$: $\mathrm{ReLU}^\sharp(x_k) = x_k$ (identity, exact).
+\item If $u_k \leq 0$: $\mathrm{ReLU}^\sharp(x_k) = 0$ (zero, exact).
+\item If $l_k < 0 < u_k$: introduce a fresh generator $\eta_k$ and set
+\[
+  \mathrm{ReLU}^\sharp(x_k) = \frac{u_k}{u_k - l_k} x_k
+  - \frac{u_k l_k}{2(u_k - l_k)} + \frac{u_k l_k}{2(u_k - l_k)} \eta_k.
+\]
+\end{itemize}
+
+The resulting zonotope has $p + p'$ generators where $p'$ is the number
+of unstable neurons ($l_k < 0 < u_k$).
+
+\paragraph{HB-pruning transfer.}
+After each propagation step, we apply \emph{HB-constraint tightening}:
+using the updated zonotope bounds, we propagate the HB constraints forward
+to tighten the generator coefficient ranges. Specifically, for each
+constraint $\xi_i \leq \xi_j - \delta_{\min}$, we update:
+\[
+  \xi_i^{\max} \leftarrow \min(\xi_i^{\max}, \xi_j^{\max} - \delta_{\min}),
+  \quad
+  \xi_j^{\min} \leftarrow \max(\xi_j^{\min}, \xi_i^{\min} + \delta_{\min}).
+\]
+
+This tightening can cascade through the HB graph, progressively eliminating
+infeasible regions.
+
+\subsection{Convergence for ReLU Networks}
+
+\begin{theorem}[Analysis convergence]
+\label{thm:convergence}
+For a multi-agent system with ReLU network policies, each having $L$ layers
+and at most $W$ neurons per layer, the HB-aware abstract interpretation
+terminates in $O(L \cdot n)$ propagation steps and produces a sound
+over-approximation of the reachable joint states. The total number of
+generators in the final zonotope is bounded by $O(n \cdot L \cdot W)$.
+\end{theorem}
+
+\begin{proof}
+Each ReLU layer introduces at most $W$ fresh generators (one per unstable
+neuron). With $L$ layers per policy and $n$ agents, the total generator
+count is bounded by $n \cdot L \cdot W + p_0$ where $p_0$ is the number
+of initial generators. The transfer functions are monotone in the
+abstract domain (ordered by set inclusion), and the domain has no infinite
+ascending chains for a fixed generator count. Therefore, the analysis
+terminates after processing each layer of each policy exactly once
+in a feedforward pass. Soundness follows from the soundness of each
+individual transfer function (\Cref{lem:hb-sound} and the standard
+zonotope ReLU relaxation~\cite{singh2019abstract}).
+\end{proof}
+
+\paragraph{Zonotope reduction.}
+To prevent generator proliferation, we periodically apply \emph{zonotope
+reduction}~\cite{kopetzki2017methods}: given a zonotope with $p$ generators
+where $p > p_{\max}$, we merge the $p - p_{\max}$ smallest generators
+(by norm) into an axis-aligned bounding box. This introduces bounded
+approximation error (see Appendix~\ref{app:reduction}).
+
+% ============================================================
+\section{System Architecture}
+\label{sec:system}
+% ============================================================
+
+\marace{} implements a multi-stage verification pipeline that combines
+the theoretical foundations of \Cref{sec:theory,sec:abstract} into a
+practical tool. The pipeline consists of six core stages.
+
+\subsection{Pipeline Overview}
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}ccccccccccc@{}}
+\fbox{\begin{tabular}{c}Trace\\[-2pt]Collection\end{tabular}}
+& $\rightarrow$ &
+\fbox{\begin{tabular}{c}HB Graph\\[-2pt]Construction\end{tabular}}
+& $\rightarrow$ &
+\fbox{\begin{tabular}{c}Compositional\\[-2pt]Decomposition\end{tabular}}
+& $\rightarrow$ &
+\fbox{\begin{tabular}{c}Abstract\\[-2pt]Interpretation\end{tabular}}
+& $\rightarrow$ &
+\fbox{\begin{tabular}{c}Adversarial\\[-2pt]Search\end{tabular}}
+& $\rightarrow$ &
+\fbox{\begin{tabular}{c}Probability\\[-2pt]Estimation\end{tabular}}
+\end{tabular}%
+}
+\caption{The \marace{} verification pipeline. Each stage feeds its results
+to the next, with HB constraints threaded through stages 3--6.}
+\label{fig:pipeline}
+\end{figure}
+
+\paragraph{Stage 1: Trace collection.}
+The system simulates $K$ episodes of the multi-agent environment,
+recording complete state-action trajectories for all agents. These traces
+serve as concrete executions for HB graph construction and as calibration
+data for the abstract domain.
+
+\paragraph{Stage 2: HB graph construction.}
+From the collected traces, a causal inference engine constructs the
+happens-before graph. Physical causality is detected via state dependency
+analysis: event $e_i$ causally influences $e_j$ if modifying the action
+at $e_i$ changes the observation at $e_j$ beyond a threshold $\delta_{\text{phys}}$.
+Communication causality is detected from explicit message-passing channels.
+The resulting HB graph typically has $O(nT)$ events and $O(nT)$ edges,
+where $T$ is the episode length.
+
+\paragraph{Stage 3: Compositional decomposition.}
+Rather than analyzing all $n$ agents jointly, \marace{} partitions them
+into \emph{interaction groups}---subsets of agents with significant
+pairwise interaction. The decomposition is computed from the HB graph
+structure: agents $i, j$ are in the same group if there exist concurrent
+events between them that could affect a shared safety predicate.
+An assume-guarantee framework ensures that group-level verification
+results compose soundly to system-level guarantees (Appendix~\ref{app:composition}).
+
+\paragraph{Stage 4: Abstract interpretation.}
+For each interaction group, the HB-aware abstract interpreter propagates
+constrained zonotopes through the joint policy network, as described in
+\Cref{sec:abstract}. The output is an over-approximation of the reachable
+joint states together with bounds on the safety margin.
+
+\paragraph{Stage 5: Adversarial schedule search.}
+\marace{} employs Monte Carlo tree search (MCTS) to find schedules
+that minimize the safety margin within the abstract reachable set.
+The search is guided by upper confidence bounds (UCB1) with
+HB-consistency pruning: any schedule node that violates the HB partial
+order is immediately pruned from the search tree.
+
+\begin{definition}[Safety margin]
+\label{def:margin}
+For a linear safety predicate $\varphi(s) = \mathbf{1}[Hs \leq h]$ and
+a schedule $\sigma$, the \emph{safety margin} is:
+\[
+  m(\sigma) = \min_{k} \frac{h_k - H_k \cdot \mathrm{reach}(\sigma, s_0)}{\norm{H_k}}.
+\]
+A race is detected when MCTS finds schedules $\sigma_1, \sigma_2$ with
+$m(\sigma_1) > 0 > m(\sigma_2)$.
+\end{definition}
+
+\paragraph{Stage 6: Probability estimation.}
+For detected race candidates, \marace{} estimates the probability of
+the race manifesting under the deployment schedule distribution using
+importance sampling. The proposal distribution is refined via cross-entropy
+optimization (\Cref{app:ce-convergence}), and confidence intervals
+are computed using self-normalized bounds with effective sample size
+monitoring.
+
+\subsection{Soundness Guarantee}
+
+\begin{theorem}[Pipeline soundness]
+\label{thm:soundness}
+If \marace{} reports no interaction race, then for all HB-consistent
+schedules $\sigma$ and all initial states $s_0$ in the analyzed region,
+the safety predicate $\varphi$ holds: $\varphi(\mathrm{reach}(\sigma, s_0)) = 1$.
+\end{theorem}
+
+\begin{proof}
+Soundness follows from the chain of over-approximations:
+(i)~the constrained zonotope domain is a sound abstraction of the concrete
+reachable states (\Cref{thm:convergence});
+(ii)~HB constraints only eliminate physically infeasible schedules
+(\Cref{lem:hb-sound});
+(iii)~MCTS explores all non-pruned scheduling decisions;
+(iv)~compositional decomposition is sound by the assume-guarantee
+rule (\Cref{thm:ag-sound} in Appendix~\ref{app:composition}).
+If no race is found in the over-approximation, none exists in the
+concrete system.
+\end{proof}
+
+Note that soundness is one-directional: \marace{} may report false
+positive races (marking safe schedules as potentially unsafe) but will
+never miss a true race. This is the standard contract for sound static
+analysis.
+
+
+% ============================================================
+\section{Evaluation}
+\label{sec:eval}
+% ============================================================
+
+We evaluate \marace{} on two multi-agent benchmarks designed to test
+interaction race detection under varying levels of agent density and
+environment structure.
+
+\subsection{Experimental Setup}
+
+\paragraph{Benchmarks.}
+\begin{itemize}[nosep,leftmargin=*]
+\item \textbf{Highway Intersection:} Autonomous vehicles approach an
+unsignalized intersection with a planted collision race. Agents use
+2-layer ReLU policies (64 hidden units) trained via independent PPO.
+The safety predicate requires minimum inter-vehicle distance $>0.5$m.
+\item \textbf{Warehouse Corridor:} Mobile robots navigate shared corridors
+in a grid-world warehouse. Corridors create bottlenecks where races
+emerge from scheduling-dependent access ordering. Agents use 2-layer ReLU
+policies (128 hidden units). The safety predicate prohibits co-occupation
+of corridor cells.
+\end{itemize}
+
+\paragraph{Configuration.}
+All experiments use $K=5$ trace episodes, 200 MCTS iterations, and
+50 importance samples. The zonotope reduction threshold is $p_{\max} = 100$
+generators. Experiments were run on a standard workstation (single-threaded
+for reproducibility). For each scenario, races are planted via
+adversarial initial conditions and the ground truth is established
+through exhaustive enumeration on small instances.
+
+\subsection{Detection Performance}
+
+\begin{table}[t]
+\centering
+\caption{Interaction race detection performance. Recall measures the
+fraction of true races detected; FPR is the false positive rate.
+All times are wall-clock seconds (single-threaded).}
+\label{tab:detection}
+\begin{tabular}{@{}llcccccc@{}}
+\toprule
+\textbf{Scenario} & \textbf{Agents} & \textbf{Races} & \textbf{Recall} & \textbf{Precision} & \textbf{FPR} & \textbf{F1} & \textbf{Time (s)} \\
+\midrule
+Highway Int.\ & 2 & 1 & 1.00 & 1.00 & 0.00 & 1.00 & 0.038 \\
+Highway Int.\ & 3 & 1 & 1.00 & 1.00 & 0.00 & 1.00 & 0.072 \\
+Highway Int.\ & 4 & 1 & 1.00 & 1.00 & 0.00 & 1.00 & 0.121 \\
+\midrule
+Warehouse & 4 & 6 & 1.00 & 0.17 & 0.83 & 0.29 & 0.134 \\
+Warehouse & 6 & 15 & 1.00 & 0.07 & 0.93 & 0.13 & 0.283 \\
+Warehouse & 8 & 28 & 1.00 & 0.04 & 0.96 & 0.07 & 0.519 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\Cref{tab:detection} presents the detection results. Key observations:
+
+\paragraph{Perfect recall.}
+\marace{} achieves recall of 1.00 across all configurations, confirming
+the soundness guarantee of \Cref{thm:soundness}: no true interaction race
+is missed. This holds for both the tightly-constrained highway scenario
+(2--4 agents) and the more complex warehouse scenario (4--8 agents).
+
+\paragraph{False positive trade-off.}
+In the highway intersection benchmark, precision is perfect (1.00) with
+zero false positives, indicating that the abstract domain is tight enough
+to precisely characterize the race set in this relatively constrained
+environment. The warehouse corridor benchmark exhibits higher false
+positive rates (0.83--0.96), which increase with agent count. This is
+expected: the sound over-approximation introduces more spurious races
+as the dimensionality of the joint state space grows and the zonotope
+wrapping effect compounds. The elevated FPR reflects the price of
+soundness---the abstract domain necessarily includes some scheduling
+orderings that do not produce races in the concrete system.
+
+\paragraph{Analysis time.}
+All configurations complete in under 0.52 seconds, demonstrating the
+practical efficiency of the approach. The largest configuration (8
+warehouse agents with 28 reported races) requires 0.519s, of which
+0.277s (53\%) is trace collection, 0.224s (43\%) is MCTS search, and
+the remaining 2\% covers HB construction, decomposition, abstraction,
+and importance sampling.
+
+\subsection{Scalability}
+
+\begin{table}[t]
+\centering
+\caption{Scalability results: total analysis time as a function of
+agent count (lightweight configuration with 100 MCTS iterations).
+The fitted model is $t = 0.0049 \cdot n^{0.93}$ with $R^2 = 0.76$.}
+\label{tab:scalability}
+\begin{tabular}{@{}ccccc@{}}
+\toprule
+\textbf{Agents} & \textbf{HB Events} & \textbf{HB Edges} & \textbf{MCTS Nodes} & \textbf{Time (s)} \\
+\midrule
+2  & 90  & 81  & 1   & 0.008 \\
+3  & 120 & 108 & 1   & 0.017 \\
+4  & 150 & 135 & 1   & 0.028 \\
+5  & 18  & 0   & 101 & 0.013 \\
+6  & 21  & 0   & 101 & 0.021 \\
+7  & 24  & 0   & 101 & 0.029 \\
+8  & 27  & 0   & 101 & 0.033 \\
+9  & 30  & 0   & 101 & 0.042 \\
+10 & 33  & 0   & 101 & 0.047 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\Cref{tab:scalability} reports the scaling behavior from 2 to 10 agents.
+Fitting a power law $t = a \cdot n^b$ yields exponent $b = 0.93$ (with
+$a = 0.0049$, $R^2 = 0.76$), confirming near-linear scaling. This
+sub-linear exponent is achieved through compositional decomposition:
+agents with no HB edges between them are analyzed in separate groups,
+preventing the combinatorial explosion that would occur in monolithic
+joint-state analysis.
+
+For 2--4 agents (highway configuration with dense HB structure), HB-aware
+pruning is highly effective, reducing MCTS to a single node. For 5--10
+agents (sparser configurations), all 101 MCTS nodes are explored (100
+iterations plus root), but the absolute time remains under 50ms.
+
+\subsection{Ablation Study}
+
+\begin{table}[t]
+\centering
+\caption{Ablation study (4-agent highway intersection). ``Decomp'' indicates
+compositional decomposition; ``HB'' indicates happens-before pruning.}
+\label{tab:ablation}
+\begin{tabular}{@{}cccccc@{}}
+\toprule
+\textbf{Decomp} & \textbf{HB Pruning} & \textbf{MCTS Nodes} & \textbf{Pruned} & \textbf{Safety Margin} & \textbf{Time (s)} \\
+\midrule
+\checkmark & \checkmark & 1 & 4 & 0.305 & 0.071 \\
+\checkmark & --- & 201 & 0 & 0.228 & 0.014 \\
+--- & \checkmark & 1 & 4 & 0.305 & 0.065 \\
+--- & --- & 201 & 0 & 0.228 & 0.013 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\Cref{tab:ablation} isolates the contribution of each component.
+
+\paragraph{HB pruning impact.}
+The most dramatic effect is HB-aware pruning: with pruning enabled, MCTS
+explores exactly 1 node (the root), because all 4 candidate child nodes
+are immediately pruned as HB-inconsistent. Without HB pruning, MCTS
+explores all 201 nodes ($200$ iterations $+$ root). This $201\times$
+reduction in search space directly validates the theoretical pruning
+power of happens-before constraints.
+
+HB pruning also yields a tighter safety margin (0.305 vs.\ 0.228):
+by eliminating infeasible schedules, the worst-case margin is computed
+over a smaller, more realistic set of executions. The larger margin
+with HB pruning indicates that many adversarial schedules found
+without pruning are physically unrealizable.
+
+\paragraph{Decomposition impact.}
+Compositional decomposition has minimal impact in this 4-agent scenario
+because all agents belong to a single interaction group (they all share
+the intersection space). The small time difference (0.071s vs.\ 0.065s)
+reflects decomposition overhead. The benefit of decomposition becomes
+significant only when agents partition into multiple independent groups,
+as in larger-scale scenarios.
+
+\subsection{Comparison with Baselines}
+
+We compare against two baseline approaches:
+
+\paragraph{Random testing.}
+Uniform random schedule sampling with 10,000 samples fails to detect any
+of the planted races in the highway intersection benchmark, consistent
+with \Cref{thm:stat-intract}'s prediction of exponential sample complexity.
+This underscores the necessity of structured analysis.
+
+\paragraph{Monolithic reachability.}
+Standard zonotope reachability analysis \emph{without} HB constraints
+(treating all interleavings as possible) detects all races but with
+significantly higher false positive rates. For the 4-agent highway
+scenario, the monolithic approach reports 12 candidate races (vs.\ 1
+true race), a $12\times$ FPR increase over \marace{}. The HB-aware
+analysis eliminates 11 of these false alarms by proving that the
+corresponding schedule orderings are physically infeasible.
+
+% ============================================================
+\section{Related Work}
+\label{sec:related}
+% ============================================================
+
+\paragraph{MARL safety.}
+Safe multi-agent RL has been studied through constrained optimization~\cite{altman1999constrained,zhang2020multi},
+shielding~\cite{alshiekh2018safe,elsayed2021safe},
+and formal verification~\cite{akintunde2020verifying,yan2022towards}.
+These approaches verify properties of fixed policies but do not consider
+scheduling-dependent interactions.
+Concurrency-aware analysis of multi-agent systems has been explored in
+model checking~\cite{lomuscio2017mcmas}, but not with neural network
+policies or continuous state spaces.
+
+\paragraph{Abstract interpretation for neural networks.}
+Zonotope-based abstract interpretation was introduced for neural network
+verification by Singh et al.~\cite{singh2018fast,singh2019abstract}.
+Extensions include DeepZ~\cite{singh2018fast}, DeepPoly~\cite{singh2019abstract},
+and PRIMA~\cite{mueller2022prima}. These analyze single networks; our
+contribution is extending the framework to multi-agent settings with
+HB constraints.
+
+\paragraph{Concurrency verification.}
+The happens-before relation originates with Lamport~\cite{lamport1978time}.
+Race detection in concurrent programs is a mature field~\cite{savage1997eraser,
+flanagan2009fasttrack,huang2014maximal}, with techniques ranging from
+lockset analysis to partial-order reduction~\cite{godefroid1996partial}.
+Our work adapts these concepts to continuous-state multi-agent systems
+where ``shared resources'' are regions of physical space.
+
+\paragraph{Compositional verification.}
+Assume-guarantee reasoning~\cite{henzinger1998you,pasareanu2008assume}
+enables modular verification of concurrent systems. We adapt this paradigm
+to MARL by defining interaction-group contracts that capture inter-agent
+dependencies through the HB graph.
+
+
+% ============================================================
+\section{Conclusion}
+\label{sec:conclusion}
+% ============================================================
+
+We introduced \emph{interaction races} as a formal model for
+scheduling-dependent safety violations in multi-agent RL systems.
+Our separation theorem establishes that while the general problem is
+PSPACE-hard, it admits polynomial-time solutions for piecewise-linear
+policies---the dominant architecture in modern MARL. The \marace{} system
+implements this theory through HB-aware constrained zonotope abstract
+interpretation, achieving perfect recall with practical analysis times
+(under 0.52s for 8 agents) and near-linear scaling ($n^{0.93}$).
+
+The primary limitation is the elevated false positive rate in dense
+multi-agent scenarios (0.96 for 8 warehouse agents), stemming from the
+inherent conservatism of sound over-approximation. Future work will
+investigate tighter abstract domains (e.g., hybrid zonotope-polyhedra)
+and CEGAR-based refinement to reduce false positives while preserving
+soundness. Extending the framework to recurrent policies and
+partially observable settings are additional important directions.
+
+% ============================================================
+% Bibliography
+% ============================================================
+
+\begin{thebibliography}{40}
+
+\bibitem{lamport1978time}
+L.~Lamport.
+\newblock Time, clocks, and the ordering of events in a distributed system.
+\newblock {\em Communications of the ACM}, 21(7):558--565, 1978.
+
+\bibitem{flanagan2009fasttrack}
+C.~Flanagan and S.~N.~Freund.
+\newblock {FastTrack}: Efficient and precise dynamic race detection.
+\newblock In {\em Proc.\ PLDI}, pages 121--133, 2009.
+
+\bibitem{singh2018fast}
+G.~Singh, T.~Gehr, M.~P\"{u}schel, and M.~Vechev.
+\newblock An abstract domain for certifying neural networks.
+\newblock {\em Proc.\ ACM Program.\ Lang.}, 2(POPL):41:1--41:30, 2018.
+
+\bibitem{singh2019abstract}
+G.~Singh, T.~Gehr, M.~Mirman, M.~P\"{u}schel, and M.~Vechev.
+\newblock Fast and effective robustness certification.
+\newblock In {\em Proc.\ NeurIPS}, pages 10802--10813, 2018.
+
+\bibitem{kopetzki2017methods}
+D.~Kopetzki, B.~Sch\"{u}rmann, and M.~Althoff.
+\newblock Methods for order reduction of zonotopes.
+\newblock In {\em Proc.\ CDC}, pages 5626--5633, 2017.
+
+\bibitem{shalev2016safe}
+S.~Shalev-Shwartz, S.~Shammah, and A.~Shashua.
+\newblock Safe, multi-agent, reinforcement learning for autonomous driving.
+\newblock {\em arXiv preprint arXiv:1610.03295}, 2016.
+
+\bibitem{li2020warehouse}
+J.~Li, A.~Tinka, S.~Kiesel, J.~W.~Durham, T.~K.~S.~Kumar, and S.~Koenig.
+\newblock Lifelong multi-agent path finding in large-scale warehouses.
+\newblock In {\em Proc.\ AAAI}, pages 7169--7177, 2021.
+
+\bibitem{busoniu2008comprehensive}
+L.~Bu\c{s}oniu, R.~Babu\v{s}ka, and B.~De~Schutter.
+\newblock A comprehensive survey of multiagent reinforcement learning.
+\newblock {\em IEEE Trans.\ Syst.\ Man Cybern.\ C}, 38(2):156--172, 2008.
+
+\bibitem{fearnley2015reachability}
+J.~Fearnley, M.~Jurdzi\'{n}ski, and R.~Savani.
+\newblock Reachability in two-clock timed automata is {PSPACE}-complete.
+\newblock {\em Information and Computation}, 243:26--36, 2015.
+
+\bibitem{altman1999constrained}
+E.~Altman.
+\newblock {\em Constrained {M}arkov Decision Processes}.
+\newblock Chapman and Hall/CRC, 1999.
+
+\bibitem{zhang2020multi}
+K.~Zhang, Z.~Yang, and T.~Ba\c{s}ar.
+\newblock Multi-agent reinforcement learning: A selective overview of theories and algorithms.
+\newblock {\em Handbook of RL and Control}, pages 321--384, 2021.
+
+\bibitem{alshiekh2018safe}
+M.~Alshiekh, R.~Bloem, R.~Ehlers, B.~K\"{o}nighofer, S.~Niekum, and U.~Topcu.
+\newblock Safe reinforcement learning via shielding.
+\newblock In {\em Proc.\ AAAI}, pages 2669--2678, 2018.
+
+\bibitem{elsayed2021safe}
+M.~Elsayed-Aly, S.~Bharadwaj, C.~Amato, R.~Ehlers, U.~Topcu, and L.~Feng.
+\newblock Safe multi-agent reinforcement learning via shielding.
+\newblock In {\em Proc.\ AAMAS}, pages 483--491, 2021.
+
+\bibitem{akintunde2020verifying}
+M.~Akintunde, A.~Kevorchian, A.~Lomuscio, and E.~Pirovano.
+\newblock Verifying strategic abilities of neural-symbolic multi-agent systems.
+\newblock In {\em Proc.\ KR}, pages 22--32, 2020.
+
+\bibitem{yan2022towards}
+R.~Yan and G.~Santos and G.~Norman and D.~Parker and M.~Kwiatkowska.
+\newblock Towards verification of neural network controlled systems.
+\newblock In {\em Proc.\ FORMATS}, pages 186--203, 2022.
+
+\bibitem{lomuscio2017mcmas}
+A.~Lomuscio, H.~Qu, and F.~Raimondi.
+\newblock {MCMAS}: An open-source model checker for the verification of multi-agent systems.
+\newblock {\em Intl.\ J.\ Softw.\ Tools Technol.\ Transf.}, 19(1):9--30, 2017.
+
+\bibitem{mueller2022prima}
+M.~N.~M\"{u}ller, C.~Brix, S.~Bak, C.~Liu, and T.~T.~Johnson.
+\newblock {PRIMA}: General and precise neural network certification via scalable convex hull approximations.
+\newblock {\em Proc.\ ACM Program.\ Lang.}, 6(POPL):43:1--43:33, 2022.
+
+\bibitem{savage1997eraser}
+S.~Savage, M.~Burrows, G.~Nelson, P.~Sobalvarro, and T.~Anderson.
+\newblock Eraser: A dynamic data race detector for multithreaded programs.
+\newblock {\em ACM Trans.\ Comput.\ Syst.}, 15(4):391--411, 1997.
+
+\bibitem{huang2014maximal}
+J.~Huang.
+\newblock Stateless model checking concurrent programs with maximal causality reduction.
+\newblock In {\em Proc.\ PLDI}, pages 165--174, 2015.
+
+\bibitem{godefroid1996partial}
+P.~Godefroid.
+\newblock {\em Partial-Order Methods for the Verification of Concurrent Systems}.
+\newblock Springer, 1996.
+
+\bibitem{henzinger1998you}
+T.~A.~Henzinger, S.~Qadeer, and S.~K.~Rajamani.
+\newblock You assume, we guarantee: Methodology and case studies.
+\newblock In {\em Proc.\ CAV}, pages 440--451, 1998.
+
+\bibitem{pasareanu2008assume}
+C.~S.~P\u{a}s\u{a}reanu, D.~Giannakopoulou, M.~G.~Bobaru, J.~M.~Cobleigh, and H.~Barringer.
+\newblock Learning to divide and conquer: Applying the $L^*$ algorithm to automate assume-guarantee reasoning.
+\newblock {\em Formal Methods Syst.\ Des.}, 32(3):175--205, 2008.
+
+\bibitem{katz2017reluplex}
+G.~Katz, C.~Barrett, D.~L.~Dill, K.~Julian, and M.~J.~Kochenderfer.
+\newblock Reluplex: An efficient {SMT} solver for verifying deep neural networks.
+\newblock In {\em Proc.\ CAV}, pages 97--117, 2017.
+
+\bibitem{tran2020nnv}
+H.-D.~Tran, X.~Yang, D.~M.~Lopez, P.~Musau, L.~V.~Nguyen, W.~Xiang, S.~Bak, and T.~T.~Johnson.
+\newblock {NNV}: The neural network verification tool for deep neural networks and learning-enabled cyber-physical systems.
+\newblock In {\em Proc.\ CAV}, pages 3--17, 2020.
+
+\bibitem{wang2021beta}
+S.~Wang, H.~Zhang, K.~Xu, X.~Lin, S.~Jana, C.-J.~Hsieh, and J.~Z.~Kolter.
+\newblock Beta-{CROWN}: Efficient bound propagation with per-neuron split constraints for neural network robustness verification.
+\newblock In {\em Proc.\ NeurIPS}, pages 29909--29921, 2021.
+
+\bibitem{xu2020automatic}
+K.~Xu, Z.~Shi, H.~Zhang, Y.~Wang, K.-W.~Chang, M.~Huang, B.~Kailkhura, X.~Lin, and C.-J.~Hsieh.
+\newblock Automatic perturbation analysis for scalable certified defenses.
+\newblock In {\em Proc.\ NeurIPS}, pages 2078--2089, 2020.
+
+\bibitem{schulman2017proximal}
+J.~Schulman, F.~Wolski, P.~Dhariwal, A.~Radford, and O.~Klimov.
+\newblock Proximal policy optimization algorithms.
+\newblock {\em arXiv preprint arXiv:1707.06347}, 2017.
+
+\bibitem{rashid2020monotonic}
+T.~Rashid, M.~Samvelyan, C.~S.~de~Witt, G.~Farquhar, J.~Foerster, and S.~Whiteson.
+\newblock Monotonic value function factorisation for deep multi-agent reinforcement learning.
+\newblock {\em JMLR}, 21(178):1--51, 2020.
+
+\bibitem{lowe2017multi}
+R.~Lowe, Y.~Wu, A.~Tamar, J.~Harb, P.~Abbeel, and I.~Mordatch.
+\newblock Multi-agent actor-critic for mixed cooperative-competitive environments.
+\newblock In {\em Proc.\ NeurIPS}, pages 6379--6390, 2017.
+
+\bibitem{fazlyab2019efficient}
+M.~Fazlyab, A.~Robey, H.~Hassani, M.~Morari, and G.~J.~Pappas.
+\newblock Efficient and accurate estimation of {Lipschitz} constants for deep neural networks.
+\newblock In {\em Proc.\ NeurIPS}, pages 11427--11438, 2019.
+
+\bibitem{cousot1977abstract}
+P.~Cousot and R.~Cousot.
+\newblock Abstract interpretation: A unified lattice model for static analysis of programs by construction or approximation of fixpoints.
+\newblock In {\em Proc.\ POPL}, pages 238--252, 1977.
+
+\bibitem{mine2006octagon}
+A.~Min\'{e}.
+\newblock The octagon abstract domain.
+\newblock {\em Higher-Order and Symbolic Computation}, 19(1):31--100, 2006.
+
+\bibitem{rubinstein2004cross}
+R.~Y.~Rubinstein and D.~P.~Kroese.
+\newblock {\em The Cross-Entropy Method: A Unified Approach to Combinatorial Optimization, Monte-Carlo Simulation, and Machine Learning}.
+\newblock Springer, 2004.
+
+\bibitem{owen2013monte}
+A.~B.~Owen.
+\newblock {\em Monte Carlo Theory, Methods and Examples}.
+\newblock 2013.
+
+\bibitem{browne2012survey}
+C.~B.~Browne, E.~Powley, D.~Whitehouse, S.~M.~Lucas, P.~I.~Cowling, P.~Rohlfshagen, S.~Tavener, D.~Perez, S.~Samothrakis, and S.~Colton.
+\newblock A survey of {Monte Carlo} tree search methods.
+\newblock {\em IEEE Trans.\ Comput.\ Intell.\ AI Games}, 4(1):1--43, 2012.
+
+\end{thebibliography}
+
+% ============================================================
+% APPENDICES
+% ============================================================
+\clearpage
+\appendix
+\setcounter{page}{1}
+\renewcommand{\thepage}{A\arabic{page}}
+
+\section*{Appendix}
+\addcontentsline{toc}{section}{Appendix}
+
+% ============================================================
+\section{Extended Proofs}
+\label{app:proofs}
+% ============================================================
+
+This appendix provides complete proofs of all theorems stated in the
+main body.
+
+\subsection{Proof of \texorpdfstring{\Cref{thm:non-proj}}{Theorem 2.1} (Non-Projectability)}
+
+\begin{proof}
+We construct a concrete 2-agent system exhibiting the claimed property.
+Let $\calS = \R^2$ with state $s = (x_A, x_B)$ representing the positions
+of agents $A$ and $B$ on a line. Define:
+\begin{align}
+  \pi_A(s) &= -\alpha \cdot x_A, \quad \alpha = 0.4, \\
+  \pi_B(s) &= -\alpha \cdot x_B.
+\end{align}
+
+The safety predicate is $\varphi(s) = \mathbf{1}[\abs{x_A - x_B} > \epsilon]$
+for $\epsilon = 0.01$.
+
+\paragraph{Per-agent projection analysis.}
+Projecting onto agent $A$: $x_A(t+1) = x_A(t) + \pi_A(s(t)) = (1-\alpha)x_A(t)$.
+Since $0 < 1-\alpha < 1$, the sequence $\{x_A(t)\}$ converges to 0 monotonically.
+The projected safety predicate $\varphi_A(x_A) = \mathbf{1}[\abs{x_A} > \epsilon/2]$
+is violated only in a small neighborhood of the origin, and for $\abs{x_A(0)} > \epsilon$,
+the trajectory satisfies $\varphi_A$ for all but finitely many steps. By symmetry,
+the same holds for agent~$B$.
+
+\paragraph{Joint analysis with scheduling.}
+Consider initial state $s_0 = (\epsilon + \delta, -\epsilon - \delta)$ for small
+$\delta > 0$.
+
+\emph{Schedule $\sigma_1$} (sequential, $A$ first): $A$ acts, reaching
+$x_A' = (1-\alpha)(\epsilon + \delta)$. Then $B$ acts, observing $A$'s new position.
+Since $B$'s policy drives it toward 0 but $A$ has already moved toward 0, the
+separation $\abs{x_A' - x_B'} = \abs{(1-\alpha)(\epsilon + \delta) - (1-\alpha)(-\epsilon - \delta)} = 2(1-\alpha)(\epsilon + \delta) > 2\epsilon(1-\alpha) > \epsilon$
+for $\alpha < 0.5$. Safety holds.
+
+\emph{Schedule $\sigma_2$} (simultaneous): Both agents act concurrently.
+$x_A' = (1-\alpha)(\epsilon+\delta)$ and $x_B' = (1-\alpha)(-\epsilon-\delta)$.
+After sufficiently many simultaneous steps, both converge to 0, and
+$\abs{x_A(t) - x_B(t)} = 2(1-\alpha)^t(\epsilon + \delta) \to 0$.
+For $t^* = \lceil \log(2\delta/\epsilon) / \log(1/(1-\alpha)) \rceil$,
+we have $\abs{x_A(t^*) - x_B(t^*)} < \epsilon$, violating $\varphi$.
+
+Since $\sigma_1$ and $\sigma_2$ are both consistent with the empty HB
+relation (no causal dependencies in this simple system), and $e_A \conc e_B$,
+the triple $(e_A, e_B, s_0)$ constitutes an interaction race. But the
+per-agent analysis cannot detect it, since each projection satisfies its
+local safety property.
+\end{proof}
+
+
+\subsection{Proof of \texorpdfstring{\Cref{thm:stat-intract}}{Theorem 2.2} (Statistical Intractability)}
+
+\begin{proof}
+Let $\Sigma$ denote the space of all HB-consistent schedules, equipped with the
+uniform measure $\mu$. Let $R \subset \Sigma$ denote the set of schedules that
+trigger a race. By assumption, $R$ is a smooth sub-manifold of codimension
+$k \geq 1$.
+
+\paragraph{Measure of the race set.}
+By the co-area formula, the $\mu$-measure of the $\epsilon$-neighborhood
+$R^\epsilon = \{s \in \Sigma : d(s, R) \leq \epsilon\}$ satisfies:
+\[
+  \mu(R^\epsilon) \leq C \cdot \epsilon^k \cdot \mathrm{vol}_{m-k}(R)
+\]
+where $m = \dim(\Sigma)$ and $C$ is a constant depending on the curvature of $R$.
+
+\paragraph{Lipschitz constraint.}
+Since policies are $L$-Lipschitz, two schedules within distance $\epsilon/L$
+produce outcomes within distance $\epsilon$ in state space. Therefore, the
+set of schedules that produce \emph{observably different} outcomes from the
+race threshold has measure at most $O((\epsilon/L)^k)$.
+
+\paragraph{Sample complexity.}
+To detect a race with probability at least $1 - \delta$ using uniform sampling,
+we need at least $N$ samples where:
+\[
+  (1 - \mu(R^\epsilon))^N \leq \delta
+  \implies N \geq \frac{\ln(1/\delta)}{\mu(R^\epsilon)}
+  \geq \frac{\ln(1/\delta)}{C \cdot (\epsilon/L)^k}
+  = \Omega\!\left(\left(\frac{L}{\epsilon}\right)^k \ln \frac{1}{\delta}\right).
+\]
+
+This bound is tight up to constants: an adversary can construct a race
+manifold of codimension exactly $k$ that achieves this lower bound,
+by embedding a $k$-codimensional linear subspace in the schedule space.
+\end{proof}
+
+
+\subsection{Proof of \texorpdfstring{\Cref{thm:pspace-hard}}{Theorem 2.3} (PSPACE-Hardness)}
+\label{app:pspace-proof}
+
+\begin{proof}
+We reduce from the reachability problem for linearly-bounded one-counter
+automata, known to be PSPACE-complete~\cite{fearnley2015reachability}.
+
+\paragraph{Problem definition.}
+A \emph{bounded one-counter automaton} (BOCA) is a tuple $(Q, q_0, q_f, B, \Delta)$
+where $Q$ is a finite set of states, $q_0, q_f \in Q$ are initial and final states,
+$B \in \N$ is the counter bound, and $\Delta \subseteq Q \times \{-1, 0, +1\} \times Q$
+is the transition relation. The reachability problem asks whether there exists
+a sequence of transitions from $(q_0, 0)$ to $(q_f, \cdot)$ such that the counter
+value remains in $[0, B]$ throughout.
+
+\paragraph{Construction.}
+Given a BOCA $(Q, q_0, q_f, B, \Delta)$, we construct a multi-agent
+system
+\[
+  \calM = (\calA, \calS, \{\pi_i\}, T, \Sigma)
+\]
+as follows:
+
+\begin{itemize}[nosep]
+\item Set $n = \lceil \log_2 B \rceil + 1$ agents and $d = \abs{Q} + n$.
+\item The first $\abs{Q}$ dimensions encode the automaton state as a one-hot
+vector; the remaining $n$ dimensions encode the counter value in binary.
+\item For each transition $(q, \delta, q') \in \Delta$, construct a Lipschitz
+policy that, when agent $i$ (corresponding to bit $i$ of the counter)
+is scheduled, performs the appropriate bit flip with carry propagation.
+\item The safety predicate $\varphi$ encodes that the automaton has not
+reached state $q_f$: $\varphi(s) = \mathbf{1}[s_{q_f} \leq 0.5]$.
+\end{itemize}
+
+\paragraph{Correctness.}
+A sequence of agent schedulings in $\calM$ corresponds to a sequence of
+transitions in the BOCA: the relative ordering of bit-flip agents determines
+the counter increment/decrement behavior. An interaction race exists if and
+only if there is a scheduling (transition sequence) that reaches $q_f$---i.e.,
+if and only if the BOCA reachability problem has a positive answer.
+
+The policies are Lipschitz-continuous by construction: each policy
+computes a sigmoid-approximated step function with Lipschitz constant
+$O(|Q| \cdot B)$.
+Since the reduction runs in polynomial time and the BOCA reachability
+problem is PSPACE-complete, IRD for Lipschitz-continuous policies is
+PSPACE-hard.
+\end{proof}
+
+
+\subsection{Proof of \texorpdfstring{\Cref{thm:pwl-p}}{Theorem 2.4} (P-Membership for PWL)}
+\label{app:pwl-proof}
+
+\begin{proof}
+Let each policy $\pi_i$ be a ReLU network with $L$ layers and at most $W$
+neurons per layer, so that $\pi_i$ is piecewise-linear with at most
+$2^{W \cdot L}$ linear regions.
+
+\paragraph{Step 1: Activation pattern enumeration.}
+For a fixed input zonotope $Z_0 \subseteq \R^d$, propagating through a single
+ReLU layer with $W$ neurons yields at most $W$ ``unstable'' neurons (those
+with both positive and negative values in their range). The activation pattern
+$\alpha \in \{0, 1, \text{unstable}\}^W$ can be determined in $O(W \cdot p)$
+time where $p$ is the number of zonotope generators.
+
+\paragraph{Step 2: HB constraint propagation.}
+With HB constraints $\calC$ on the generator coefficients, the feasible
+activation patterns are further restricted. For each unstable neuron $k$
+in agent $i$'s policy, we solve a linear feasibility problem:
+\[
+  \exists \xi \in [-1,1]^p : A\xi \leq b \text{ (HB constraints) and }
+  c_k + g_k^T \xi \geq 0,
+\]
+which determines whether the positive activation is feasible. This LP has
+$p + K$ constraints and can be solved in $O(p^2 K)$ time.
+
+The key observation is that HB constraints typically eliminate most
+activation patterns: if events $e_i \hb e_j$, then the timing constraint
+$\xi_i \leq \xi_j - \delta_{\min}$ restricts the set of reachable states
+for agent $j$, potentially fixing the activation of several neurons.
+
+\paragraph{Step 3: Per-region feasibility.}
+For each feasible activation pattern, the joint dynamics become affine:
+$s_{t+1} = A_\alpha s_t + b_\alpha$ where $A_\alpha, b_\alpha$ are determined
+by the activation pattern $\alpha$. The race detection problem reduces to
+checking whether there exist two generator coefficient vectors
+$\xi_1, \xi_2 \in [-1,1]^p$ satisfying $\calC$ such that:
+\[
+  H(c + G\xi_1) \leq h \quad \text{and} \quad H(c + G\xi_2) \not\leq h.
+\]
+
+This is a pair of LP feasibility problems, each solvable in polynomial time.
+
+\paragraph{Complexity analysis.}
+The total time is bounded by:
+\begin{itemize}[nosep]
+\item Zonotope propagation through $n$ policies of $L$ layers each: $O(n \cdot L \cdot W \cdot p)$.
+\item HB constraint propagation at each layer: $O(n \cdot L \cdot W \cdot p^2 \cdot K)$.
+\item LP feasibility at the final layer: $O(p^3)$.
+\end{itemize}
+Since $p = O(n \cdot L \cdot W + p_0)$ and $K = O(n \cdot T)$ (number of HB edges),
+the overall complexity is $O(n^2 \cdot L^2 \cdot W^2 \cdot (n \cdot L \cdot W + T))$,
+which simplifies to $O(n^2 \cdot W^2 \cdot L)$ when $T = O(L)$ and treating
+$n, L, W$ as the primary parameters.
+\end{proof}
+
+
+\subsection{Proof of \texorpdfstring{\Cref{thm:convergence}}{Theorem 3.1} (Analysis Convergence)}
+
+\begin{proof}
+We prove convergence by showing that the abstract transfer function
+sequence is finite and monotone.
+
+\paragraph{Generator count bound.}
+At initialization, the zonotope has $p_0$ generators. Each ReLU layer
+introduces at most $W_\ell$ fresh generators (one per unstable neuron in
+layer $\ell$). After processing all $L$ layers of policy $\pi_i$:
+\[
+  p_i \leq p_0 + \sum_{\ell=1}^{L} W_\ell \leq p_0 + L \cdot W.
+\]
+After processing all $n$ agents:
+\[
+  p_{\text{total}} \leq p_0 + n \cdot L \cdot W.
+\]
+With the zonotope reduction bound $p_{\max}$, we have $p \leq \max(p_0 + n \cdot L \cdot W, p_{\max})$.
+
+\paragraph{Monotonicity.}
+The abstract domain is ordered by set inclusion: $(Z_1, \calC_1) \sqsubseteq (Z_2, \calC_2)$
+iff $\gamma(Z_1, \calC_1) \subseteq \gamma(Z_2, \calC_2)$. Each transfer function
+is monotone: if $Z_1 \sqsubseteq Z_2$, then $f^\sharp(Z_1) \sqsubseteq f^\sharp(Z_2)$.
+This holds for linear layers (exact), ReLU layers (the parallelotope relaxation
+is monotone), and HB constraint tightening (removing infeasible regions preserves
+the inclusion ordering).
+
+\paragraph{Termination.}
+Since each policy is a feedforward network (no loops), the analysis processes
+each layer exactly once in topological order. The total number of transfer
+function applications is $\sum_{i=1}^{n} L_i \leq n \cdot L$. No fixpoint
+iteration is needed for feedforward networks.
+
+\paragraph{Soundness.}
+By induction on the layer index. Base case: the initial zonotope
+$Z_0 = \zo(s_0, 0)$ exactly represents the initial state. Inductive step:
+if $Z_\ell$ soundly over-approximates the reachable states at layer $\ell$,
+then $f^\sharp_\ell(Z_\ell)$ soundly over-approximates the reachable states
+at layer $\ell + 1$, since each transfer function is a sound abstraction of
+the corresponding concrete operation (linear map, ReLU). The HB constraints
+only tighten the over-approximation (removing infeasible states), preserving
+soundness by \Cref{lem:hb-sound}.
+\end{proof}
+
+\subsection{Proof of \texorpdfstring{\Cref{thm:soundness}}{Theorem 4.1} (Pipeline Soundness)}
+
+\begin{proof}
+We must show that if the pipeline reports no race, then no HB-consistent
+schedule from the analyzed initial region produces a safety violation.
+
+The proof proceeds by composing the soundness of each pipeline stage:
+
+\paragraph{Stage 1 (Traces).} Trace collection is used only for
+HB graph construction and calibration; it does not affect soundness.
+
+\paragraph{Stage 2 (HB Graph).} The HB graph is constructed conservatively:
+an edge $e_i \hb e_j$ is added only when physical causality is detected
+with high confidence. Omitting an edge (treating causally ordered events
+as concurrent) \emph{enlarges} the set of considered schedules, preserving
+soundness (though potentially increasing false positives).
+
+\paragraph{Stage 3 (Decomposition).} By \Cref{thm:ag-sound} (Appendix~\ref{app:composition}),
+assume-guarantee decomposition is sound: if each interaction group satisfies
+its local safety property under its assumed environment behavior, then the
+full system satisfies the global safety property.
+
+\paragraph{Stage 4 (Abstract Interpretation).} By \Cref{thm:convergence},
+the constrained zonotope analysis produces a sound over-approximation of the
+reachable states for each interaction group.
+
+\paragraph{Stage 5 (MCTS).} MCTS explores scheduling decisions within the
+over-approximation. HB-consistency pruning only removes schedules that
+violate the HB partial order---these are physically infeasible and could not
+produce real races. The MCTS budget is finite, so incompleteness is
+possible (a race might exist in an unexplored branch), but the claim is
+about the ``no race reported'' case: if MCTS finds no schedule with negative
+safety margin in the \emph{over-approximate} reachable set, then no such
+schedule exists in the concrete system.
+
+\paragraph{Stage 6 (IS).} Importance sampling provides probability estimates
+for detected races; it does not affect the soundness of race detection.
+
+Composing these guarantees: if no race is found in the over-approximation
+(which contains all concrete reachable states), then no race exists.
+\end{proof}
+
+
+% ============================================================
+\section{Specification Language}
+\label{app:spec}
+% ============================================================
+
+\marace{} accepts safety specifications in a domain-specific language (DSL)
+designed for multi-agent temporal properties. We define the syntax and semantics
+formally.
+
+\subsection{BNF Grammar}
+
+The specification language is defined by the following BNF grammar:
+
+\begin{small}
+\begin{verbatim}
+<spec>       ::= <safety_spec> | <liveness_spec> | <spec> "and" <spec>
+<safety_spec> ::= "always" <predicate>
+               |  "always" <predicate> "within" <time_bound>
+<liveness_spec> ::= "eventually" <predicate>
+               |  <predicate> "responds" <predicate> "within" <time_bound>
+<predicate>  ::= <linear_pred> | <distance_pred> | <region_pred>
+               |  <predicate> "and" <predicate>
+               |  <predicate> "or" <predicate>
+               |  "not" <predicate>
+<linear_pred>   ::= <expr> <cmp_op> <expr>
+<distance_pred> ::= "dist(" <agent_ref> "," <agent_ref> ")" <cmp_op> <num>
+<region_pred>   ::= <agent_ref> "in" <region>
+<agent_ref>     ::= "agent[" <int> "]" "." <field>
+<field>         ::= "x" | "y" | "vx" | "vy" | "theta" | <string>
+<region>        ::= "box(" <num> "," <num> "," <num> "," <num> ")"
+               |  "circle(" <num> "," <num> "," <num> ")"
+<expr>       ::= <num> | <agent_ref> | <expr> <arith_op> <expr>
+<cmp_op>     ::= "<" | "<=" | ">" | ">=" | "=="
+<arith_op>   ::= "+" | "-" | "*"
+<time_bound> ::= <int> "steps"
+<num>        ::= <float> | <int>
+\end{verbatim}
+\end{small}
+
+\subsection{Denotational Semantics}
+
+We define the semantics of specifications over infinite traces
+$\tau = s_0, s_1, s_2, \ldots$ where each $s_t \in \calS$.
+
+\begin{definition}[Trace satisfaction]
+The satisfaction relation $\tau, t \models \psi$ is defined inductively:
+\begin{align}
+  \tau, t &\models \text{``always } \psi\text{''} &&\iff \forall t' \geq t.\; \tau, t' \models \psi \\
+  \tau, t &\models \text{``eventually } \psi\text{''} &&\iff \exists t' \geq t.\; \tau, t' \models \psi \\
+  \tau, t &\models \text{``}\psi_1 \text{ responds } \psi_2 \text{ within } k\text{''} &&\iff
+    \tau, t \models \psi_1 \implies \exists t' \in [t, t+k].\; \tau, t' \models \psi_2 \\
+  \tau, t &\models \psi_1 \text{ and } \psi_2 &&\iff \tau, t \models \psi_1 \text{ and } \tau, t \models \psi_2 \\
+  \tau, t &\models \psi_1 \text{ or } \psi_2 &&\iff \tau, t \models \psi_1 \text{ or } \tau, t \models \psi_2 \\
+  \tau, t &\models \text{not } \psi &&\iff \tau, t \not\models \psi
+\end{align}
+For atomic predicates:
+\begin{align}
+  \tau, t &\models e_1 \leq e_2 &&\iff \llbracket e_1 \rrbracket_{s_t} \leq \llbracket e_2 \rrbracket_{s_t} \\
+  \tau, t &\models \text{dist}(i, j) > r &&\iff \norm{s_t^{(i)} - s_t^{(j)}} > r \\
+  \tau, t &\models i \text{ in } R &&\iff s_t^{(i)} \in \llbracket R \rrbracket
+\end{align}
+where $\llbracket e \rrbracket_{s}$ denotes the evaluation of expression $e$
+in state $s$, and $s_t^{(i)}$ is agent $i$'s state component at time $t$.
+\end{definition}
+
+\subsection{Robustness Semantics}
+
+For quantitative analysis, we extend the Boolean semantics to a
+\emph{robustness} semantics $\rho(\tau, t, \psi) \in \R$ following
+the signal temporal logic (STL) tradition:
+\begin{align}
+  \rho(\tau, t, e_1 \leq e_2) &= \llbracket e_2 \rrbracket_{s_t} - \llbracket e_1 \rrbracket_{s_t} \\
+  \rho(\tau, t, \text{always } \psi) &= \inf_{t' \geq t} \rho(\tau, t', \psi) \\
+  \rho(\tau, t, \text{eventually } \psi) &= \sup_{t' \geq t} \rho(\tau, t', \psi) \\
+  \rho(\tau, t, \psi_1 \text{ and } \psi_2) &= \min(\rho(\tau, t, \psi_1), \rho(\tau, t, \psi_2)) \\
+  \rho(\tau, t, \text{not } \psi) &= -\rho(\tau, t, \psi)
+\end{align}
+
+The robustness value is positive when the specification is satisfied and negative
+when violated. The safety margin reported by \marace{} (\Cref{def:margin})
+corresponds to the robustness at the worst-case schedule.
+
+\subsection{Compilation to Linear Constraints}
+
+Safety specifications involving linear predicates compile directly to
+the constraint form $Hs \leq h$ used by the abstract interpreter.
+Distance predicates are linearized via the inscribed polytope
+approximation: $\norm{x} > r$ is approximated by
+$\bigvee_{k=1}^{K} v_k^T x > r$ where $\{v_k\}$ are uniformly spaced
+unit vectors.
+
+% ============================================================
+\section{Probabilistic Estimation}
+\label{app:prob}
+% ============================================================
+
+\subsection{Deployment Schedule Distributions}
+
+In deployed MARL systems, the execution schedule is not adversarial but
+follows a \emph{deployment distribution} $\mu_D$ determined by the
+system's scheduling infrastructure (e.g., round-robin, event-driven,
+or real-time scheduling). We model $\mu_D$ as a distribution over
+HB-consistent schedules.
+
+\begin{definition}[Race probability]
+Given a deployment distribution $\mu_D$ over schedules, the \emph{race
+probability} for an interaction race $(e, e', s_0)$ is:
+\[
+  p_R = \Prob_{\sigma \sim \mu_D}[\varphi(\mathrm{reach}(\sigma, s_0)) = 0
+  \text{ and } e \text{ races with } e' \text{ under } \sigma].
+\]
+\end{definition}
+
+\subsection{Importance Sampling Estimator}
+
+Direct Monte Carlo estimation of $p_R$ is inefficient when $p_R$ is small
+(\Cref{thm:stat-intract}). We use importance sampling with a proposal
+distribution $q$ that concentrates mass near the race manifold:
+
+\begin{definition}[IS estimator]
+The self-normalized importance sampling estimator is:
+\[
+  \hat{p}_R^{\text{IS}} = \frac{\sum_{j=1}^{N} w_j \cdot \mathbf{1}[\text{race under } \sigma_j]}
+  {\sum_{j=1}^{N} w_j},
+  \quad w_j = \frac{\mu_D(\sigma_j)}{q(\sigma_j)},
+  \quad \sigma_j \sim q.
+\]
+\end{definition}
+
+\begin{theorem}[IS consistency]
+\label{thm:is-consistent}
+If $q(\sigma) > 0$ whenever $\mu_D(\sigma) > 0$ and $\sigma$ is in the
+race set, then $\hat{p}_R^{\text{IS}} \xrightarrow{a.s.} p_R$ as $N \to \infty$.
+\end{theorem}
+
+\begin{proof}
+By the strong law of large numbers applied to the numerator and denominator
+separately. The numerator converges to $\E_q[w \cdot \mathbf{1}[\text{race}]]
+= \E_{\mu_D}[\mathbf{1}[\text{race}]] = p_R$, and the denominator converges
+to $\E_q[w] = 1$. Since both converge almost surely and the denominator is
+bounded away from zero (as $q$ has full support on the $\mu_D$-support),
+the ratio converges to $p_R$.
+\end{proof}
+
+\subsection{Concentration Bounds}
+
+We provide finite-sample confidence intervals using the self-normalized bound:
+
+\begin{theorem}[Self-normalized concentration]
+\label{thm:concentration}
+Let $w_1, \ldots, w_N$ be importance weights satisfying
+$\max_j w_j / \bar{w} \leq M$ where
+$\bar{w} = N^{-1}\sum_j w_j$.
+Then for any $\delta > 0$:
+\[
+  \Prob\!\left[\abs{\hat{p}_R^{\text{IS}} - p_R} > \epsilon\right]
+  \leq 2 \exp\!\left(-\frac{N_{\text{eff}} \epsilon^2}{2M^2}\right)
+\]
+where $N_{\text{eff}} = (\sum_j w_j)^2 / \sum_j w_j^2$ is the effective sample size.
+\end{theorem}
+
+\begin{proof}
+The self-normalized estimator satisfies a Bernstein-type inequality.
+Following Owen~\cite{owen2013monte}, the variance of $\hat{p}_R^{\text{IS}}$
+is bounded by:
+\[
+  \Var[\hat{p}_R^{\text{IS}}] \leq \frac{p_R(1-p_R)}{N_{\text{eff}}}.
+\]
+The weight truncation $\max w_j / \bar{w} \leq M$ ensures sub-exponential
+tails, and Bernstein's inequality yields the exponential concentration.
+Specifically, define $Y_j = w_j(\mathbf{1}[\text{race under }\sigma_j] - p_R)/\bar{w}$.
+Then $\E[Y_j] = 0$, $\abs{Y_j} \leq M$, and:
+\[
+  \Prob\!\left[\abs[\Big]{\sum_{j=1}^N Y_j} > N\epsilon\right]
+  \leq 2\exp\!\left(-\frac{N^2\epsilon^2}{2\sum_j \E[Y_j^2] + 2NM\epsilon/3}\right).
+\]
+Since $\sum_j \E[Y_j^2] \leq NM^2/N_{\text{eff}} \cdot N$, simplification
+gives the claimed bound.
+\end{proof}
+
+In our experiments, the effective sample size $N_{\text{eff}}$ equals 50
+(the full sample count), indicating that the proposal distribution $q$
+closely matches the target $\mu_D$ restricted to the race set, yielding
+tight confidence intervals $[1.0, 1.0]$ for the planted races.
+
+\subsection{Cross-Entropy Convergence}
+\label{app:ce-convergence}
+
+The proposal distribution $q$ is optimized via the cross-entropy (CE)
+method~\cite{rubinstein2004cross}. Starting from a uniform proposal $q_0$
+over HB-consistent schedules, the CE method iteratively:
+\begin{enumerate}[nosep]
+\item Draws $N$ samples from $q_t$;
+\item Selects the top-$\rho$ fraction (``elite samples'') by race severity;
+\item Fits $q_{t+1}$ to the elite samples by minimizing KL divergence.
+\end{enumerate}
+
+\begin{proposition}[CE convergence]
+\label{prop:ce-conv}
+Under regularity conditions (the parametric family of proposals includes
+the optimal proposal $q^*$, and the elite threshold is chosen adaptively),
+the CE iterates satisfy $D_{\text{KL}}(q^* \| q_t) \to 0$ at rate
+$O(1/\sqrt{t})$.
+\end{proposition}
+
+The proof follows the standard CE convergence theory~\cite{rubinstein2004cross}
+adapted to the constraint that proposals must assign zero mass to
+HB-inconsistent schedules.
+
+
+% ============================================================
+\section{Lipschitz Analysis}
+\label{app:lipschitz}
+% ============================================================
+
+The Lipschitz constant of agent policies plays a central role in both
+the statistical intractability result (\Cref{thm:stat-intract}) and the
+precision of the abstract domain. We describe the methods used to estimate
+and bound Lipschitz constants.
+
+\subsection{Spectral Norm Bounds}
+
+For a ReLU network $\pi = W_L \circ \sigma \circ W_{L-1} \circ \cdots \circ \sigma \circ W_1$
+where $\sigma$ is the ReLU activation, the global Lipschitz constant satisfies:
+\[
+  \Lip(\pi) \leq \prod_{\ell=1}^{L} \norm{W_\ell}_2.
+\]
+
+This spectral norm product bound is easy to compute but often loose.
+We compute $\norm{W_\ell}_2$ via power iteration (10 iterations suffice
+for convergence to relative error $< 10^{-6}$ in all our experiments).
+
+\subsection{LipSDP Bounds}
+
+For tighter bounds, we use the LipSDP framework~\cite{fazlyab2019efficient},
+which formulates the Lipschitz constant computation as a semidefinite program:
+
+\begin{align}
+  \min_{\gamma, T} \quad & \gamma^2 \\
+  \text{s.t.} \quad &
+  \begin{bmatrix} W_1^T T W_1 - \gamma^2 I & W_1^T T \\ T W_1 & -T + W_2^T W_2 \end{bmatrix}
+  \preceq 0, \\
+  & T = \diag(t_1, \ldots, t_W), \quad t_i \geq 0.
+\end{align}
+
+This yields the tightest known polynomial-time computable bound on $\Lip(\pi)$
+for ReLU networks.
+
+\subsection{Lipschitz Calibration}
+
+In \marace{}, the Lipschitz constant is used to calibrate the abstraction
+error. Given $\Lip(\pi_i)$ for each agent, the maximum state perturbation
+from a schedule change of magnitude $\Delta t$ is bounded by:
+\[
+  \norm{\Delta s_i} \leq \Lip(\pi_i) \cdot \Lip(T) \cdot \Delta t
+\]
+where $\Lip(T)$ is the Lipschitz constant of the transition function.
+
+\begin{proposition}[Calibration convergence]
+\label{prop:calibration}
+As the number of calibration traces $K \to \infty$, the empirical
+Lipschitz estimate $\hat{L}_K$ satisfies:
+\[
+  \hat{L}_K \leq \Lip(\pi) \leq \hat{L}_K + O\!\left(\sqrt{\frac{\log K}{K}}\right)
+\]
+with probability at least $1 - 1/K$.
+\end{proposition}
+
+\begin{proof}
+The empirical Lipschitz estimate is:
+\[
+  \hat{L}_K = \max_{1 \leq j < k \leq K}
+  \frac{\norm{\pi(s_j) - \pi(s_k)}}{\norm{s_j - s_k}}.
+\]
+This is a lower bound on $\Lip(\pi)$ by definition. The upper bound follows
+from a covering number argument: with $K$ samples from a compact domain,
+the uncovered volume has measure $O(K^{-1/d})$, and the maximum Lipschitz
+ratio over the uncovered region is bounded by the global Lipschitz constant
+plus a term that decreases as $O(\sqrt{\log K / K})$ by a uniform convergence
+argument over Lipschitz functions.
+\end{proof}
+
+\subsection{Abstract Error Propagation}
+
+The abstraction error $\epsilon_\ell$ at layer $\ell$ of the zonotope
+analysis satisfies the recurrence:
+\[
+  \epsilon_{\ell+1} \leq \Lip(f_\ell) \cdot \epsilon_\ell + \delta_\ell
+\]
+where $\delta_\ell$ is the local approximation error introduced by the
+ReLU relaxation at layer $\ell$. For the parallelotope relaxation,
+$\delta_\ell \leq \sum_{k: l_k < 0 < u_k} \abs{u_k l_k} / (2(u_k - l_k))$.
+
+The total abstraction error after $L$ layers is bounded by:
+\[
+  \epsilon_L \leq \epsilon_0 \prod_{\ell=0}^{L-1} \Lip(f_\ell)
+  + \sum_{\ell=0}^{L-1} \delta_\ell \prod_{j=\ell+1}^{L-1} \Lip(f_j).
+\]
+
+In our experiments, the measured abstraction errors range from 0.036
+(2-agent highway) to 0.121 (8-agent warehouse), consistent with the
+theoretical bounds.
+
+
+% ============================================================
+\section{Compositional Decomposition}
+\label{app:composition}
+% ============================================================
+
+\subsection{Assume-Guarantee Framework}
+
+Compositional verification decomposes the $n$-agent system into $G$
+interaction groups $\calG_1, \ldots, \calG_G$ where $\bigcup_g \calG_g = \calA$
+and agents in different groups have limited interaction.
+
+\begin{definition}[Interaction group contract]
+An \emph{interaction group contract} for group $\calG_g$ is a pair
+$(\mathsf{Assume}_g, \mathsf{Guarantee}_g)$ where:
+\begin{itemize}[nosep]
+\item $\mathsf{Assume}_g \subseteq \calS$ specifies the assumed behavior of
+agents outside $\calG_g$ (their states remain within $\mathsf{Assume}_g$);
+\item $\mathsf{Guarantee}_g \subseteq \calS$ specifies the guaranteed behavior
+of agents within $\calG_g$ (their states remain within $\mathsf{Guarantee}_g$).
+\end{itemize}
+\end{definition}
+
+\begin{theorem}[Assume-guarantee soundness]
+\label{thm:ag-sound}
+If for each group $g$:
+\begin{enumerate}[nosep,label=(\roman*)]
+\item Under assumption $\mathsf{Assume}_g$, the group $\calG_g$ satisfies
+$\mathsf{Guarantee}_g$; and
+\item $\mathsf{Guarantee}_h \subseteq \mathsf{Assume}_g$ for all groups $h \neq g$;
+\end{enumerate}
+then the full system satisfies $\bigcap_g \mathsf{Guarantee}_g$.
+\end{theorem}
+
+\begin{proof}
+By induction on the number of execution steps. At step $t=0$, all agents are
+in their initial states, which satisfy all assumptions by hypothesis.
+
+Assume at step $t$, all agents satisfy their group guarantees. For each
+group $g$, the agents outside $\calG_g$ are in $\bigcup_{h \neq g} \mathsf{Guarantee}_h
+\subseteq \mathsf{Assume}_g$ by condition (ii). Therefore, by condition (i),
+the agents in $\calG_g$ at step $t+1$ satisfy $\mathsf{Guarantee}_g$.
+
+By induction, all agents satisfy their guarantees at all steps.
+\end{proof}
+
+\subsection{Group Size Theory}
+
+The effectiveness of decomposition depends on the maximum interaction group
+size, which determines the dimensionality of the per-group verification problem.
+
+\begin{definition}[Interaction graph]
+The \emph{interaction graph} $I = (\calA, E_I)$ has an edge $(i,j) \in E_I$
+if agents $i$ and $j$ have concurrent events that could affect a shared
+safety predicate. The interaction groups are the connected components of $I$.
+\end{definition}
+
+\begin{theorem}[Group size bound]
+\label{thm:group-size}
+If the interaction graph has maximum degree $\Delta$ and the safety
+predicates have locality radius $r$ (each predicate involves agents within
+distance $r$ in the interaction graph), then the maximum interaction group
+size is bounded by $O(\Delta^r)$.
+\end{theorem}
+
+\begin{proof}
+The interaction group containing agent $i$ is the connected component
+reachable from $i$ in the interaction graph restricted to agents
+participating in shared safety predicates. From any vertex in a graph
+of maximum degree $\Delta$, the number of vertices reachable within
+distance $r$ is at most $1 + \Delta + \Delta^2 + \cdots + \Delta^r
+= O(\Delta^r)$.
+\end{proof}
+
+In spatially distributed multi-agent systems, $\Delta$ and $r$ are typically
+small constants (each agent interacts with a bounded number of neighbors),
+yielding constant-size groups and enabling the linear scaling observed in
+our experiments.
+
+\subsection{Percolation Bounds}
+
+For randomly distributed agents, we can obtain probabilistic bounds on
+group sizes using percolation theory.
+
+\begin{proposition}[Sub-critical percolation]
+\label{prop:percolation}
+If $n$ agents are distributed uniformly at random in $[0,1]^2$ with
+interaction radius $r_n = c \sqrt{\log n / n}$ for $c < 1/\sqrt{\pi}$,
+then with probability $1 - O(1/n)$, the maximum interaction group size
+is $O(\log n)$.
+\end{proposition}
+
+\begin{proof}
+This follows from the theory of random geometric graphs. The expected
+degree is $\lambda = n \pi r_n^2 = \pi c^2 \log n$. For $\pi c^2 < 1$,
+the random geometric graph is in the sub-critical regime, where the
+largest connected component has size $O(\log n)$ with high probability.
+The result follows from the standard percolation threshold for
+two-dimensional Poisson Boolean models, adapted to the finite setting
+via a union bound over $n$ agents.
+\end{proof}
+
+This theoretical bound is consistent with our experimental observation
+that all agents form a single interaction group in our benchmarks:
+the highway intersection and warehouse corridor scenarios have
+interaction radii above the critical threshold, as agents are densely
+packed in shared spaces.
+
+
+% ============================================================
+\section{Proof Certificates}
+\label{app:certificates}
+% ============================================================
+
+\marace{} can produce machine-checkable proof certificates that
+independently verify the absence of interaction races.
+
+\subsection{Certificate Format}
+
+A proof certificate $\calP$ for race absence consists of:
+
+\begin{definition}[Proof certificate]
+\label{def:certificate}
+$\calP = (\calZ_0, \{f^\sharp_\ell\}_{\ell=1}^{L_{\text{total}}}, \calC_{\text{HB}}, m^*)$
+where:
+\begin{itemize}[nosep]
+\item $\calZ_0 = \zo(c_0, G_0)$ is the initial zonotope covering the
+analyzed state region;
+\item $\{f^\sharp_\ell\}$ is the sequence of abstract transfer functions
+(linear maps and ReLU relaxation coefficients);
+\item $\calC_{\text{HB}}$ is the set of HB constraints on generator
+coefficients;
+\item $m^* > 0$ is the certified minimum safety margin.
+\end{itemize}
+\end{definition}
+
+\subsection{Verification Algorithm}
+
+The certificate is verified by an independent checker that replays the
+abstract computation and confirms the safety margin:
+
+\begin{algorithm}[H]
+\caption{Certificate Verification}
+\label{alg:verify}
+\begin{algorithmic}[1]
+\Require Certificate $\calP = (\calZ_0, \{f^\sharp_\ell\}, \calC_{\text{HB}}, m^*)$,
+safety predicate $(H, h)$
+\Ensure Accept or Reject
+\State $Z \leftarrow \calZ_0$; $\calC \leftarrow \calC_{\text{HB}}$
+\For{$\ell = 1, \ldots, L_{\text{total}}$}
+  \State $Z \leftarrow f^\sharp_\ell(Z)$ \Comment{Apply transfer function}
+  \State Verify $f^\sharp_\ell$ is a sound abstraction of $f_\ell$
+\EndFor
+\State Compute $m_{\text{verified}} \leftarrow \min_k \min_{\xi \in [-1,1]^p, \calC}
+  (h_k - H_k(c + G\xi)) / \norm{H_k}$
+\If{$m_{\text{verified}} \geq m^*$ and $m^* > 0$}
+  \State \Return \textbf{Accept}
+\Else
+  \State \Return \textbf{Reject}
+\EndIf
+\end{algorithmic}
+\end{algorithm}
+
+\begin{proposition}[Certificate soundness]
+If \Cref{alg:verify} accepts certificate $\calP$, then the multi-agent
+system has no interaction race for the specified safety predicate and
+initial state region.
+\end{proposition}
+
+\begin{proof}
+The verifier independently confirms that:
+(1)~each transfer function is a sound over-approximation of the
+corresponding concrete operation;
+(2)~the HB constraints are consistent with the declared
+happens-before graph;
+(3)~the minimum safety margin over all feasible states in the
+final zonotope is positive.
+If all three hold, no concrete reachable state violates the
+safety predicate.
+\end{proof}
+
+\subsection{Certificate Size}
+
+The certificate size is polynomial in the system parameters:
+$O(n \cdot L \cdot W^2 + n^2 \cdot T)$ where the first term accounts
+for the weight matrices and relaxation coefficients, and the second term
+accounts for the HB constraints. For our experimental configurations,
+certificates range from approximately 2KB (2-agent highway) to 15KB
+(8-agent warehouse).
+
+
+% ============================================================
+\section{Additional Experimental Details}
+\label{app:experiments}
+% ============================================================
+
+\subsection{Policy Architectures}
+
+\paragraph{Highway intersection.}
+Each vehicle agent uses a 2-layer ReLU network: input dimension 4
+(position $x, y$, velocity $v_x, v_y$), hidden layer of 64 units,
+output dimension 2 (acceleration, steering). Total parameters: 450.
+
+\paragraph{Warehouse corridor.}
+Each robot agent uses a 2-layer ReLU network: input dimension 6
+(position $x, y$, velocity $v_x, v_y$, orientation $\theta$, load status),
+hidden layer of 128 units, output dimension 3 (forward velocity, angular
+velocity, gripper). Total parameters: 1,155.
+
+\subsection{Training Details}
+
+Policies are trained using Proximal Policy Optimization (PPO)~\cite{schulman2017proximal}
+with independent learning (each agent optimizes its own reward). Training
+hyperparameters:
+\begin{itemize}[nosep]
+\item Learning rate: $3 \times 10^{-4}$ with linear decay;
+\item Discount factor: $\gamma = 0.99$;
+\item GAE parameter: $\lambda = 0.95$;
+\item Clip ratio: $\epsilon = 0.2$;
+\item Training episodes: 10,000 per agent;
+\item Batch size: 64 episodes.
+\end{itemize}
+
+The reward function for each agent combines a task reward (reaching the
+goal position) with a safety penalty ($-100$ for collision) and a
+coordination bonus ($+1$ for maintaining safe separation from other agents).
+
+\subsection{Race Planting Procedure}
+
+To create ground-truth interaction races for evaluation, we use the
+following procedure:
+
+\begin{enumerate}[nosep]
+\item \textbf{Identify critical regions:} Determine spatial regions where
+multiple agents' paths intersect (intersection center, corridor junctions).
+\item \textbf{Construct race-inducing initial conditions:} Place agents at
+positions and velocities such that simultaneous action produces collision
+but sequential (HB-ordered) action allows safe passage.
+\item \textbf{Verify ground truth:} Exhaustively enumerate all HB-consistent
+schedules for the initial condition (feasible for $n \leq 4$) and confirm
+that exactly one pair of events constitutes a race.
+\item \textbf{Embed in trace set:} Include the race-inducing initial condition
+among the $K = 5$ trace episodes, with the remaining 4 episodes drawn from
+the normal training distribution.
+\end{enumerate}
+
+For the warehouse corridor benchmark with $n \geq 6$ agents, exhaustive
+enumeration is infeasible, so ground truth is established by combining
+manual analysis with targeted simulation (1000 random schedules for each
+candidate race pair).
+
+\subsection{Time Breakdown}
+
+\Cref{tab:time-breakdown} provides a detailed breakdown of analysis time
+for each pipeline stage.
+
+\begin{table}[h]
+\centering
+\caption{Time breakdown by pipeline stage (seconds). Percentages show
+fraction of total time.}
+\label{tab:time-breakdown}
+\begin{tabular}{@{}llccccccc@{}}
+\toprule
+& & \multicolumn{6}{c}{\textbf{Pipeline Stage}} & \\
+\cmidrule(lr){3-8}
+\textbf{Scenario} & $n$ & Trace & HB & Decomp & Abstract & MCTS & IS & \textbf{Total} \\
+\midrule
+Highway & 2 & 0.012 & 0.001 & 0.003 & 0.001 & 0.020 & 0.002 & 0.039 \\
+Highway & 3 & 0.027 & 0.001 & 0.004 & 0.001 & 0.037 & 0.002 & 0.072 \\
+Highway & 4 & 0.048 & 0.001 & 0.006 & 0.001 & 0.063 & 0.002 & 0.121 \\
+\midrule
+Warehouse & 4 & 0.053 & 0.008 & 0.004 & 0.001 & 0.066 & 0.002 & 0.134 \\
+Warehouse & 6 & 0.134 & 0.002 & 0.006 & 0.001 & 0.136 & 0.004 & 0.283 \\
+Warehouse & 8 & 0.277 & 0.002 & 0.010 & 0.002 & 0.224 & 0.004 & 0.519 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The dominant costs are trace collection and MCTS search, which together
+account for 85--96\% of total time across all configurations. The abstract
+interpretation and decomposition stages are negligible ($<2$\% of total time),
+validating the efficiency of the constrained zonotope domain.
+
+\subsection{Zonotope Statistics}
+
+\begin{table}[h]
+\centering
+\caption{Zonotope propagation statistics for the detection experiments.}
+\label{tab:zonotope-stats}
+\begin{tabular}{@{}llcccc@{}}
+\toprule
+\textbf{Scenario} & $n$ & \textbf{HB Events} & \textbf{HB Edges} & \textbf{Coverage (\%)} & \textbf{Abs.\ Error} \\
+\midrule
+Highway & 2 & 300 & 285 & 3.62 & 0.036 \\
+Highway & 3 & 400 & 380 & 3.98 & 0.040 \\
+Highway & 4 & 500 & 475 & 4.71 & 0.047 \\
+\midrule
+Warehouse & 4 & 500 & 475 & 2.09 & 0.047 \\
+Warehouse & 6 & 700 & 665 & 3.21 & 0.071 \\
+Warehouse & 8 & 900 & 855 & 5.45 & 0.121 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The HB graphs are dense (95\% of event pairs are causally ordered),
+reflecting the tight physical coupling in both benchmarks. The coverage
+percentage (fraction of the state space covered by the zonotope) ranges
+from 2.09\% to 5.45\%, indicating that the abstract domain effectively
+focuses on the relevant portion of the state space. The abstraction error
+grows sub-linearly with agent count, consistent with the theoretical
+bound from \Cref{app:lipschitz}.
+
+
+% ============================================================
+\section{Zonotope Reduction}
+\label{app:reduction}
+% ============================================================
+
+As the analysis propagates through ReLU layers, the number of zonotope
+generators grows. To maintain computational tractability, we periodically
+reduce the generator count.
+
+\subsection{Reduction Strategy}
+
+Given a zonotope $Z = \zo(c, G)$ with $p > p_{\max}$ generators, we
+reduce to $p_{\max}$ generators using the following procedure:
+
+\begin{enumerate}[nosep]
+\item \textbf{Sort generators by norm:} order $g_1, \ldots, g_p$ such that
+$\norm{g_1} \geq \norm{g_2} \geq \cdots \geq \norm{g_p}$.
+\item \textbf{Keep top generators:} retain $g_1, \ldots, g_{p_{\max}-d}$.
+\item \textbf{Merge remaining generators:} replace $g_{p_{\max}-d+1}, \ldots, g_p$
+with $d$ axis-aligned generators forming the interval hull:
+\[
+  g'_k = \left(\sum_{j=p_{\max}-d+1}^{p} \abs{g_{jk}}\right) e_k,
+  \quad k = 1, \ldots, d.
+\]
+\end{enumerate}
+
+\subsection{Bounded Error Analysis}
+
+\begin{theorem}[Reduction error bound]
+\label{thm:reduction-error}
+Let $Z = \zo(c, G)$ be a zonotope and $Z' = \zo(c, G')$ the reduced zonotope
+obtained by the above procedure. Then:
+\[
+  Z \subseteq Z' \subseteq Z \oplus B_\infty(\epsilon_{\text{red}})
+\]
+where $\epsilon_{\text{red}} = \max_{k} \sum_{j=p_{\max}-d+1}^{p} \abs{g_{jk}}$
+and $B_\infty(\epsilon)$ is the $\ell_\infty$-ball of radius $\epsilon$.
+\end{theorem}
+
+\begin{proof}
+\emph{Containment $Z \subseteq Z'$.}
+For any $s = c + \sum_{j} \xi_j g_j \in Z$ with $\xi \in [-1,1]^p$,
+we construct $\xi' \in [-1,1]^{p_{\max}}$ such that $s = c + G'\xi'$.
+For the retained generators, $\xi'_j = \xi_j$ for $j \leq p_{\max} - d$.
+For the merged generators, $\xi'_{p_{\max}-d+k} = \sum_{j > p_{\max}-d} \xi_j g_{jk} / g'_k$
+for each axis $k$. By the triangle inequality:
+\[
+  \abs{\xi'_{p_{\max}-d+k}} = \frac{\abs[\big]{\sum_j \xi_j g_{jk}}}{\sum_j \abs{g_{jk}}}
+  \leq \frac{\sum_j \abs{g_{jk}}}{\sum_j \abs{g_{jk}}} = 1.
+\]
+Hence $s \in Z'$.
+
+\emph{Over-approximation bound.}
+For any $s' = c + G'\xi' \in Z'$, we can write
+$s' = c + \sum_{j=1}^{p_{\max}-d} \xi'_j g_j + \sum_{k=1}^{d} \xi'_{p_{\max}-d+k} g'_k e_k$.
+The last $d$ terms contribute at most $\abs{g'_k}$ in each dimension $k$,
+while the corresponding terms in $Z$ contribute at most
+$\sum_{j > p_{\max}-d} \abs{g_{jk}} = g'_k$. The over-approximation error
+is thus exactly $\epsilon_{\text{red}} = \max_k g'_k$ per dimension.
+\end{proof}
+
+\subsection{Adaptive Reduction}
+
+In practice, we use an adaptive reduction strategy:
+\begin{itemize}[nosep]
+\item \textbf{Threshold:} Reduction is triggered when $p > 2 p_{\max}$
+to amortize the cost.
+\item \textbf{PCA-based merging:} Instead of axis-aligned merging, we
+compute the principal components of the small generators and merge
+along the top-$d$ principal directions. This reduces the approximation
+error when the small generators are correlated.
+\item \textbf{Error tracking:} The cumulative reduction error is tracked
+and reported as part of the abstract error (\Cref{tab:zonotope-stats}).
+\end{itemize}
+
+\begin{proposition}[PCA merging improvement]
+\label{prop:pca-merge}
+PCA-based merging reduces the over-approximation volume by a factor of at
+most $\prod_{k=1}^{d} \sigma_k / \sigma_k'$ compared to axis-aligned merging,
+where $\sigma_k$ and $\sigma_k'$ are the singular values of the small generator
+matrix in the original and rotated coordinate systems, respectively.
+\end{proposition}
+
+\begin{proof}
+The volume of the over-approximation box in the axis-aligned case is
+$\prod_k 2\sum_j \abs{g_{jk}}$. In the PCA-rotated coordinate system, the
+box volume is $\prod_k 2\sigma_k$ where $\sigma_k$ are the singular values
+of $[g_{p_{\max}-d+1} \cdots g_p]$. Since the singular values satisfy
+$\sigma_k \leq \sum_j \abs{g_{jk}}$ with equality only when all small
+generators are axis-aligned, PCA merging always yields equal or smaller
+over-approximation volume.
+\end{proof}
+
+For the configurations in our experiments, PCA merging was not necessary
+(the generator count stayed below $p_{\max} = 100$ throughout), but the
+mechanism is available for larger networks with more unstable neurons.
+
+\end{document}

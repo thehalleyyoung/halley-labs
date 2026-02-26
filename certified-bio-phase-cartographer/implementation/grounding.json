@@ -1,0 +1,148 @@
+{
+  "project": "certified-bio-phase-cartographer",
+  "grounding_date": "2025-07-18",
+  "claims": [
+    {
+      "claim": "100% MiniCheck (Tier 1) pass rate on all certified cells across all five models",
+      "evidence_type": "experiment",
+      "evidence": "benchmark_output/summary.json: tier1_pass_rate=1.0 for toggle_switch, brusselator, selkov, repressilator, goodwin",
+      "reproducible": "python3 -c 'from phase_cartographer.benchmarks.runner import run_all_benchmarks; run_all_benchmarks()'"
+    },
+    {
+      "claim": "84-100% parameter-space coverage across all models",
+      "evidence_type": "experiment",
+      "evidence": "toggle_switch: 100%, brusselator: 84.4%, selkov: 100%, repressilator: 100%, goodwin: 100%",
+      "reproducible": true
+    },
+    {
+      "claim": "Krawczyk contraction factors 0.63-0.90 across all models",
+      "evidence_type": "experiment",
+      "evidence": "benchmark_output/summary.json: toggle=0.6609, brusselator=0.8015, selkov=0.8334, repressilator=0.6334, goodwin=0.9030",
+      "reproducible": true
+    },
+    {
+      "claim": "11,546 lines of Python implementation",
+      "evidence_type": "code_measurement",
+      "evidence": "find phase_cartographer tests -name '*.py' | xargs wc -l",
+      "reproducible": true
+    },
+    {
+      "claim": "MiniCheck is 917 lines standalone checker with 5 models",
+      "evidence_type": "code_measurement",
+      "evidence": "wc -l phase_cartographer/minicheck.py → 917 (toggle_switch, brusselator, selkov, repressilator, goodwin)",
+      "reproducible": true
+    },
+    {
+      "claim": "81 tests pass (unit, integration, end-to-end, composition, GP, benchmarks)",
+      "evidence_type": "test",
+      "evidence": "python3 -m pytest tests/ -q → 81 passed",
+      "reproducible": true
+    },
+    {
+      "claim": "Five benchmark models evaluated: toggle switch, Brusselator, Selkov, repressilator, Goodwin",
+      "evidence_type": "experiment",
+      "evidence": "benchmark_output/summary.json contains results for all five models",
+      "reproducible": true
+    },
+    {
+      "claim": "Newton-guided search improves repressilator coverage from 25% to 100%",
+      "evidence_type": "experiment",
+      "evidence": "Bisection-only: 25% coverage, 69.8s. Newton-guided: 100% coverage, 0.4s. Verified by running benchmarks with both approaches.",
+      "reproducible": true
+    },
+    {
+      "claim": "Newton-guided search improves Goodwin coverage from 0% to 100%",
+      "evidence_type": "experiment",
+      "evidence": "Bisection-only: 0% coverage, 166.6s timeout. Newton-guided: 100% coverage, 0.1s.",
+      "reproducible": true
+    },
+    {
+      "claim": "Krawczyk operator certifies equilibrium existence and uniqueness (Theorem 1)",
+      "evidence_type": "theorem",
+      "evidence": "Standard result (Krawczyk 1969). Implemented in equilibrium/krawczyk.py, independently reimplemented in minicheck.py.",
+      "reproducible": true
+    },
+    {
+      "claim": "Delta-soundness bound (Theorem 2): explicit bound relating dReal delta to eigenvalue gap",
+      "evidence_type": "theorem",
+      "evidence": "Proof in tool_paper.tex Section 7 and Appendix B. Implementation in smt/delta_bound.py. Unit-tested.",
+      "reproducible": true
+    },
+    {
+      "claim": "Certificate composition soundness (Theorem 3)",
+      "evidence_type": "theorem",
+      "evidence": "Proof in tool_paper.tex Section 9. Implementation in atlas/composition.py. Tested in tests/test_composition.py.",
+      "reproducible": true
+    },
+    {
+      "claim": "Formal regime inference rules derive labels from certified facts",
+      "evidence_type": "implementation",
+      "evidence": "tiered/certificate.py::RegimeInferenceRules with 6 rules. RegimeDerivation proof trees in atlas/composition.py.",
+      "reproducible": true
+    },
+    {
+      "claim": "GP surrogate uses ARD Matern-5/2 kernel with calibration",
+      "evidence_type": "implementation",
+      "evidence": "gp/surrogate.py: matern52_kernel_ard, optimize_ard_length_scales, calibration_error, train_from_atlas. Tested in tests/test_gp.py.",
+      "reproducible": true
+    },
+    {
+      "claim": "GP-guided refinement with boundary-uncertainty acquisition",
+      "evidence_type": "implementation",
+      "evidence": "refinement/octree.py::gp_guided_refine integrates GP into refinement loop. Tested in tests/test_gp.py.",
+      "reproducible": true
+    },
+    {
+      "claim": "Anisotropic splitting guided by eigenvalue sensitivity",
+      "evidence_type": "implementation",
+      "evidence": "refinement/octree.py::anisotropic_split_box. Tested in tests/test_gp.py::TestAnisotropicSplit.",
+      "reproducible": true
+    },
+    {
+      "claim": "7 boundary cell pairs detected for Brusselator (Hopf bifurcation surface)",
+      "evidence_type": "experiment",
+      "evidence": "benchmark_output/brusselator_result.json: n_boundary_pairs=7",
+      "reproducible": true
+    }
+  ],
+  "hallucination_audit": [
+    {
+      "original_claim": "48,000 lines of code",
+      "status": "corrected",
+      "actual": "11,546 lines of Python"
+    },
+    {
+      "original_claim": "Five benchmark models evaluated",
+      "status": "now_true",
+      "actual": "Five models: toggle switch, Brusselator, Selkov, repressilator, Goodwin"
+    },
+    {
+      "original_claim": ">=95% coverage on all models",
+      "status": "corrected",
+      "actual": "84-100% coverage. Brusselator at 84.4% due to Hopf bifurcation gap."
+    },
+    {
+      "original_claim": "Tier 2 (dReal) and Tier 3 (Z3) verification results",
+      "status": "corrected",
+      "actual": "All reported results use Tier 1 (MiniCheck). Tier 2/3 implemented but not exercised."
+    },
+    {
+      "original_claim": "AUTO and DSGRN comparison results",
+      "status": "removed",
+      "actual": "No comparisons with external tools were run"
+    },
+    {
+      "original_claim": "Repressilator 25% coverage",
+      "status": "corrected",
+      "actual": "100% coverage with Newton-guided search (was 25% with bisection only)"
+    }
+  ],
+  "limitations": [
+    "Brusselator has 15.6% uncertified gap near Hopf bifurcation (correct conservative behavior)",
+    "Tier 2 (dReal) and Tier 3 (Z3) not exercised in benchmarks",
+    "No periodic orbit certification",
+    "GP surrogate not head-to-head benchmarked on identical problems",
+    "No comparison with AUTO/MATCONT/DSGRN baselines",
+    "Many cells near bifurcation boundaries classified as INCONCLUSIVE (correct when eigenvalue enclosures cross zero)"
+  ]
+}

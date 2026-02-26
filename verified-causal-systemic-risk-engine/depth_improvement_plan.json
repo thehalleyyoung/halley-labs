@@ -1,0 +1,78 @@
+{
+  "project": "verified-causal-systemic-risk-engine",
+  "triage_category": "B",
+  "plan_date": "2025-07-18",
+  "key_improvements": [
+    {
+      "id": "composition-theorem-proof",
+      "title": "Formal Proof of Bound Composition Theorem with SMT Verification",
+      "critiques_addressed": [
+        "Composition theorem—the central soundness claim—is implemented but not formally proved or mechanized",
+        "Composition Theorem Not Formally Stated in logic",
+        "Composition Theorem Assumed, Not Proved"
+      ],
+      "approach": "1. State the theorem formally as a sequence of lemmas with explicit hypotheses in both Python and LaTeX. 2. Implement machine-verified proof via Z3: encode the theorem as QF_LRA assertions and verify each lemma step. 3. Add a formal_proof module with step-by-step validity proof that can be re-checked. 4. Add experiment: run the formal verifier on 100+ random decompositions and report verification rate.",
+      "deliverables": [
+        "causalbound/composition/formal_proof.py — mechanized step-by-step proof via Z3",
+        "tests/test_formal_proof.py — verification tests",
+        "Experiment results showing 100% verification on valid decompositions"
+      ],
+      "estimated_loc": 1200
+    },
+    {
+      "id": "discretization-error-bounds",
+      "title": "Formal Discretization Error Bounds with SMT Certificates",
+      "critiques_addressed": [
+        "Discretization introduces unquantified approximation error that breaks the formal guarantee chain",
+        "Discretization breaks the clean symbolic framework",
+        "Convergence rate not characterized"
+      ],
+      "approach": "1. Add formal error analysis: for each discretization, compute the worst-case L1/TV/KL error bound analytically. 2. Encode discretization error bounds as QF_LRA constraints in the SMT verifier so the total pipeline bound accounts for discretization gap. 3. Add adaptive refinement that tightens discretization until error is below a user-specified threshold. 4. Prove that composed bounds remain valid after adding the discretization correction term.",
+      "deliverables": [
+        "causalbound/junction/discretization_error.py — formal error analysis",
+        "causalbound/smt/discretization_verifier.py — SMT verification of error bounds",
+        "tests/test_discretization_error.py",
+        "Experiment: error convergence as bins increase"
+      ],
+      "estimated_loc": 1100
+    },
+    {
+      "id": "dag-sensitivity-analysis",
+      "title": "DAG Sensitivity Analysis Across Markov Equivalence Class",
+      "critiques_addressed": [
+        "Causal discovery (FCI) is unverified with no sensitivity analysis for DAG errors",
+        "Causal Discovery Underspecified",
+        "No adversarial evaluation of the pipeline"
+      ],
+      "approach": "1. Enumerate DAGs in the Markov equivalence class (MEC) of the discovered PAG. 2. Recompute causal polytope bounds under each DAG in the MEC. 3. Report bound variation (min/max/std across MEC). 4. Add adversarial DAG perturbation: flip/add/remove edges and measure bound sensitivity. 5. Produce a sensitivity report showing bound robustness.",
+      "deliverables": [
+        "causalbound/scm/sensitivity.py — MEC enumeration and bound recomputation",
+        "causalbound/evaluation/adversarial.py — adversarial DAG/topology/marginal perturbation",
+        "tests/test_sensitivity.py",
+        "Experiment: bound variation across MEC and under perturbation"
+      ],
+      "estimated_loc": 1200
+    }
+  ],
+  "secondary_improvements": [
+    {
+      "id": "alethe-proof-extraction",
+      "title": "Alethe-Format Proof Certificate Extraction",
+      "description": "Extract Alethe-format proof objects from Z3 UNSAT verdicts to reduce TCB.",
+      "estimated_loc": 500
+    },
+    {
+      "id": "contagion-verification",
+      "title": "Contagion Model Property Verification",
+      "description": "Add SMT-based property checking for contagion models (monotonicity, bounded output, Lipschitz).",
+      "estimated_loc": 600
+    }
+  ],
+  "total_estimated_new_loc": 4600,
+  "phases": {
+    "B0": "This plan (depth_improvement_plan.json)",
+    "B1": "Execute all 5 improvements with real code",
+    "B2": "Math rigor pass: verify all theorems, tighten bounds",
+    "finalization": "Rewrite paper, README, API.md, grounding.json, experiments, commit"
+  }
+}

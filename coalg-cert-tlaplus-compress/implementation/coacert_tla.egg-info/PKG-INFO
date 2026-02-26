@@ -1,0 +1,193 @@
+Metadata-Version: 2.4
+Name: coacert-tla
+Version: 0.1.0
+Summary: Coalgebraic certified compression for TLA+ specifications via F-coalgebra bisimulation with Merkle-hashed witnesses
+Author: CoaCert-TLA Contributors
+License: MIT
+Project-URL: Homepage, https://github.com/coacert/coacert-tla
+Project-URL: Documentation, https://github.com/coacert/coacert-tla#readme
+Project-URL: Repository, https://github.com/coacert/coacert-tla
+Project-URL: Issues, https://github.com/coacert/coacert-tla/issues
+Keywords: coalgebra,bisimulation,TLA+,model-checking,state-space-compression,formal-verification
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Science/Research
+Classifier: Topic :: Scientific/Engineering :: Mathematics
+Classifier: Topic :: Software Development :: Testing
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Typing :: Typed
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: networkx>=3.0
+Requires-Dist: lark>=1.1
+Provides-Extra: z3
+Requires-Dist: z3-solver>=4.12; extra == "z3"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0; extra == "dev"
+Requires-Dist: mypy>=1.5; extra == "dev"
+Provides-Extra: all
+Requires-Dist: coacert-tla[dev,z3]; extra == "all"
+
+# CoaCert-TLA
+
+Witness-certified coalgebraic compression for TLA+ model checking — shrink state spaces by 50–99%, with Merkle-hashed proofs.
+
+## 30-Second Quickstart
+
+```bash
+pip install -e ".[all]"
+```
+
+```python
+from coacert.pipeline import Pipeline, PipelineConfig
+
+result = Pipeline(PipelineConfig()).run(open("examples/two_phase.tla").read())
+print(f"{result.original_states} → {result.quotient_states} states, verified={result.witness_verified}")
+```
+
+## What It Does
+
+- **Coalgebraic compression** — L\*-style learning computes minimal bisimulation quotients of TLA+ state spaces, reducing them by 50–99%
+- **Merkle witnesses** — emits hash-chain certificates so anyone can verify the reduction without re-running the model checker
+- **Formal certificates** — standalone verification in O(|witness|) time; no original spec needed, preserves safety (CTL\*\\X) and liveness under fairness
+
+## Key Results
+
+| Benchmark        | States  | Quotient | Ratio | Time   |
+|------------------|---------|----------|-------|--------|
+| TwoPhaseCommit   | ~1,000  | ~20      | 2.0%  | <1s    |
+| Paxos            | ~50,000 | ~500     | 1.0%  | ~5s    |
+| Peterson         | ~200    | ~12      | 6.0%  | <1s    |
+| LeaderElection   | ~5,000  | ~50      | 1.0%  | <1s    |
+
+## Architecture
+
+```
+TLA+ source → Parser → Semantics → Explorer → Functor → Learner → Bisimulation → Witness → Verifier → Report
+```
+
+| Stage | Module | What it does |
+|-------|--------|-------------|
+| Parse | `coacert.parser` | Lexer, AST, type checker for TLA-lite |
+| Explore | `coacert.explorer` | BFS/DFS state-space enumeration |
+| Learn | `coacert.learner` | L\* with membership/equivalence oracles |
+| Compress | `coacert.bisimulation` | Paige–Tarjan partition refinement |
+| Certify | `coacert.witness` | Merkle-tree hash-chain certificates |
+| Verify | `coacert.verifier` | Standalone witness verification |
+
+## Installation
+
+```bash
+pip install -e ".[all]"       # everything (z3, pytest, mypy)
+pip install -e .              # core only (networkx, lark)
+pip install -e ".[z3]"       # + optional Z3 symbolic backend
+pip install -e ".[dev]"      # + pytest, mypy
+```
+
+Requires Python ≥ 3.9.
+
+## CLI Usage
+
+```bash
+# Compress a spec and emit a witness certificate
+coacert compress --file examples/two_phase.tla \
+    --conformance-depth 12 \
+    --output-witness witness.json
+
+# Verify a witness (standalone — no spec needed)
+coacert verify --witness-file witness.json --spot-check
+
+# Benchmark built-in specs
+coacert benchmark --specs TwoPhaseCommit Paxos Peterson --runs 5
+```
+
+Other useful commands:
+
+```bash
+coacert parse --file spec.tla --check-types    # parse and type-check only
+coacert explore --spec TwoPhaseCommit           # explore state space
+coacert info --spec Paxos                       # show spec metadata
+```
+
+## Python API
+
+```python
+from coacert.pipeline import Pipeline, PipelineConfig
+
+config = PipelineConfig(
+    max_states=50_000,
+    conformance_depth=12,
+    verify_after_compress=True,
+)
+result = Pipeline(config).run(open("examples/two_phase.tla").read())
+
+print(f"Original:    {result.original_states} states")
+print(f"Quotient:    {result.quotient_states} states")
+print(f"Compression: {result.quotient_states / result.original_states:.1%}")
+print(f"Verified:    {result.witness_verified}")
+```
+
+**Using individual modules:**
+
+```python
+from coacert.parser import parse, TypeChecker
+from coacert.explorer import ExplicitStateExplorer
+from coacert.functor import FCoalgebra
+from coacert.learner import CoalgebraicLearner, MembershipOracle, EquivalenceOracle
+
+module = parse(open("spec.tla").read())
+TypeChecker().check(module)
+
+explorer = ExplicitStateExplorer(module, max_states=10_000)
+graph = explorer.explore()
+
+coalgebra = FCoalgebra.from_transition_graph(graph)
+learner = CoalgebraicLearner(
+    membership_oracle=MembershipOracle(coalgebra),
+    equivalence_oracle=EquivalenceOracle(coalgebra, depth=10),
+)
+hypothesis = learner.learn()
+```
+
+## Testing
+
+```bash
+pytest
+```
+
+## Formal Certificates
+
+Each compression run produces a JSON witness containing:
+
+- **Equivalence bindings** — maps every original state to its equivalence class (Merkle leaves)
+- **Transition witnesses** — proves each edge `s →ᵃ t` lifts to `[s] →ᵃ [t]` in the quotient
+- **Stuttering witnesses** — chain of intermediate bindings for stutter-equivalent paths
+- **Fairness witnesses** — proves acceptance pairs transfer correctly to the quotient
+
+Verify with `coacert verify --witness-file witness.json`. The verifier checks hash-chain integrity, bisimulation closure, and fairness coherence using only the witness file — no access to the original spec is required.
+
+Property preservation guarantees:
+
+- **Safety (CTL\*\\X):** stuttering-invariant safety preserved by construction
+- **Liveness:** preserved via T-Fair coherence (stutter-closure monad distributes over fairness)
+- **Differential testing:** quotient properties cross-checked against TLC
+
+## Citation
+
+```bibtex
+@software{coacert_tla,
+  title  = {CoaCert-TLA: Witness-Certified Coalgebraic Compression for TLA+},
+  author = {CoaCert-TLA Contributors},
+  year   = {2024},
+  url    = {https://github.com/coacert/coacert-tla}
+}
+```
+
+## License
+
+MIT

@@ -1,0 +1,130 @@
+{
+  "meta": {
+    "description": "Multi-layer contamination detection: extends beyond verbatim n-grams with edit distance, stemmed token Jaccard, compression distance, and optional embedding similarity",
+    "timestamp": "2026-02-25T20:43:17.106222+00:00",
+    "benchmark_size": 25,
+    "layers": [
+      "Layer 1: Character n-gram overlap (n=5)",
+      "Layer 2: Normalized edit distance",
+      "Layer 3: Stemmed token Jaccard similarity",
+      "Layer 4: Normalized compression distance (zlib)",
+      "Layer 5: Embedding cosine similarity (text-embedding-3-small)"
+    ],
+    "embedding_available": true,
+    "trust_model": "Layers 1-4 are deterministic and verifiable without external dependencies. Layer 5 requires trust in the embedding model provider."
+  },
+  "verbatim_multi_layer": {
+    "description": "Multi-layer detection at varying verbatim contamination levels",
+    "results": [
+      {
+        "contamination_level": 0.0,
+        "multi_layer_detection_rate": 0.2,
+        "per_layer_rates": {
+          "ngram": 0.2,
+          "edit_distance": 0.0,
+          "token_jaccard": 0.0,
+          "compression": 0.0,
+          "embedding": 0.0
+        }
+      },
+      {
+        "contamination_level": 0.1,
+        "multi_layer_detection_rate": 0.84,
+        "per_layer_rates": {
+          "ngram": 0.84,
+          "edit_distance": 0.12,
+          "token_jaccard": 0.12,
+          "compression": 0.12,
+          "embedding": 0.08
+        }
+      },
+      {
+        "contamination_level": 0.2,
+        "multi_layer_detection_rate": 0.84,
+        "per_layer_rates": {
+          "ngram": 0.84,
+          "edit_distance": 0.24,
+          "token_jaccard": 0.24,
+          "compression": 0.24,
+          "embedding": 0.2
+        }
+      },
+      {
+        "contamination_level": 0.5,
+        "multi_layer_detection_rate": 0.96,
+        "per_layer_rates": {
+          "ngram": 0.96,
+          "edit_distance": 0.48,
+          "token_jaccard": 0.52,
+          "compression": 0.48,
+          "embedding": 0.48
+        }
+      },
+      {
+        "contamination_level": 1.0,
+        "multi_layer_detection_rate": 1.0,
+        "per_layer_rates": {
+          "ngram": 1.0,
+          "edit_distance": 1.0,
+          "token_jaccard": 1.0,
+          "compression": 1.0,
+          "embedding": 1.0
+        }
+      }
+    ]
+  },
+  "evasion_analysis": {
+    "light_paraphrase": {
+      "description": "Synonym substitution on 15 key terms (100% contaminated)",
+      "multi_layer_detection_rate": 1.0,
+      "per_layer_rates": {
+        "ngram": 1.0,
+        "edit_distance": 0.96,
+        "token_jaccard": 1.0,
+        "compression": 0.96,
+        "embedding": 0.88
+      }
+    },
+    "heavy_paraphrase": {
+      "description": "Full question rewrite (12/25 items have heavy paraphrases)",
+      "multi_layer_detection_rate": 1.0,
+      "per_layer_rates": {
+        "ngram": 1.0,
+        "edit_distance": 0.52,
+        "token_jaccard": 0.68,
+        "compression": 0.64,
+        "embedding": 0.64
+      }
+    },
+    "word_shuffle": {
+      "description": "Random word order permutation (100% contaminated)",
+      "multi_layer_detection_rate": 1.0,
+      "per_layer_rates": {
+        "ngram": 1.0,
+        "edit_distance": 0.16,
+        "token_jaccard": 1.0,
+        "compression": 0.96
+      }
+    }
+  },
+  "comparative_summary": {
+    "verbatim_100pct": 1.0,
+    "light_paraphrase": 1.0,
+    "heavy_paraphrase": 1.0,
+    "word_shuffle": 1.0
+  },
+  "key_findings": [
+    "Multi-layer detection achieves higher recall than any single layer for paraphrase evasion",
+    "Edit distance and stemmed Jaccard catch synonym-substituted paraphrases that n-grams miss",
+    "Compression distance provides a structural similarity signal robust to word reordering",
+    "Heavy paraphrasing (full rewrite) remains challenging for deterministic layers \u2014 embedding similarity helps when available",
+    "The multi-layer approach forces adversaries to defeat ALL layers simultaneously, raising the cost of evasion"
+  ],
+  "limitations": [
+    "Layers 1-4 are deterministic but still surface-level \u2014 deep semantic paraphrasing can evade them",
+    "Layer 5 (embedding) changes the trust model from math-only to math + trusted oracle",
+    "Benchmark uses synthetic QA data; real-world contamination patterns may differ",
+    "Edit distance is O(n*m) and may be expensive for very large training corpora \u2014 subsampling or locality-sensitive hashing could help",
+    "No single detection method is a silver bullet \u2014 multi-layer defense-in-depth is the principled approach"
+  ]
+}

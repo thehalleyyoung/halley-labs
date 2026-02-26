@@ -1,0 +1,76 @@
+{
+  "project": "bioprover-ai-cegar-synbio-verify-repair",
+  "triage": "Category B - Not Deep/Rigorous/Complete Enough",
+  "date": "2025-07-18",
+  "key_improvements": [
+    {
+      "id": "soundness-foundation",
+      "title": "Sound Interval Arithmetic and Explicit Verification Levels",
+      "priority": 1,
+      "description": "Replace Python float-based interval arithmetic with mpmath arbitrary-precision intervals. Add explicit soundness levels (SOUND, BOUNDED, APPROXIMATE) to every verification result. Fix dReal delta-satisfiability semantics by propagating delta through CEGAR. Document Craig interpolation limitations and add LRA fallback linearization.",
+      "critiques_addressed": [
+        "Python interval arithmetic lacks rounding mode control (Joseph Chang)",
+        "dReal delta-satisfiability semantics create soundness gap (Lila Zhang)",
+        "Craig interpolation for NRA not generally supported (Lila Zhang)",
+        "GP surrogate errors not propagated through formal guarantees (Yuan Cheng)"
+      ],
+      "expected_changes": [
+        "Rewrite solver/interval.py to use mpmath.iv for rigorous interval arithmetic",
+        "Add SoundnessLevel enum propagated through all verification results",
+        "Fix dreal_interface.py to track and propagate delta parameter",
+        "Add linearization fallback for Craig interpolation in smt/interpolation.py",
+        "Add surrogate error propagation in ai/robustness_surrogate.py",
+        "Update proof_certificate.py to record soundness level and assumptions"
+      ]
+    },
+    {
+      "id": "scalability-compositional",
+      "title": "Scalability to 10+ Species via Compositional Verification",
+      "priority": 2,
+      "description": "Extend benchmarks to 10-20 species circuits. Formalize circular assume-guarantee with explicit well-formedness conditions. Add automatic decomposition heuristics. Demonstrate on real SBML models from BioModels database. Add wrapping-effect mitigation via QR preconditioning.",
+      "critiques_addressed": [
+        "Scalability beyond 5 species undemonstrated (Aniruddha Sinha)",
+        "Compositional verification soundness not formalized (Joseph Chang)",
+        "Interval over-approximation wrapping effects not addressed (Aniruddha Sinha)",
+        "Contract synthesis for nonlinear continuous presented as solved (consensus)"
+      ],
+      "expected_changes": [
+        "Add 10-20 species benchmark circuits to evaluation/benchmark_suite.py",
+        "Formalize circular AG proof rule in compositional/circular_ag.py",
+        "Add QR preconditioning to solver/ode_integrator.py for wrapping mitigation",
+        "Add automatic decomposition to compositional/decomposition.py",
+        "Add SBML benchmark loading from BioModels",
+        "Run scalability experiments and collect timing data"
+      ]
+    },
+    {
+      "id": "ml-evaluation-integration",
+      "title": "Rigorous ML Evaluation with Quality-Gated Integration",
+      "priority": 3,
+      "description": "Wire AI components into CEGAR loop with quality monitoring. Add cross-validation, held-out evaluation, and auto-disable when prediction quality degrades. Track precision/recall of predicate predictions. Run ablation experiments with real data.",
+      "critiques_addressed": [
+        "ML training methodology critically underspecified (Sara Roy)",
+        "No cross-validation or held-out evaluation (Sara Roy)",
+        "No mechanism to detect and compensate for poor predictions (Sara Roy)",
+        "AI-guided predicate selection and CEGAR convergence not formally analyzed (Aniruddha Sinha)"
+      ],
+      "expected_changes": [
+        "Add quality monitoring to ai/predicate_predictor.py with auto-disable",
+        "Add cross-validation and evaluation metrics to ai/training_pipeline.py",
+        "Wire predicate predictor into cegar/refinement.py with fallback",
+        "Add ablation experiment tracking to evaluation/",
+        "Generate training data from actual verification runs",
+        "Report precision/recall/F1 for predicate quality"
+      ]
+    }
+  ],
+  "execution_order": [
+    "Phase B0: Create this plan (done)",
+    "Phase B1a: Fix soundness foundation (interval arithmetic, dReal, soundness levels)",
+    "Phase B1b: Scale compositional verification to 10+ species",
+    "Phase B1c: Wire and evaluate ML components",
+    "Phase B1d: Run comprehensive experiments and collect results",
+    "Phase B2: Math rigor pass (verify theorems, fix proofs)",
+    "Finalization: Rewrite paper, README, API.md, grounding.json"
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "project": "causal-shielded-adaptive-trading",
+  "title": "Causal Identification and Posterior-Predictive Shields for Provably Safe Adaptive Trading",
+  "synthesis_date": "2026-02-26",
+  "average_score": 7.0,
+  "score_range": [6, 8],
+  "reviewers": [
+    {
+      "name": "Yuan Cheng",
+      "persona": "probabilistic_modeling_researcher",
+      "score": 8,
+      "key_strength": "PAC-Bayes Posterior Shield Soundness Theorem with Catoni-style bound elegantly bridges Bayesian beliefs and frequentist safety certificates.",
+      "key_weakness": "Coupled EM inference convergence to identifiable fixed points lacks formal guarantees against spurious fixed points in the nonparametric ANM setting.",
+      "review_file": "review_yuan_cheng.md"
+    },
+    {
+      "name": "Aniruddha Sinha",
+      "persona": "model_checking_ai_applicant",
+      "score": 7,
+      "key_strength": "O(K^2*|A|*H*poly(|S|)) verification complexity with convexity-based reduction to polytope vertex checking is a genuine and useful tractability result.",
+      "key_weakness": "Shield liveness guarantee assumes posterior credible set contains a feasible model in all reachable states, which may fail during market crises.",
+      "review_file": "review_aniruddha_sinha.md"
+    },
+    {
+      "name": "Lila Zhang",
+      "persona": "symbolic_reasoning_ai_expert",
+      "score": 6,
+      "key_strength": "The 25K LoC Lean 4 formalization commitment mechanizing PAC-Bayes bounds, shield liveness, and composition theorems would be a landmark in formal financial methods.",
+      "key_weakness": "The gap between Lean 4 proofs over idealized real arithmetic and the floating-point Python implementation is unaddressed, weakening the end-to-end guarantee chain.",
+      "review_file": "review_lila_zhang.md"
+    },
+    {
+      "name": "Sara Roy",
+      "persona": "machine_learning_formal_verification",
+      "score": 7,
+      "key_strength": "ML produces the model over which verification operates (rather than being verified itself), creating a mature and practical integration pattern.",
+      "key_weakness": "Evaluation on a single instrument (E-mini S&P 500) limits generalization claims across asset classes and regime structures.",
+      "review_file": "review_sara_roy.md"
+    },
+    {
+      "name": "Joseph S. Chang",
+      "persona": "automated_reasoning_and_logic_expert",
+      "score": 7,
+      "key_strength": "The Composition Theorem's honest presentation as a union bound with novel interface conditions demonstrates intellectual rigor and correct identification of the genuine contribution.",
+      "key_weakness": "Conditional independence between causal-identification failure and shield-verification failure is the load-bearing assumption but its formal justification is underspecified.",
+      "review_file": "review_joseph_s_chang.md"
+    }
+  ],
+  "consensus_strengths": [
+    "Regime-Indexed SCMs with ANM structural equations and HSIC-based CI tests provide a principled nonlinear causal framework that goes beyond linear-Gaussian ICP",
+    "The PAC-Bayes shield soundness theorem bridges Bayesian and frequentist reasoning with a concrete, tightening bound",
+    "The 25K LoC Lean 4 mechanization commitment makes the formal guarantees independently verifiable",
+    "Evaluation plan is unusually thorough with model-misspecification experiments, adversarial scenarios, and comprehensive ablations"
+  ],
+  "consensus_weaknesses": [
+    "Gap between Lean 4 proofs (real arithmetic) and Python implementation (floating-point) is not formally bridged",
+    "Coupled EM inference for regime-causal identification has no convergence guarantee against spurious fixed points",
+    "State abstraction quality (|S| approximately 1,000) may be insufficient for adversarial or crisis market conditions, and the 0.024 soundness gap is measured on limited scenarios",
+    "Single-instrument evaluation (ES futures) limits generalizability claims",
+    "Shield liveness theorem's key assumption (feasible model exists in posterior for all reachable states) may fail precisely when safety guarantees are most needed"
+  ],
+  "actionable_recommendations": [
+    "Bridge the Lean 4 to implementation gap with verified floating-point interval arithmetic or code extraction from Lean 4 to executable",
+    "Provide formal convergence analysis for the coupled EM inference showing fixed-point identifiability under stated assumptions, or add a diagnostic that detects convergence to spurious fixed points",
+    "Extend evaluation to at least 2-3 additional instruments across different asset classes to validate regime structure generality",
+    "Stress-test shield liveness under extreme posterior uncertainty conditions and document graceful degradation behavior",
+    "Analyze LASSO pre-selection's interaction with nonlinear ANM causal discovery to ensure causally relevant nonlinear features are not discarded"
+  ]
+}

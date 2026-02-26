@@ -1,0 +1,79 @@
+{
+  "project": "csl-model-checking-on-tensor-train-cme",
+  "category": "B",
+  "triage_reason": "Novel TT-based CSL model checking approach but insufficient depth: unresolved clamping gap, no independent certificate verification, fragile fixpoint convergence",
+  "improvements": [
+    {
+      "id": "clamping-gap-resolution",
+      "title": "Resolve the Clamping Soundness Gap",
+      "critique_source": ["Yuan Cheng", "Joseph S. Chang"],
+      "weakness_addressed": "SVD truncation produces negative probabilities; post-truncation clamping breaks contractivity; no tight bound on clamping error",
+      "approach": [
+        "Strengthen Proposition 1 with rigorous proof: ‖p_clamped − p_SVD‖₁ ≤ ε_trunc (not 2ε), since negative entries are a subset of the error",
+        "Implement proper non-negativity-preserving TT rounding via alternating projections (Uschmajew 2015) with convergence monitoring",
+        "Add NNTT rounding as default mode: SVD compress → clamp → re-compress cycle with certified error tracking at each iteration",
+        "Propagate clamping error through the full certification pipeline: ErrorCertificate now carries per-step clamping bounds",
+        "Add numerical experiments verifying the clamping bound on birth-death, toggle switch, and Schlögl models"
+      ],
+      "estimated_loc": 800,
+      "files_affected": [
+        "tn_check/error/certification.py",
+        "tn_check/error/propagation.py",
+        "tn_check/tensor/operations.py",
+        "tn_check/checker/model_checker.py"
+      ]
+    },
+    {
+      "id": "independent-certificate-verifier",
+      "title": "Build Independent Certificate Verification",
+      "critique_source": ["Joseph S. Chang", "Lila Zhang"],
+      "weakness_addressed": "Error certificates computed by same system that generates results; no separate checker for post-hoc auditing",
+      "approach": [
+        "Create tn_check/verifier/ module: standalone certificate checker",
+        "VerificationTrace dataclass: stores per-step TT states, truncation errors, FSP bounds, clamping events, bond dimensions",
+        "CertificateVerifier class: re-derives error bounds from the trace without re-running time evolution",
+        "Checks: (1) per-step truncation errors are consistent with bond dimensions, (2) clamping errors satisfy Proposition 1, (3) total error composition is sound (triangle inequality), (4) probability conservation holds within tolerance, (5) FSP bounds are consistent",
+        "VerificationReport: structured output with pass/fail per check, overall soundness verdict",
+        "JSON serialization of traces for external auditing"
+      ],
+      "estimated_loc": 600,
+      "files_affected": [
+        "tn_check/verifier/__init__.py",
+        "tn_check/verifier/trace.py",
+        "tn_check/verifier/checker.py",
+        "tn_check/integrator/base.py",
+        "tn_check/checker/model_checker.py"
+      ]
+    },
+    {
+      "id": "spectral-gap-convergence",
+      "title": "Spectral-Gap-Informed Fixpoint Convergence",
+      "critique_source": ["Aniruddha Sinha"],
+      "weakness_addressed": "Fixpoint iteration fragile for slowly-mixing CTMCs with metastability; no formal convergence criterion",
+      "approach": [
+        "Estimate spectral gap of projected rate matrix via power iteration on the MPS representation",
+        "Use gap estimate to predict required iteration count: K ≈ log(1/ε) / gap",
+        "If predicted K exceeds max_iter, auto-fallback to bounded-until before wasting iterations",
+        "Add convergence rate monitoring: track geometric convergence ratio between consecutive iterations",
+        "Report spectral gap estimate and predicted convergence in ConvergenceDiagnostics",
+        "For slowly-mixing CTMCs: implement adaptive time-bound selection for fallback (T = C/gap)"
+      ],
+      "estimated_loc": 400,
+      "files_affected": [
+        "tn_check/checker/model_checker.py",
+        "tn_check/checker/spectral.py",
+        "tn_check/checker/satisfaction.py"
+      ]
+    }
+  ],
+  "total_estimated_new_loc": 1800,
+  "total_estimated_modified_loc": 1200,
+  "priority_order": ["clamping-gap-resolution", "independent-certificate-verifier", "spectral-gap-convergence"],
+  "success_criteria": [
+    "All tests pass including new tests for each improvement",
+    "Certificate verifier independently validates error bounds on 3+ models",
+    "Clamping error bound is tight and verified numerically",
+    "Spectral gap estimation correctly predicts convergence/divergence",
+    "Existing functionality unbroken"
+  ]
+}

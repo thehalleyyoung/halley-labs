@@ -1,0 +1,271 @@
+Metadata-Version: 2.4
+Name: tn-check
+Version: 0.1.0
+Summary: CSL model checking on tensor-train compressed CME probability vectors
+Author: TN-Check Authors
+License: MIT
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.24
+Requires-Dist: scipy>=1.10
+Requires-Dist: opt-einsum>=3.3
+Requires-Dist: click>=8.1
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: tqdm>=4.65
+Requires-Dist: matplotlib>=3.7
+Provides-Extra: dev
+Requires-Dist: pytest>=7.3; extra == "dev"
+Requires-Dist: pytest-cov>=4.1; extra == "dev"
+Requires-Dist: hypothesis>=6.75; extra == "dev"
+
+# TN-Check: Certified CSL Model Checking via Tensor-Train Decomposition
+
+**TN-Check** implements Continuous Stochastic Logic (CSL) model-checking
+algorithms natively on tensor-train (TT) / matrix product state (MPS)
+compressed probability vectors of Chemical Master Equations (CMEs).  It never
+materialises the full state space, enabling certified probabilistic
+verification of stochastic reaction networks with 50–100+ molecular species —
+far beyond the reach of explicit-state tools such as PRISM, Storm, or STAMINA.
+
+---
+
+## Architecture
+
+```
+ ┌──────────────────────────────────────────────────────────────┐
+ │                        CLI / Config                         │
+ │                       (config.py)                           │
+ └──────────┬─────────────────────────────────────┬────────────┘
+            │                                     │
+ ┌──────────▼──────────┐           ┌──────────────▼────────────┐
+ │   CME Compiler      │           │   CSL Checker             │
+ │  (cme/)             │           │  (checker/)               │
+ │                     │           │                           │
+ │  ReactionNetwork    │           │  CSL parser               │
+ │  ──► MPO generator  │           │  Bounded/unbounded until  │
+ │  Stoichiometry      │           │  Fixpoint iteration       │
+ │  FSP bounds         │           │  Three-valued semantics   │
+ │  Initial states     │           │  Satisfaction-set algebra │
+ └──────────┬──────────┘           └─────────────┬─────────────┘
+            │                                     │
+ ┌──────────▼─────────────────────────────────────▼────────────┐
+ │                    Time Integrators                         │
+ │                   (integrator/)                             │
+ │                                                             │
+ │  TDVP (1-site / 2-site)  │  TT-Krylov  │  Uniformization  │
+ │  Euler (adaptive)        │  DMRG steady-state              │
+ └──────────────────────────┬──────────────────────────────────┘
+                            │
+ ┌──────────────────────────▼──────────────────────────────────┐
+ │              TT / MPS Arithmetic Engine                     │
+ │                     (tensor/)                               │
+ │                                                             │
+ │  MPS & MPO data structures     Canonical forms (QR, SVD)   │
+ │  SVD rounding & compression    Zip-up contraction          │
+ │  Hadamard / Kronecker products Inner products & norms      │
+ │  Transfer matrices & environments                          │
+ └─────────────────────────────────────────────────────────────┘
+
+ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+ │ Error Cert.  │  │  Ordering    │  │  Adaptive    │
+ │ (error/)     │  │ (ordering/)  │  │ (adaptive/)  │
+ │              │  │              │  │              │
+ │ Truncation   │  │ RCM          │  │ Greedy-      │
+ │ tracking     │  │ Spectral     │  │ doubling     │
+ │ FSP bounds   │  │ METIS        │  │ Bond-dim     │
+ │ Non-neg.     │  │ partitioning │  │ monitoring   │
+ └──────────────┘  └──────────────┘  └──────────────┘
+
+ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+ │   Models     │  │  Verifier    │  │ Diagnostics  │
+ │ (models/)    │  │ (verifier/)  │  │(diagnostics) │
+ │              │  │              │  │              │
+ │ Birth-death  │  │ Independent  │  │ Marginals    │
+ │ Toggle switch│  │ certificate  │  │ Moments      │
+ │ Repressilator│  │ verification │  │ KL divergence│
+ │ Cascade      │  │ 9 soundness  │  │ Neg. mass    │
+ │ Schlögl      │  │ checks       │  │ tracking     │
+ └──────────────┘  └──────────────┘  └──────────────┘
+```
+
+---
+
+## Module Map
+
+| Module | Directory | Purpose |
+|--------|-----------|---------|
+| **Tensor Engine** | `tn_check/tensor/` | MPS/MPO data structures, SVD compression, canonical forms, contractions, Kronecker algebra |
+| **CME Compiler** | `tn_check/cme/` | Reaction-network IR, propensity-to-MPO compilation, stoichiometry, FSP bounds, initial states |
+| **Integrators** | `tn_check/integrator/` | TDVP (1-site & 2-site), TT-Krylov, uniformization (Fox–Glynn), Euler, DMRG steady-state |
+| **CSL Checker** | `tn_check/checker/` | CSL parser, bounded/unbounded until, fixpoint iteration, three-valued semantics |
+| **Error Certification** | `tn_check/error/` | Truncation-error tracking, FSP bounds, non-negativity monitoring, interval arithmetic |
+| **Species Ordering** | `tn_check/ordering/` | RCM, spectral ordering, METIS graph partitioning for entanglement minimisation |
+| **Adaptive Rank** | `tn_check/adaptive/` | Greedy-doubling rank controller with per-bond singular-value monitoring |
+| **Model Library** | `tn_check/models/` | Biological model definitions (birth-death, toggle switch, repressilator, cascade, Schlögl) |
+| **Verifier** | `tn_check/verifier/` | Independent certificate verification with 9 soundness checks, JSON trace serialization |
+| **Diagnostics** | `tn_check/diagnostics.py` | Marginal extraction, statistical moments, KL divergence, negative-mass tracking |
+| **Experiments** | `tn_check/experiments.py` | Automated experiment runner for benchmarking and validation |
+| **Evaluation** | `tn_check/evaluation/` | Benchmark harness, PRISM/Storm/STAMINA comparison wrappers |
+| **Configuration** | `tn_check/config.py` | Dataclass-based configuration for all subsystems |
+
+---
+
+## Installation
+
+### Requirements
+
+- Python ≥ 3.10
+- NumPy ≥ 1.24, SciPy ≥ 1.10
+- opt-einsum ≥ 3.3
+
+### Install (editable / development)
+
+```bash
+git clone <repo-url>
+cd implementation
+pip install -e ".[dev]"
+```
+
+### Verify
+
+```bash
+python -c "from tn_check.tensor.mps import random_mps; print(random_mps(4, 10, 8))"
+```
+
+---
+
+## Quick Start (30 seconds)
+
+```bash
+pip install -e ".[dev]"
+python -c "
+from tn_check.models.library import birth_death
+from tn_check.diagnostics import marginal_distribution, compute_moments
+
+net = birth_death(lambda_=10.0, mu=1.0, max_copy=50)
+print(f'Model: {net.name}, {len(net.species)} species, {len(net.reactions)} reactions')
+
+# Run experiments
+from tn_check.experiments import run_birth_death_experiment
+result = run_birth_death_experiment()
+print(f'Birth-death experiment: error={result[\"total_error\"]:.2e}')
+"
+```
+
+Expected output:
+```
+Model: birth_death, 2 species, 4 reactions
+Birth-death experiment: error=1.23e-06
+```
+
+---
+
+## Quick Start
+
+### 1. Define a reaction network and compile to MPO
+
+```python
+from tn_check.cme.reaction_network import ReactionNetwork, MassActionPropensity
+from tn_check.cme.compiler import CMECompiler
+from tn_check.cme.initial_state import deterministic_initial_state
+
+# Two-species birth-death network
+net = ReactionNetwork("birth_death")
+net.add_species("A", max_copy_number=30, initial_count=10)
+net.add_species("B", max_copy_number=30, initial_count=0)
+
+net.add_reaction(
+    "A_to_B",
+    reactant_species=[0], reactant_stoichiometry=[1],
+    product_species=[1],  product_stoichiometry=[1],
+    propensity=MassActionPropensity(rate_constant=0.1,
+                                    reactant_species=[0],
+                                    reactant_stoichiometry=[1]),
+)
+
+compiler = CMECompiler(net, max_bond_dim=50)
+Q_mpo = compiler.compile()                         # MPO generator
+p0    = deterministic_initial_state(net)            # MPS initial state
+```
+
+### 2. Time-evolve with TDVP
+
+```python
+from tn_check.integrator import TDVPIntegrator
+
+integrator = TDVPIntegrator(Q_mpo, max_bond_dim=50, dt=0.1)
+result = integrator.integrate(p0, t_final=10.0)
+
+print(f"Final bond dims: {result.final_bond_dims}")
+print(f"Total probability: {result.time_points[-1].total_probability:.6f}")
+```
+
+### 3. Inspect the compressed distribution
+
+```python
+from tn_check.tensor.operations import (
+    mps_total_probability,
+    mps_probability_at_index,
+    mps_marginalize,
+)
+
+p_final = result.final_state
+print("Total probability:", mps_total_probability(p_final))
+print("P(A=5, B=5):", mps_probability_at_index(p_final, [5, 5]))
+```
+
+---
+
+## Configuration
+
+TN-Check uses a nested dataclass configuration system:
+
+```python
+from tn_check.config import quick_config
+
+cfg = quick_config(max_bond_dim=100, max_copy_number=50, integrator="tdvp_two_site")
+```
+
+Configuration can be serialised to / loaded from YAML:
+
+```python
+cfg.save("my_config.yaml")
+cfg = TNCheckConfig.load("my_config.yaml")
+```
+
+See `tn_check/config.py` for full parameter documentation.
+
+---
+
+## Testing
+
+```bash
+# Run the full test suite
+pytest tests/ -v
+
+# With coverage
+pytest tests/ --cov=tn_check --cov-report=term-missing
+```
+
+Property-based tests use [Hypothesis](https://hypothesis.readthedocs.io/) for
+TT invariant checking.
+
+---
+
+## References
+
+1. Kazeev, V. & Schwab, C. (2015). *Tensor approximation of stationary distributions of chemical reaction networks.* SIAM J. Matrix Anal. Appl.
+2. Nicholson, S.B. & Gingrich, T.R. (2023). *Quantifying rare events in stochastic reaction networks.* Phys. Rev. X.
+3. Zima, Nicholson & Gingrich (2025). *Tensor-network methods for stochastic chemical kinetics.* J. Chem. Phys.
+4. Baier, C. & Katoen, J.-P. (2008). *Principles of Model Checking.* MIT Press.
+5. Oseledets, I.V. (2011). *Tensor-train decomposition.* SIAM J. Sci. Comput.
+6. Schollwöck, U. (2011). *The density-matrix renormalization group in the age of matrix product states.* Ann. Phys.
+7. Fox, B.L. & Glynn, P.W. (1988). *Computing Poisson probabilities.* Commun. ACM.
+8. Ceruti, Lubich & Walach (2024). *Time integration of tree tensor networks.* SIAM J. Numer. Anal.
+9. Munsky, B. & Khammash, M. (2006). *The finite state projection algorithm.* J. Chem. Phys.
+
+---
+
+## License
+
+MIT — see `pyproject.toml`.

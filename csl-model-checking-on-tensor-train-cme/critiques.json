@@ -1,0 +1,72 @@
+{
+  "project": "csl-model-checking-on-tensor-train-cme",
+  "title": "Certified CSL Model Checking via Tensor-Train Decomposition of Chemical Master Equation States",
+  "synthesis_date": "2026-02-26",
+  "average_score": 7.6,
+  "score_range": [
+    6,
+    9
+  ],
+  "reviewers": [
+    {
+      "name": "Yuan Cheng",
+      "persona": "probabilistic_modeling_researcher",
+      "score": 9,
+      "key_strength": "Error-contraction analysis exploiting the Metzler structure of CME generators provides mathematically rigorous probabilistic soundness guarantees.",
+      "key_weakness": "The clamping problem\u2014TT-SVD producing negative probability entries\u2014is a genuine soundness gap that requires either tight bounds or alternative non-negativity-preserving rounding.",
+      "review_file": "review_yuan_cheng.md"
+    },
+    {
+      "name": "Aniruddha Sinha",
+      "persona": "model_checking_ai_applicant",
+      "score": 8,
+      "key_strength": "CSL operators executing natively on MPS-compressed representations are genuinely novel algorithms with no precedent in tensor-network or verification literature.",
+      "key_weakness": "Unbounded-until fixpoint iteration may fail for slowly-mixing CTMCs with metastability, weakening the temporal logic coverage claim.",
+      "review_file": "review_aniruddha_sinha.md"
+    },
+    {
+      "name": "Lila Zhang",
+      "persona": "symbolic_reasoning_ai_expert",
+      "score": 6,
+      "key_strength": "Rank-1 TT mask encoding of axis-aligned atomic propositions enables efficient satisfaction-set algebra without state-space materialization.",
+      "key_weakness": "Non-axis-aligned predicates have exponential TT rank in the number of referenced species, limiting expressiveness for multi-species biological properties.",
+      "review_file": "review_lila_zhang.md"
+    },
+    {
+      "name": "Sara Roy",
+      "persona": "machine_learning_formal_verification",
+      "score": 7,
+      "key_strength": "Three-valued semantics with explicit uncertainty quantification is a model design pattern for ML verification tools handling approximate computation.",
+      "key_weakness": "The deferred MLP rank controller represents a missed opportunity to demonstrate ML-augmented formal verification within the project scope.",
+      "review_file": "review_sara_roy.md"
+    },
+    {
+      "name": "Joseph S. Chang",
+      "persona": "automated_reasoning_and_logic_expert",
+      "score": 8,
+      "key_strength": "The complexity separation theorem (Theorem 3) provides the first rigorous proof-theoretic justification for TT-based model checking over explicit enumeration.",
+      "key_weakness": "The trusted computing base (~60K LoC) is large by formal verification standards; no component is formally verified in a proof assistant.",
+      "review_file": "review_joseph_s_chang.md"
+    }
+  ],
+  "consensus_strengths": [
+    "First system implementing CSL model-checking operators natively on tensor-train compressed state representations, a genuinely novel algorithmic contribution.",
+    "Rigorous pre-build validation gate with falsifiable go/no-go criteria on 10+ adversarial BioModels prevents wasted engineering effort.",
+    "Error-contraction analysis exploiting the Metzler structure of CME generators provides sound certified probability bounds for single-level CSL.",
+    "Complexity separation theorem (Theorem 3) provides theoretical justification for the TT approach on modular CTMCs."
+  ],
+  "consensus_weaknesses": [
+    "TT-SVD clamping problem introduces a soundness gap: negative probability entries from truncation require either tight clamping bounds or non-negativity-preserving rounding.",
+    "Non-axis-aligned predicates have exponentially growing TT rank, limiting CSL expressiveness for multi-species biological constraints.",
+    "Unbounded-until fixpoint iteration may diverge for slowly-mixing CTMCs, forcing fallback to bounded-until approximation.",
+    "The ~60K LoC trusted computing base has no formally verified components, despite the system claiming certified verification.",
+    "Adaptive rank controller is a simple greedy heuristic; learned rank allocation policies are deferred despite strong potential for improvement."
+  ],
+  "actionable_recommendations": [
+    "Prioritize non-negativity-preserving TT rounding (Uschmajew 2015) as the primary strategy rather than post-hoc clamping with error bounds.",
+    "Implement SAT-based exact species ordering for small networks (N \u2264 20) to benchmark heuristic ordering quality and quantify the optimality gap.",
+    "Formalize Theorem 1 (Error Contraction) in Lean 4 to reduce the TCB for the soundness-critical error certification path.",
+    "Quantify the TT rank growth for common non-axis-aligned biological predicates and provide guidance on when mask rank becomes prohibitive.",
+    "Include a pilot RL experiment for bond-dimension allocation on 2\u20133 BioModels to validate whether learned rank control merits full implementation."
+  ]
+}

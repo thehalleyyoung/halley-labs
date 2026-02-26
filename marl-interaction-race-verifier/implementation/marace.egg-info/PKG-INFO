@@ -1,0 +1,439 @@
+Metadata-Version: 2.4
+Name: marace
+Version: 0.1.0
+Summary: Multi-Agent Race Condition Verifier for MARL policies
+Author: MARACE Team
+License: MIT
+Project-URL: Repository, https://github.com/marace-project/marace
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Software Development :: Testing
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.24
+Requires-Dist: scipy>=1.10
+Requires-Dist: networkx>=3.0
+Requires-Dist: pyyaml>=6.0
+Provides-Extra: onnx
+Requires-Dist: onnxruntime>=1.15; extra == "onnx"
+Provides-Extra: viz
+Requires-Dist: matplotlib>=3.7; extra == "viz"
+Provides-Extra: full
+Requires-Dist: onnxruntime>=1.15; extra == "full"
+Requires-Dist: matplotlib>=3.7; extra == "full"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0; extra == "dev"
+Requires-Dist: mypy>=1.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+
+# MARACE: Interaction Race Detection via Happens-Before–Aware Abstract Interpretation for Multi-Agent RL Safety Verification
+
+**MARACE** (Multi-Agent Race Analysis and Certification Engine) is a
+verification system that detects timing-dependent safety violations in
+asynchronous multi-agent reinforcement-learning systems.  When independently
+deployed policies share a physical environment but observe and act with
+heterogeneous latencies, the relative ordering of their actions is
+unconstrained—and certain interleavings can trigger safety violations
+invisible to any single-agent analysis.  MARACE formalises these failures as
+**interaction races** and provides sound detection, probability estimation,
+and absence certification.
+
+## Architecture
+
+```
+ ┌──────────────────────────────────────────────────────────────────────────────┐
+ │                           MARACEPipeline                                    │
+ │                  (pipeline.py — stage orchestrator)                          │
+ └──┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬────┘
+    │      │      │      │      │      │      │      │      │      │      │
+ ┌──┴──┐┌──┴──┐┌──┴──┐┌──┴──┐┌──┴──┐┌──┴──┐┌──┴──┐┌──┴──┐┌──┴──┐┌──┴──┐┌──┴──┐
+ │Load ││Conf ││Parse││Rec. ││Build││Decom││Abstr││Adver││Impor││Cata-││Repor│
+ │Poli-││ Env ││Spec ││Trace││ HB  ││pose ││ act ││sari-││tance││ log ││ting │
+ │cies ││     ││     ││     ││Graph││     ││Intp.││al   ││Samp.││     ││     │
+ └──┬──┘└──┬──┘└──┬──┘└──┬──┘└──┬──┘└──┬──┘└──┬──┘└──┬──┘└──┬──┘└──┬──┘└──┬──┘
+    │      │      │      │      │      │      │      │      │      │      │
+ ┌──┴──────┴──┐   │   ┌──┴──────┴──┐┌──┴──┐┌──┴──────┴──────┴──┐┌──┴──────┴──┐
+ │  policy/   │   │   │   trace/   ││ hb/ ││    abstract/       ││ reporting/ │
+ │ ONNX load  │   │   │ events,    ││vec- ││ zonotope domain    ││ race cata- │
+ │ Lipschitz  │   │   │ replay,    ││clks,││ HB constraints     ││ log, certs │
+ │ abstract   │   │   │ serialize  ││caus-││ transfer funcs     ││ replay viz │
+ │ transform  │   │   │            ││ al  ││ fixpoint engine    ││            │
+ └────────────┘   │   └────────────┘└─────┘└────────────────────┘└────────────┘
+               ┌──┴──┐
+               │spec/│   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+               │pars-│   │decomposition/│  │   search/    │  │  sampling/   │
+               │er,  │   │ inter. graph │  │ MCTS sched.  │  │ importance   │
+               │temp-│   │ contracts    │  │ UCB1-Safety   │  │ cross-entr.  │
+               │oral │   │ assume-guar. │  │ HB pruning   │  │ confidence   │
+               └─────┘   │ partitioning │  │ schedule opt │  │ bounds       │
+                          └──────────────┘  └──────────────┘  └──────────────┘
+
+               ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+               │    race/     │  │    env/       │  │ evaluation/  │
+               │ definition   │  │ MultiAgentEnv │  │ benchmarks   │
+               │ epsilon-race │  │ HighwayEnv    │  │ metrics      │
+               │ catalog      │  │ WarehouseEnv  │  │ baselines    │
+               │ classifier   │  │ timing models │  │ experiments  │
+               └──────────────┘  └──────────────┘  └──────────────┘
+```
+
+### Pipeline stages
+
+| # | Stage                  | Description                                                    |
+|---|------------------------|----------------------------------------------------------------|
+| 1 | `LOAD_POLICIES`        | Load ONNX / Python-callable agent policies                     |
+| 2 | `CONFIGURE_ENV`        | Instantiate `MultiAgentEnv` with async stepping semantics      |
+| 3 | `PARSE_SPEC`           | Parse safety specification (temporal logic over joint states)   |
+| 4 | `RECORD_TRACES`        | Roll out policies, emit HB-stamped `ExecutionTrace`s           |
+| 5 | `BUILD_HB_GRAPH`       | Construct happens-before DAG via causal inference               |
+| 6 | `DECOMPOSE_GROUPS`     | Partition into interaction groups; generate contracts           |
+| 7 | `ABSTRACT_INTERPRET`   | Zonotope fixpoint per group with HB-constraint pruning         |
+| 8 | `ADVERSARIAL_SEARCH`   | MCTS over schedules to find worst-case interleavings           |
+| 9 | `IMPORTANCE_SAMPLING`  | Estimate P(race) with confidence intervals via SIS/CE          |
+|10 | `GENERATE_CATALOG`     | Compile detected races into a structured catalog               |
+|11 | `GENERATE_REPORTS`     | Emit text / JSON / HTML / LaTeX reports                        |
+|12 | `GENERATE_CERTIFICATES`| Produce formal proof certificates for race absence             |
+
+## Module Map
+
+```
+marace/
+├── __init__.py                # Package root (lazy submodule loading)
+├── pipeline.py                # Pipeline orchestrator (MARACEPipeline)
+├── cli.py                     # CLI entry point (marace verify / analyze / …)
+│
+├── trace/                     # Trace infrastructure
+│   ├── events.py              #   Event, ActionEvent, VectorClock helpers
+│   ├── trace.py               #   ExecutionTrace, MultiAgentTrace
+│   ├── construction.py        #   TraceConstructor, AsyncTraceBuilder
+│   ├── replay.py              #   TraceReplayer, SchedulePermutation
+│   └── serialization.py       #   JSON / binary I/O, streaming
+│
+├── hb/                        # Happens-before engine
+│   ├── vector_clock.py        #   VectorClock, ClockComparison
+│   ├── hb_graph.py            #   HBGraph, transitive closure, HBRelation
+│   ├── causal_inference.py    #   CausalInferenceEngine (obs / phys / comm)
+│   ├── interaction_groups.py  #   InteractionGroup, GroupMerger, GroupEvolution
+│   └── visualization.py       #   SpaceTimeDiagram, HBVisualizer
+│
+├── abstract/                  # HB-aware abstract interpretation
+│   ├── zonotope.py            #   Zonotope domain (DeepZono-style)
+│   ├── domains.py             #   IntervalDomain, HybridDomain, ProductDomain
+│   ├── hb_constraints.py      #   HBConstraint, TimingConstraint, ConstraintSet
+│   ├── transfer.py            #   ReLU / Tanh / Linear / HBPruning transfers
+│   └── fixpoint.py            #   FixpointEngine, WideningStrategy, convergence
+│
+├── decomposition/             # Compositional decomposition
+│   ├── interaction_graph.py   #   InteractionGraph, GraphConstructor
+│   ├── contracts.py           #   Contract, ContractGenerator, ContractChecker
+│   ├── assume_guarantee.py    #   AssumeGuaranteeVerifier, SoundnessProof
+│   └── partitioning.py        #   SpectralPartitioner, MinCutPartitioner
+│
+├── sampling/                  # Sequential importance sampling
+│   ├── schedule_space.py      #   Schedule, ScheduleSpace, ScheduleGenerator
+│   ├── importance_sampling.py #   ImportanceSampler, RaceProbabilityEstimator
+│   ├── cross_entropy.py       #   CrossEntropyOptimizer, ParametricProposal
+│   └── statistics.py          #   ConfidenceBound, BayesianEstimator
+│
+├── search/                    # Adversarial schedule search
+│   ├── mcts.py                #   MCTS, MCTSNode, SearchResult
+│   ├── ucb.py                 #   UCB1Safety, MultiObjectiveUCB
+│   ├── pruning.py             #   HBConsistencyPruner, SymmetryPruner
+│   ├── replay.py              #   ReplayGenerator, CounterfactualReplay
+│   └── schedule_optimizer.py  #   GeneticScheduleSearch, TimingOptimizer
+│
+├── policy/                    # Policy ingestion
+│   ├── onnx_loader.py         #   ONNXPolicy, ModelLoader, PolicyEvaluator
+│   ├── lipschitz.py           #   LipschitzExtractor, SpectralNormComputation
+│   ├── abstract_policy.py     #   DeepZTransformer, AbstractPolicyEvaluator
+│   └── policy_utils.py        #   LinearPolicy, RandomPolicy, PolicyCache
+│
+├── env/                       # Environment adapters
+│   ├── base.py                #   MultiAgentEnv, AsyncSteppingSemantics
+│   ├── highway.py             #   HighwayEnv, ScenarioType (intersection, …)
+│   ├── warehouse.py           #   WarehouseEnv, corridor deadlock scenarios
+│   └── timing.py              #   TimingModel, StochasticLatencyModel, HardwareProfile
+│
+├── spec/                      # Specification language
+│   ├── predicates.py          #   Safety predicate library
+│   ├── temporal.py            #   Temporal logic operators (always, eventually)
+│   ├── parser.py              #   Spec file parser (YAML / DSL)
+│   └── safety_library.py      #   Built-in specs: no-collision, bounded-delay, …
+│
+├── race/                      # Race detection core
+│   ├── definition.py          #   InteractionRace, RaceWitness
+│   ├── epsilon_race.py        #   EpsilonRace, iterative ε-calibration
+│   ├── catalog.py             #   RaceCatalog, CatalogBuilder
+│   └── classifier.py          #   SeverityScorer, RootCauseAnalyzer
+│
+├── reporting/                 # Reporting
+│   ├── race_report.py         #   Text / JSON / HTML race reports
+│   ├── replay_report.py       #   Replay visualization
+│   ├── certificates.py        #   Formal proof certificates
+│   └── visualization.py       #   Matplotlib-based plotting
+│
+└── evaluation/                # Evaluation harness
+    ├── benchmarks.py          #   Benchmark suite runner
+    ├── metrics.py             #   Precision, recall, timing metrics
+    ├── baselines.py           #   Baseline comparisons (CROWN, PRISM, MC)
+    └── experiment.py          #   Experiment orchestration
+```
+
+## Installation
+
+```bash
+# From the repository root (requires Python >= 3.10)
+pip install -e ".[full]"     # core + ONNX runtime + matplotlib
+
+# Minimal (NumPy, SciPy, NetworkX, PyYAML only)
+pip install -e .
+
+# Development (adds pytest, mypy, ruff)
+pip install -e ".[dev]"
+```
+
+**Core dependencies:** NumPy ≥ 1.24, SciPy ≥ 1.10, NetworkX ≥ 3.0, PyYAML ≥ 6.0.
+
+## Quick Start
+
+### Programmatic usage
+
+```python
+import numpy as np
+from marace.env.highway import HighwayEnv, ScenarioType
+from marace.trace.construction import TraceConstructor
+from marace.hb.hb_graph import HBGraph
+from marace.abstract.zonotope import Zonotope
+from marace.abstract.fixpoint import FixpointEngine
+
+# 1. Record an execution trace
+env = HighwayEnv(num_agents=2, scenario_type=ScenarioType.OVERTAKING)
+obs = env.reset()
+tc = TraceConstructor(env.get_agent_ids())
+
+for _ in range(30):
+    actions = {aid: np.array([1.0, 0.0]) for aid in env.get_agent_ids()}
+    next_obs, rewards, done, info = env.step_sync(actions)
+    tc.record_step(actions, next_obs, rewards,
+                   {aid: done for aid in env.get_agent_ids()})
+    obs = next_obs
+    if done:
+        break
+
+trace = tc.build(trace_id="demo")
+
+# 2. Build happens-before graph
+hb = HBGraph()
+for event in trace:
+    hb.add_event(event.event_id, agent_id=event.agent_id)
+for event in trace:
+    for pred in event.causal_predecessors:
+        hb.add_hb_edge(pred, event.event_id)
+
+# 3. Run zonotope fixpoint analysis
+z0 = Zonotope.from_box(np.full(10, -2.0), np.full(10, 2.0))
+engine = FixpointEngine(
+    transfer_fn=lambda z: z.affine_transform(0.95 * np.eye(10)),
+    max_iterations=20,
+)
+result = engine.compute(z0)
+print(f"Converged: {result.converged}  ({result.iterations} iterations)")
+```
+
+### Full pipeline
+
+```python
+from marace.pipeline import PipelineConfig, MARACEPipeline
+
+config = PipelineConfig(
+    env_config={"type": "highway", "num_agents": 4, "scenario": "intersection"},
+    policy_paths=["agent_0.onnx", "agent_1.onnx",
+                  "agent_2.onnx", "agent_3.onnx"],
+    spec_path="specs/no_collision.yaml",
+    num_trace_samples=100,
+    adversarial_budget=500,
+    importance_samples=5000,
+)
+pipeline = MARACEPipeline(config)
+state = pipeline.run()
+print(pipeline.summary())
+```
+
+### CLI
+
+```bash
+# Full verification
+marace verify --config config.yaml --output results/
+
+# Analyse pre-recorded traces
+marace analyze-trace --trace traces/*.json --output analysis.json
+
+# Run benchmark suite
+marace benchmark --suite highway_intersection --output bench/
+
+# Inspect a policy
+marace inspect-policy --policy model.onnx
+
+# Replay an adversarial schedule
+marace replay --trace trace.json --schedule schedule.json
+
+# Validate a specification file
+marace check-spec --spec safety.yaml
+```
+
+### Configuration (YAML)
+
+```yaml
+env_config:
+  type: highway
+  num_agents: 4
+  scenario: intersection
+policy_paths:
+  - policies/agent_0.onnx
+  - policies/agent_1.onnx
+  - policies/agent_2.onnx
+  - policies/agent_3.onnx
+spec_path: specs/no_collision.yaml
+output_dir: output/
+num_trace_samples: 500
+abstraction_domain: zonotope
+adversarial_budget: 1000
+importance_samples: 10000
+report_formats: [text, json]
+generate_certificates: true
+```
+
+## Examples
+
+| Example                               | Description                                      |
+|---------------------------------------|--------------------------------------------------|
+| `examples/quickstart.py`             | Minimal 2-agent race detection end-to-end        |
+| `examples/highway_race_detection.py` | 4-vehicle intersection with full pipeline         |
+| `examples/warehouse_deadlock.py`     | 6-robot warehouse corridor deadlock               |
+| `examples/zonotope_demo.py`          | Zonotope operations, widening, fixpoint           |
+
+```bash
+python -m examples.quickstart
+python -m examples.highway_race_detection
+```
+
+## Testing
+
+```bash
+# Full test suite
+pytest
+
+# With coverage
+pytest --cov=marace --cov-report=term-missing
+
+# Specific modules
+pytest tests/test_zonotope.py tests/test_hb_graph.py
+pytest tests/test_vector_clock.py
+pytest tests/test_integration.py
+
+# Type checking
+mypy marace/
+
+# Linting
+ruff check marace/
+```
+
+The test suite covers:
+
+| Test file                | Module under test            |
+|--------------------------|------------------------------|
+| `test_zonotope.py`       | `abstract/zonotope.py`       |
+| `test_hb_graph.py`       | `hb/hb_graph.py`             |
+| `test_vector_clock.py`   | `hb/vector_clock.py`         |
+| `test_hb_constraints.py` | `abstract/hb_constraints.py` |
+| `test_transfer.py`       | `abstract/transfer.py`       |
+| `test_fixpoint.py`       | `abstract/fixpoint.py`       |
+| `test_events.py`         | `trace/events.py`            |
+| `test_trace.py`          | `trace/trace.py`             |
+| `test_decomposition.py`  | `decomposition/*`            |
+| `test_sampling.py`       | `sampling/*`                 |
+| `test_mcts.py`           | `search/mcts.py`             |
+| `test_policy.py`         | `policy/*`                   |
+| `test_race.py`           | `race/*`                     |
+| `test_spec.py`           | `spec/*`                     |
+| `test_environments.py`   | `env/*`                      |
+| `test_pipeline.py`       | `pipeline.py`                |
+| `test_integration.py`    | End-to-end integration       |
+
+## Key Algorithms
+
+### Zonotope abstract domain
+
+A zonotope **Z = {c + G·ε | ε ∈ [-1,1]^p}** is defined by a centre vector
+c ∈ ℝⁿ and generator matrix G ∈ ℝⁿˣᵖ.  Affine transforms are exact;
+ReLU/Tanh activations are soundly over-approximated via DeepZ-style
+λ-relaxation.  Generator count is bounded by Girard's PCA-based reduction.
+
+### HB-aware transfer functions
+
+After each abstract transfer step the zonotope is intersected with
+halfspaces **aᵀx ≤ b** encoding happens-before ordering and timing
+constraints derived from the causal graph.  This prunes the abstract
+state to only HB-consistent joint states.
+
+### MCTS adversarial schedule search
+
+UCB1 with a safety-margin bias explores the schedule space.  Only
+HB-consistent interleavings are expanded (via `HBConsistencyPruner`
+and `SymmetryPruner`).  Abstract safety margins guide the search
+toward low-margin (risky) regions.
+
+### Compositional decomposition
+
+Agents are partitioned into interaction groups via spectral or min-cut
+methods.  Each group is verified independently under assume-guarantee
+contracts on shared state variables.  The composition is sound:
+any global interaction race projects onto at least one group.
+
+### Importance sampling
+
+Race probability is estimated via sequential importance sampling with
+cross-entropy proposal adaptation.  Confidence intervals are computed
+using Hoeffding / Bernstein bounds and Bayesian posterior estimation.
+
+## References
+
+- Lamport, L. *Time, Clocks, and the Ordering of Events in a Distributed
+  System.* Communications of the ACM, 1978.
+- Ghorbal, K., Goubault, E., & Putot, S. *The Zonotope Abstract Domain.*
+  SAS, 2009.
+- Singh, G. et al. *An Abstract Domain for Certifying Neural Networks.*
+  POPL, 2019. (DeepZ / DeepPoly)
+- Girard, A. *Reachability of Uncertain Linear Systems Using Zonotopes.*
+  HSCC, 2005.
+- Kocsis, L. & Szepesvári, C. *Bandit Based Monte-Carlo Planning.* ECML, 2006.
+- Kwiatkowska, M. et al. *PRISM-games: Verification and Strategy Synthesis for
+  Stochastic Multi-Player Games.* TACAS, 2020.
+- Alshiekh, M. et al. *Safe Reinforcement Learning via Shielding.* AAAI, 2018.
+- Serebryany, K. & Iskhodzhanov, T. *ThreadSanitizer — Data Race Detection in
+  Practice.* WBIA, 2009.
+- Blackshear, S. et al. *RacerD: Compositional Static Race Detection.*
+  OOPSLA, 2018.
+
+## Citation
+
+```bibtex
+@software{marace2024,
+  title   = {MARACE: Multi-Agent Race Condition Verifier},
+  author  = {MARACE Team},
+  year    = {2024},
+  url     = {https://github.com/marace-project/marace},
+  version = {0.1.0},
+}
+```
+
+## License
+
+MIT — see `pyproject.toml` for details.

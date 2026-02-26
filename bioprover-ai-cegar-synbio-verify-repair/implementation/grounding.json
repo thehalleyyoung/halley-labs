@@ -1,0 +1,127 @@
+{
+  "description": "Maps paper claims to implementation artifacts and experimental evidence.",
+  "claims": [
+    {
+      "claim": "29 benchmark circuits",
+      "artifact": "experiments/results/benchmark_results.json",
+      "evidence": "benchmark_results.json field n_benchmarks=29, with 29 entries in benchmarks array",
+      "verified": true
+    },
+    {
+      "claim": "24 circuits verified with sound guarantees",
+      "artifact": "experiments/results/benchmark_results.json",
+      "evidence": "15 VERIFIED/SOUND + 13 BOUNDED_GUARANTEE/BOUNDED_SOUND = 28 with guarantees, 1 UNKNOWN. Actual count is 28, not 24.",
+      "verified": false,
+      "actual": "28 circuits with sound guarantees (15 SOUND, 13 BOUNDED_SOUND), 1 UNKNOWN"
+    },
+    {
+      "claim": "1.54x ML speedup",
+      "artifact": "experiments/results/ml_quality_results.json",
+      "evidence": "aggregate.avg_cegar_speedup = 1.54",
+      "verified": true
+    },
+    {
+      "claim": "0.90 precision, 0.68 recall",
+      "artifact": "experiments/results/ml_quality_results.json",
+      "evidence": "aggregate.precision = 0.90, aggregate.recall = 0.68",
+      "verified": true
+    },
+    {
+      "claim": "3.1x compositional speedup at 12 species",
+      "artifact": "experiments/results/scalability_results.json",
+      "evidence": "12-species monolithic=246.63s, compositional=80.05s, ratio=3.08x",
+      "verified": true,
+      "actual": "3.08x (rounds to 3.1x)"
+    },
+    {
+      "claim": "Monolithic times out at 15 species",
+      "artifact": "experiments/results/scalability_results.json",
+      "evidence": "15-species monolithic: time_s=300.0, status=TIMEOUT. Compositional: 106.68s, status=BOUNDED_GUARANTEE",
+      "verified": true
+    },
+    {
+      "claim": "32% more iterations without AI",
+      "artifact": "experiments/results/ablation_results.json",
+      "evidence": "toggle_switch: full=7, no_ai=11 (+57%). repressilator: full=10, no_ai=14 (+40%). Average increase is 47%, not 32%.",
+      "verified": false,
+      "actual": "47% more iterations without AI (averaged over 2 circuits in ablation)"
+    },
+    {
+      "claim": "Four soundness levels",
+      "artifact": "bioprover/soundness.py",
+      "evidence": "SoundnessLevel enum with SOUND, DELTA_SOUND, BOUNDED, APPROXIMATE. Supports comparison operators and meet().",
+      "verified": true
+    },
+    {
+      "claim": "Standalone certificate verifier",
+      "artifact": "bioprover/solver/proof_certificate.py",
+      "evidence": "validate_certificate() function. Also: ProofCertificate, FlowpipeCertificate, InvariantCertificate, SoundnessCertificate classes.",
+      "verified": true
+    },
+    {
+      "claim": "Well-formedness checker for circular AG",
+      "artifact": "bioprover/compositional/circular_ag.py",
+      "evidence": "WellFormednessChecker class with check_all(), check_contract_compatibility(), check_progress_condition(). Also TopologyAnalyzer and CircularAGChecker.",
+      "verified": true
+    },
+    {
+      "claim": "Moment closure validator",
+      "artifact": "bioprover/stochastic/moment_closure.py",
+      "evidence": "MomentEquations class with compute_mean_odes(), compute_covariance_odes(), _propensity_moment_expansion(). Supports normal closure.",
+      "verified": true
+    },
+    {
+      "claim": "Delta propagation",
+      "artifact": "bioprover/smt/dreal_interface.py",
+      "evidence": "DeltaPropagator class with cumulative_delta property, record_iteration(), to_error_budget(). Tracks additive/multiplicative delta compounding.",
+      "verified": true
+    },
+    {
+      "claim": "Quality-gated auto-disable",
+      "artifact": "bioprover/ai/predicate_predictor.py",
+      "evidence": "PredictionQualityMonitor class with sliding-window precision/F1 tracking, per-family metrics, auto-disable on quality degradation.",
+      "verified": true
+    },
+    {
+      "claim": "Cross-validation training",
+      "artifact": "bioprover/ai/training_pipeline.py",
+      "evidence": "CrossValidator class with k-fold cross-validation returning TrainingReport (precision, recall, F1, loss per fold). TrainingDataGenerator for trace collection.",
+      "verified": true
+    },
+    {
+      "claim": "5 refinement strategies",
+      "artifact": "bioprover/cegar/refinement.py",
+      "evidence": "7 strategy classes: StructuralRefinement, MonotonicityRefinement, TimeScaleRefinement, InterpolationRefinement, SimulationGuidedRefinement, RefinementCombinator, AIGuidedRefinement. At least 5 core strategies confirmed.",
+      "verified": true,
+      "actual": "7 strategy classes (5 core + RefinementCombinator + AIGuidedRefinement)"
+    },
+    {
+      "claim": "QR preconditioning",
+      "artifact": "bioprover/solver/ode_integrator.py",
+      "evidence": "QRPreconditioner class with precondition() and back_transform() methods. Used in ValidatedODEIntegrator._qr_preconditioned_step() for wrapping-effect mitigation.",
+      "verified": true
+    },
+    {
+      "claim": "Monotonicity acceleration O(m log(x_max/eps))",
+      "artifact": "bioprover/cegar/refinement.py",
+      "evidence": "MonotonicityRefinement class exists. Docstring describes 'reducing refinement from exponential to logarithmic in precision' but does not use the exact O(m log(x_max/eps)) notation.",
+      "verified": true,
+      "note": "Complexity described qualitatively as logarithmic, not with exact big-O notation"
+    },
+    {
+      "claim": "Error budget tracking",
+      "artifact": "bioprover/soundness.py",
+      "evidence": "ErrorBudget dataclass tracking delta, epsilon, truncation, discretization errors. propagate_errors() computes RSS composition. Attached to SoundnessAnnotation via with_error_budget().",
+      "verified": true
+    }
+  ],
+  "summary": {
+    "total_claims": 18,
+    "verified": 16,
+    "partially_verified": 2,
+    "notes": [
+      "Claim '24 circuits verified with sound guarantees': actual count is 28 (15 SOUND + 13 BOUNDED_SOUND).",
+      "Claim '32% more iterations without AI': actual increase is 47% averaged over the 2-circuit ablation set."
+    ]
+  }
+}
