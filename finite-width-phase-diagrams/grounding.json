@@ -1,6 +1,6 @@
 {
   "description": "Grounding map: every quantitative claim is traced to its data source.",
-  "paper_version": "v10 (stochastic crossover, improved baseline, depth-aware init)",
+  "paper_version": "v11 (DAG propagator, 61 architectures, 19 families)",
   "paper_file": "theory/tool_paper.tex",
   "claims": [
     {
@@ -294,18 +294,18 @@
       "verification": "4 configs, 50 Adam steps each, PhaseKit mean loss 6.242 vs LSUV 6.253."
     },
     {
-      "id": "graph-generalization-18-arch",
-      "claim": "Compositional MF engine achieves 83% phase agreement across 18 architectures spanning 6 families (MLP, CNN, ResNet, DenseNet, UNet, Transformer).",
-      "data_source": "experiments/results/graph_generalization/graph_generalization_results.json",
-      "code": "experiments/run_graph_generalization.py",
-      "verification": "18 architectures, phase classification compared against empirical variance-ratio ground truth from forward hooks."
+      "id": "dag-propagation-61-arch",
+      "claim": "DAG-based variance propagation engine achieves 95.1% phase classification accuracy across 61 architectures spanning 19 families. Uses torch.fx symbolic tracing with fallback to module-tree walk. Perfect accuracy on MLP (12/12), CNN (5/5), ResNet (8/8), Transformer (6/6), DenseNet (2/2), UNet (2/2), Gated (2/2). Includes 8 real torchvision models (7/8 correct): ResNet-18/50, MobileNetV2, DenseNet-121, VGG-11, EfficientNet-B0, ShuffleNetV2.",
+      "data_source": "experiments/results/universal_graph/universal_graph_results.json",
+      "code": "experiments/run_universal_graph_experiment.py",
+      "verification": "61 architectures, 19 families, empirical ground truth from end-to-end variance trajectories with 100 samples per architecture."
     },
     {
-      "id": "compositional-mf-block-aware-chi",
-      "claim": "Block-aware chi computation correctly classifies Transformers as critical and ResNets as near-critical, fixing the prior bug where all normalized architectures were misclassified as ordered.",
-      "data_source": "experiments/results/graph_generalization/graph_generalization_results.json",
-      "code": "implementation/src/compositional_mf.py",
-      "verification": "compute_chi_total() resets chi product at normalization boundaries; residual-aware path accounts for skip connections maintaining chi >= 1."
+      "id": "dag-chi-decomposition",
+      "claim": "DAG chi decomposition: residual connections use chi_eff = 1 + chi_branch, concatenation uses variance-averaged chi, gating uses product. For normalized architectures, geometric mean across blocks. Outperforms sequential compositional engine (95.1% vs 86.9%).",
+      "data_source": "experiments/results/universal_graph/universal_graph_results.json",
+      "code": "implementation/src/dag_propagator.py",
+      "verification": "DAG propagator correctly handles all ResNets (8/8), DenseNets (2/2), and gated architectures (2/2) that the sequential engine misses."
     },
     {
       "id": "z3-finite-width-8-properties",
@@ -341,6 +341,20 @@
       "data_source": "experiments/results/stochastic_crossover/crossover_results.json",
       "code": "implementation/src/stochastic_crossover.py",
       "verification": "200 Monte Carlo trials per activation at N=128, D=10."
+    },
+    {
+      "id": "dag-torchvision-validation",
+      "claim": "First validation of mean-field phase prediction on 8 production torchvision models. DAG propagator achieves 87.5% accuracy (7/8). Correctly analyses ResNet-18/50, MobileNetV2, DenseNet-121, VGG-11, EfficientNet-B0, ShuffleNetV2. Single failure: SqueezeNet (borderline chi).",
+      "data_source": "experiments/results/universal_graph/universal_graph_results.json",
+      "code": "experiments/run_universal_graph_experiment.py",
+      "verification": "Unmodified torchvision models with default initialization. Phase determined by end-to-end variance ratio."
+    },
+    {
+      "id": "dag-merge-types",
+      "claim": "DAG propagator correctly detects and handles 3 merge types: ADD (residual connections, q_out = sum q_i), CAT (concatenation, q_out = mean q_i), MUL (gating, q_out = prod q_i). Demonstrated on DenseNet (CAT), ResNet (ADD), Gated/SwiGLU (MUL).",
+      "data_source": "experiments/results/universal_graph/universal_graph_results.json",
+      "code": "implementation/src/dag_propagator.py",
+      "verification": "Merge types detected via torch.fx symbolic tracing of the computation graph."
     }
   ]
 }

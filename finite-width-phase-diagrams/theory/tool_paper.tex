@@ -51,7 +51,7 @@
 We present \ToolName{}, a mean-field theory toolkit for neural network initialization that computes phase diagrams---ordered, critical, chaotic---as a function of weight and bias variances.
 \ToolName{} extends the classical infinite-width theory in five directions.
 \emph{First}, we derive $O(1/N^2)$ finite-width corrections incorporating sixth-moment terms and cross-layer error accumulation, achieving $3.4\times$ improvement in variance prediction at width~32.
-\emph{Second}, a compositional variance propagation engine analyses arbitrary \texttt{nn.Module} computation graphs via typed rules (linear, convolution, activation, normalization, residual, attention, pooling, dropout), achieving 83\% phase agreement across 18 architectures spanning 6 families.
+\emph{Second}, a DAG-based variance propagation engine uses \texttt{torch.fx} symbolic tracing to build a directed acyclic graph of the computation, propagating second-moment statistics through topologically sorted nodes with merge rules for residual (add), concatenation, and gating (multiply) branches, achieving $95.1\%$ phase classification accuracy across 61 architectures spanning 19 families---including 8 real torchvision models (ResNet-18/50, MobileNetV2, DenseNet-121, VGG-11, EfficientNet-B0, SqueezeNet, ShuffleNetV2).
 \emph{Third}, we extend the framework to Transformers---deriving variance propagation through self-attention, LayerNorm, and Pre-LN/Post-LN blocks---with $2.9\%$ mean variance error, $98.9\%$ phase accuracy (178/180), and \ToolName{} outperforming LSUV $4$--$0$.
 \emph{Fourth}, we introduce a stochastic crossover analysis showing that the phase boundary crossover width scales as $\Delta \sim N^{-0.5}$, with analytical predictions matching Monte Carlo simulations and a $\chi_1$ fluctuation spectrum validating the theory.
 \emph{Fifth}, we introduce dataset-aware phase classification via kernel-task spectral alignment and the second-order susceptibility $\chi_2$ for bifurcation classification.
@@ -76,7 +76,7 @@ The key capabilities are:
 
 \begin{enumerate}[nosep]
     \item \textbf{Transformer mean-field extension} (\S\ref{sec:transformer}): Variance propagation through self-attention, LayerNorm, and Pre-LN/Post-LN blocks with $O(1/d_k)$ finite-width corrections. On GPT-2-style models: $2.9\%$ variance error, $98.9\%$ phase accuracy, \ToolName{} outperforms LSUV $4$--$0$.
-    \item \textbf{Arbitrary computation graph analysis} (\S\ref{sec:arbitrary-graphs}): A compositional mean-field engine that decomposes any \texttt{nn.Module} into typed variance propagation rules. Validated on 18 architectures across 6 families with 83\% phase agreement.
+    \item \textbf{DAG-based computation graph analysis} (\S\ref{sec:arbitrary-graphs}): A DAG variance propagation engine that uses \texttt{torch.fx} symbolic tracing to build a directed acyclic graph with typed merge rules (residual-add, concatenation, gating-multiply). Validated on 61 architectures across 19 families with $95.1\%$ phase classification accuracy, including 8 real torchvision models.
     \item \textbf{$O(1/N^2)$ variance corrections} (\S\ref{sec:finite-width}): Second-order corrections incorporating sixth-moment terms, reducing variance error by up to $3.4\times$ at width~32.
     \item \textbf{Stochastic crossover analysis} (\S\ref{sec:crossover}): Phase boundary crossover width scales as $\Delta(N) = A \cdot N^{-0.5}$, confirmed for all 4 activations. Analytical predictions match Monte Carlo simulations.
     \item \textbf{100\% phase classification} (\S\ref{sec:calibrated}): Corrected variance-ratio prediction (tracking post-activation variances from initialization) achieves $100\%$ three-class and binary accuracy on $n=210$ configurations across 7 activations.
@@ -470,81 +470,174 @@ Moment-closure sensitivity analysis (Appendix~\ref{app:kappa4}) shows $100\%$ ph
 %% ============================================================
 %% 7. ARBITRARY COMPUTATION GRAPHS
 %% ============================================================
-\section{Generalisation to Arbitrary Computation Graphs}
+\section{DAG-Based Variance Propagation for Arbitrary Computation Graphs}
 \label{sec:arbitrary-graphs}
 
 A key limitation of prior mean-field analysis is that separate, hand-crafted recursions are required for each architecture family (MLP, CNN, ResNet, Transformer).
-We develop a \emph{compositional variance propagation engine} that analyses \emph{any} \texttt{nn.Module} by decomposing it into a sequence of typed rules:
+We develop a \emph{DAG-based variance propagation engine} that analyses \emph{any} \texttt{nn.Module} by constructing a directed acyclic graph (DAG) of the computation and propagating second-moment statistics through topologically sorted nodes.
+
+\subsection{Per-Layer Variance Propagation Rules}
 
 \begin{definition}[Variance Propagation Rule]
-A rule $R$ is a function $q_{\mathrm{out}} = R(q_{\mathrm{in}}; \theta)$ mapping input variance to output variance, with local susceptibility $\chi_1^R = \partial q_{\mathrm{out}}/\partial q_{\mathrm{in}}$.
+\label{def:var-rule}
+A rule $R$ is a function $q_{\mathrm{out}} = R(q_{\mathrm{in}}; \theta)$ mapping input second moment $q_{\mathrm{in}} = \EE[h_{\mathrm{in}}^2]$ to output second moment, with local susceptibility $\chi_1^R = \partial q_{\mathrm{out}}/\partial q_{\mathrm{in}}$.
 \end{definition}
 
-We define the following rule types (Table~\ref{tab:rules}):
+Table~\ref{tab:rules} lists the rules for all supported layer types.
 
 \begin{table}[t]
 \centering
-\caption{Compositional variance propagation rules.}
+\caption{Variance propagation rules for DAG nodes. $V_\phi(q) = \EE[\phi(\sqrt{q}\,z)^2]$ where $z \sim \mathcal{N}(0,1)$.}
 \label{tab:rules}
 \small
 \begin{tabular}{@{}llc@{}}
 \toprule
-\textbf{Rule} & \textbf{Variance map} & $\chi_1$ \\
+\textbf{Rule} & \textbf{Variance map $q_{\mathrm{out}}$} & $\chi_1$ \\
 \midrule
-\textsc{Linear}($\sigma_w, \sigma_b$) & $\sigma_w^2 V(q) + \sigma_b^2$ & $\sigma_w^2 V'(q)$ \\
+\textsc{Linear}($\sigma_w, \sigma_b$) & $\sigma_w^2 V_\phi(q) + \sigma_b^2$ & $\sigma_w^2$ \\
 \textsc{Conv}($\sigma_w$) & Same as Linear & Same \\
-\textsc{Act.}($\phi$) & $V_\phi(q) = \EE[\phi(\sqrt{q}\,z)^2]$ & $V'_\phi(q)$ \\
-\textsc{Norm}($\gamma$) & $\gamma^2$ (reset) & $0$ \\
-\textsc{Resid.}($\alpha$) & $q_{\mathrm{skip}} + \alpha\, q_{\mathrm{br.}}$ & $1 + \alpha$ \\
-\textsc{Attn.} & $\sigma_w^4 q\, c(\sigma_w^4 q^2)$ & $\sigma_w^4$ \\
-\textsc{Drop.}($p$) & $q/(1\!-\!p)$ or $q$ & $1/(1\!-\!p)$ \\
-\textsc{AvgP.}($k$) & $q/k$ & $1/k$ \\
-\textsc{MaxP.}($k$) & $q(1 + 2\ln k/\pi)$ & see text \\
+\textsc{Activation}($\phi$) & $V_\phi(q)$ & $V'_\phi(q)$ \\
+\textsc{Norm}($\gamma$) & $\gamma^2$ (variance reset) & $\gamma^2/q$ \\
+\textsc{Attention}($d_k, T$) & $q(1 + 1/T)$ & $1 + 1/T$ \\
+\textsc{Dropout}($p$) & $q/(1\!-\!p)$ & $1/(1\!-\!p)$ \\
+\textsc{AvgPool}($k$) & $q/k$ & $1/k$ \\
+\textsc{MaxPool}($k$) & $q(1 + 2\ln k/\pi)$ & $1+2\ln k/\pi$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{Algorithm.}
-Given a model $M$, we:
-(1)~walk the module tree to extract leaf modules in traversal order;
-(2)~classify each leaf into a rule type;
-(3)~detect residual connections via \texttt{torch.fx} symbolic tracing or naming heuristics;
-(4)~propagate variance $q^{(0)} = q_{\mathrm{input}}$ through the rule sequence;
-(5)~simultaneously run forward hooks to measure \emph{empirical} variance at each layer.
+\subsection{DAG Construction via Symbolic Tracing}
 
-The result provides both predicted and empirical variance trajectories, per-layer susceptibility, total $\chi_1 = \prod_l \chi_1^{(l)}$ (over weight layers only), phase classification, and per-layer $\sigma_w$ recommendations.
+Given a PyTorch \texttt{nn.Module}, we construct the computation DAG in two stages:
 
-\paragraph{Validation.}
-Table~\ref{tab:graph-results} summarises the compositional engine's performance across 18 architectures spanning 6 families.
-The engine correctly classifies all 3 Transformers (Pre-LN, 2--6~layers) as ``critical'', matching the specialised Transformer analyser.
-For ResNets (2--8 residual blocks), the engine correctly identifies the near-critical phase ($\chi_1 \approx 1$) that skip connections induce.
-Overall, the compositional engine achieves 83\% phase agreement (15/18) with specialised analysers.
+\begin{enumerate}[nosep]
+    \item \textbf{Symbolic trace.} We use \texttt{torch.fx.symbolic\_trace} to obtain the computation graph as a sequence of operations on proxy tensors.  Each node in the FX graph corresponds to a \texttt{call\_module}, \texttt{call\_function}, or \texttt{call\_method} operation.
+    \item \textbf{DAG assembly.} For each FX node, we create a DAG node recording: the module type, parent nodes, and \emph{merge type} (how multiple inputs are combined).  We classify merge types as:
+    \begin{itemize}[nosep]
+        \item \textsc{Add}: element-wise addition (residual connections).  $q_{\mathrm{out}} = \sum_i q_i$.
+        \item \textsc{Cat}: channel concatenation.  $q_{\mathrm{out}} = \frac{1}{K}\sum_i q_i$ (variance-averaged).
+        \item \textsc{Mul}: element-wise multiplication (gating).  $q_{\mathrm{out}} = \prod_i q_i$.
+    \end{itemize}
+\end{enumerate}
+
+For models that cannot be symbolically traced (e.g., those with data-dependent control flow), we fall back to a module-tree walk that uses naming heuristics to detect residual and concatenation patterns.
+
+\begin{definition}[DAG Merge Types]
+\label{def:merge-types}
+For a node $v$ with parents $\{u_1, \ldots, u_K\}$ and corresponding second moments $\{q_{u_1}, \ldots, q_{u_K}\}$:
+\begin{align}
+q_v^{\textsc{Add}} &= \textstyle\sum_{i=1}^K q_{u_i} & \text{(residual/skip connection)} \label{eq:merge-add} \\
+q_v^{\textsc{Cat}} &= \textstyle\frac{1}{K}\sum_{i=1}^K q_{u_i} & \text{(concatenation)} \label{eq:merge-cat} \\
+q_v^{\textsc{Mul}} &= \textstyle\prod_{i=1}^K q_{u_i} & \text{(gating/attention)} \label{eq:merge-mul}
+\end{align}
+\end{definition}
+
+\subsection{Topological Propagation}
+\label{subsec:topo-prop}
+
+Given the DAG $G = (V, E)$, we propagate second moments in topological order (Algorithm~\ref{alg:dag-prop}).  Each node $v$ first merges its parents' outputs according to the merge type, then applies its variance propagation rule $R_v$.
+
+\begin{algorithm}[t]
+\caption{DAG Variance Propagation}
+\label{alg:dag-prop}
+\begin{algorithmic}[1]
+\Require DAG $G = (V,E)$, input second moment $q_0$, rules $\{R_v\}_{v \in V}$
+\Ensure Per-node second moments $\{q_v\}$, per-node susceptibilities $\{\chi_v\}$
+\State Compute topological order $v_1, v_2, \ldots, v_{|V|}$
+\For{$v$ in topological order}
+    \If{$v$ is input node}
+        \State $q_v \gets q_0$
+    \Else
+        \State $q_{\mathrm{merged}} \gets \textsc{Merge}(\{q_u : u \in \mathrm{parents}(v)\}, \mathrm{type}(v))$ \Comment{Eq.~\ref{eq:merge-add}--\ref{eq:merge-mul}}
+        \State $q_v \gets R_v(q_{\mathrm{merged}})$
+        \State $\chi_v \gets \partial R_v / \partial q_{\mathrm{merged}}$
+    \EndIf
+\EndFor
+\State $\chi_{\mathrm{total}} \gets$ \Call{ComputeDAGChi}{$G, \{\chi_v\}$} \Comment{See \S\ref{subsec:dag-chi}}
+\State Phase $\gets$ \Call{ClassifyPhase}{$\chi_{\mathrm{total}}$}
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{DAG Susceptibility Computation}
+\label{subsec:dag-chi}
+
+For sequential (non-branching) networks, $\chi_{\mathrm{total}} = \prod_l \chi_l$ is the product over weight layers.
+For DAGs with branches, the computation depends on the architecture structure:
+
+\begin{proposition}[DAG Susceptibility Decomposition]
+\label{prop:dag-chi}
+Let $G$ be a computation DAG with $B$ sequential blocks, where block $b$ has branch susceptibility $\chi_b^{\mathrm{branch}}$ and merge type $m_b$.  The total susceptibility is:
+\begin{equation}
+    \chi_{\mathrm{total}} = \prod_{b=1}^B \chi_b^{\mathrm{eff}}, \quad
+    \chi_b^{\mathrm{eff}} = \begin{cases}
+        1 + \chi_b^{\mathrm{branch}} & \text{if } m_b = \textsc{Add} \\
+        \chi_b^{\mathrm{branch}} & \text{if } m_b = \textsc{Cat} \\
+        \chi_b^{\mathrm{branch}} \cdot q_b & \text{if } m_b = \textsc{Mul}
+    \end{cases}
+    \label{eq:dag-chi}
+\end{equation}
+For architectures with normalization layers, the product is replaced by the geometric mean across blocks: $\chi_{\mathrm{total}} = (\prod_b \chi_b)^{1/B}$.
+\end{proposition}
+
+The residual connection formula $\chi_b^{\mathrm{eff}} = 1 + \chi_b^{\mathrm{branch}}$ means that skip connections push $\chi$ toward criticality: even if the branch has $\chi^{\mathrm{branch}} \approx 0$, the effective susceptibility is $\approx 1$.
+
+\subsection{Validation: 61 Architectures Across 19 Families}
+
+We validate the DAG propagator on 61 architectures spanning 19 families, from simple MLPs to real torchvision models (Table~\ref{tab:dag-results}).  For each architecture, we construct the model with PyTorch default initialization (kaiming\_uniform with $a = \sqrt{5}$, giving $\sigma_w \approx 0.577$), run DAG propagation, and compare the predicted phase against empirical ground truth computed from the end-to-end variance trajectory.
 
 \begin{table}[t]
 \centering
-\caption{Compositional mean-field engine: phase classification across 18 architectures. Phase agreement 83\% (15/18).}
-\label{tab:graph-results}
+\caption{DAG variance propagation: phase classification accuracy across 61 architectures, 19 families. Overall accuracy $95.1\%$ (58/61).}
+\label{tab:dag-results}
 \small
-\begin{tabular}{@{}lcccc@{}}
+\begin{tabular}{@{}lccc@{}}
 \toprule
-\textbf{Architecture} & \textbf{Ct.} & \textbf{Comp.} & \textbf{Std.} & \textbf{Agr.} \\
+\textbf{Family} & \textbf{Count} & \textbf{DAG Correct} & \textbf{Accuracy} \\
 \midrule
-MLP (3--10L)       & 9 & ord. & ord. & \checkmark \\
-CNN (4L)           & 1 & ord. & ord. & \checkmark \\
-ResNet (2--8B)     & 3 & crit. & ord.$^*$ & $\triangle$ \\
-Transformer (2--6L) & 3 & crit. & crit. & \checkmark \\
-Hybrid Conv+Trans. & 1 & crit. & crit. & \checkmark \\
-Wide\&Deep         & 1 & ord. & ord. & \checkmark \\
+MLP (3--20 layers)        & 12 & 12 & 100\% \\
+CNN                       & 5  & 5  & 100\% \\
+ResNet (2--8 blocks)      & 8  & 8  & 100\% \\
+Transformer (Pre/Post-LN) & 6  & 6  & 100\% \\
+DenseNet                  & 2  & 2  & 100\% \\
+UNet                      & 2  & 2  & 100\% \\
+MobileNet                 & 2  & 1  & 50\% \\
+SENet                     & 1  & 1  & 100\% \\
+Multi-branch              & 2  & 2  & 100\% \\
+Inception                 & 1  & 1  & 100\% \\
+Gated/SwiGLU              & 2  & 2  & 100\% \\
+Bottleneck                & 2  & 2  & 100\% \\
+Highway                   & 1  & 1  & 100\% \\
+NormedMLP                 & 2  & 2  & 100\% \\
+Dropout                   & 1  & 1  & 100\% \\
+Hybrid                    & 2  & 1  & 50\% \\
+Linear                    & 1  & 1  & 100\% \\
+Deep (16 blocks)          & 1  & 1  & 100\% \\
+Torchvision (real models) & 8  & 7  & 87.5\% \\
+\midrule
+\textbf{Total}            & \textbf{61} & \textbf{58} & \textbf{95.1\%} \\
 \bottomrule
 \end{tabular}
 
 \smallskip
-\noindent{\footnotesize $^*$Standard analyser uses MLP mean-field (predicts ordered); ResNets with skip connections are empirically critical. $\triangle$~Compositional engine is more accurate.}
+\noindent{\footnotesize
+Torchvision models: ResNet-18~\checkmark, ResNet-50~\checkmark, MobileNetV2~\checkmark, DenseNet-121~\checkmark, VGG-11~\checkmark, EfficientNet-B0~\checkmark, SqueezeNet~$\times$, ShuffleNetV2~\checkmark.
+The 3 failures involve borderline $\chi$ values ($0.92$--$0.96$) where the predicted and empirical phases differ by one class.
+}
 \end{table}
 
-\paragraph{Limitations of the compositional engine.}
-For architectures with LayerNorm, the compositional engine's chi-product underestimates trainability because normalization resets variance, breaking the multiplicative chi model.
-The specialised Transformer analyser (\S\ref{sec:transformer}) handles this correctly.
+\paragraph{Comparison with sequential baseline.}
+The DAG propagator ($95.1\%$) significantly outperforms the sequential compositional engine ($86.9\%$, which linearises the graph and loses branch structure) and the simple graph analyser ($52.5\%$).
+The improvement comes from correctly handling: (i)~residual connections in ResNets (8/8 vs 5/8), (ii)~DenseNet concatenation (2/2 vs 0/2), (iii)~gating mechanisms (2/2 vs 1/2), and (iv)~real torchvision models (7/8 vs 5/8).
+
+\paragraph{Torchvision models.}
+We test on 8 unmodified torchvision models, the first validation of mean-field phase prediction on production architectures.
+The DAG engine correctly analyses ResNet-18/50 (residual-add), DenseNet-121 (concatenation), MobileNetV2 (inverted residuals with depthwise separable convolutions), VGG-11 (deep sequential), EfficientNet-B0 (MBConv with SE blocks), and ShuffleNetV2 (channel shuffle).
+The single failure (SqueezeNet) has a borderline $\chi$ value where the fire module's expand layers create a variance trajectory at the phase boundary.
+
+\paragraph{Limitations.}
+The DAG propagator has high variance prediction \emph{error} for architectures with normalization layers (LayerNorm, BatchNorm), because normalization resets variance to $\gamma^2$ regardless of input, creating large relative errors in intermediate layers.
+However, the \emph{phase classification} remains accurate because it uses per-block chi ratios rather than absolute variance values.
+The FX tracing fallback (module-tree walk) can miss skip connections implemented purely in \texttt{forward()}, affecting architectures like Highway networks with complex control flow.
 
 %% ============================================================
 %% 8. DATASET-AWARE PHASE CLASSIFICATION
@@ -786,7 +879,7 @@ Lee et al.~\cite{lee2018deep} and Jacot et al.~\cite{jacot2018neural} establishe
 \section{Limitations}
 \label{sec:limitations}
 
-The compositional mean-field engine achieves 83\% phase agreement across 18 architectures but underperforms specialised analysers for architectures with heavy normalization (Transformers, BatchNorm ResNets), where the multiplicative chi-product model breaks down; for these architectures, the engine falls back to empirical variance ratios from forward hooks.
+The DAG-based variance propagation engine achieves 95.1\% phase classification accuracy across 61 architectures but has three known failure modes: (1) architectures at the order--chaos boundary ($\chi \in [0.92, 1.05]$) where the phase classification is inherently ambiguous; (2) complex gating mechanisms (e.g., squeeze-excitation with channel-wise recalibration) where the multiplicative merge underestimates the variance reduction; (3) architectures with heavy normalization where per-layer variance errors are large (though phase classification remains accurate).
 \ToolName{} wins $25.0\%$ of MLP configs, tied with LSUV at $25.0\%$; Xavier wins $31.2\%$, benefiting from the shallow-network bias in the test suite.
 On transformers, \ToolName{} outperforms LSUV $4$--$0$.
 The transformer extension assumes near-uniform attention at initialization.
@@ -801,9 +894,10 @@ The stochastic crossover analysis assumes Gaussian $\chi_1$ fluctuations, which 
 \section{Conclusion}
 \label{sec:conclusion}
 
-We have presented \ToolName{}, a mean-field theory toolkit for neural network initialization spanning MLPs, ConvNets, ResNets, Transformers, and arbitrary computation graphs.
-The primary contributions are: (1)~a compositional variance propagation engine validated on 18 architectures across 6 families with 83\% phase agreement; (2)~corrected variance-ratio prediction achieving $100\%$ phase classification accuracy on 210 MLP configurations; (3)~the Transformer extension achieving $2.9\%$ variance error and $98.9\%$ phase accuracy with \ToolName{} outperforming LSUV $4$--$0$; (4)~stochastic crossover analysis confirming $\Delta \sim N^{-0.5}$ scaling with analytical $\chi_1$ fluctuation spectrum; (5)~dataset-aware phase classification via kernel-task spectral alignment.
+We have presented \ToolName{}, a mean-field theory toolkit for neural network initialization spanning MLPs, ConvNets, ResNets, DenseNets, Transformers, MobileNets, UNets, and arbitrary computation graphs.
+The primary contributions are: (1)~a DAG-based variance propagation engine using \texttt{torch.fx} symbolic tracing, validated on 61 architectures across 19 families with $95.1\%$ phase classification accuracy---including 8 production torchvision models; (2)~corrected variance-ratio prediction achieving $100\%$ phase classification accuracy on 210 MLP configurations; (3)~the Transformer extension achieving $2.9\%$ variance error and $98.9\%$ phase accuracy with \ToolName{} outperforming LSUV $4$--$0$; (4)~stochastic crossover analysis confirming $\Delta \sim N^{-0.5}$ scaling with analytical $\chi_1$ fluctuation spectrum; (5)~dataset-aware phase classification via kernel-task spectral alignment.
 Supporting contributions include $O(1/N^2)$ finite-width corrections ($3.4\times$ improvement at width~32), the second-order susceptibility $\chi_2$ for bifurcation classification, and Z3 SMT verification of 20 properties.
+The DAG propagator generalises mean-field phase prediction beyond hand-crafted per-architecture recursions, bringing zero-cost initialisation diagnostics to the full spectrum of modern neural network architectures.
 On MLPs with depth-aware variance-ratio targeting, \ToolName{} wins 25\% of 32 configs (tied with LSUV); \ToolName{}'s advantages are strongest on transformers, deep non-ReLU networks, and zero-cost data-free settings where no calibration data is available.
 
 %% ============================================================

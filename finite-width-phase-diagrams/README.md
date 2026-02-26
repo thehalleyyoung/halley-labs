@@ -1,6 +1,6 @@
 # PhaseKit: Mean-Field Phase Diagrams for Neural Network Initialization
 
-Diagnose and fix neural network initialization in one line. PhaseKit predicts training dynamics (ordered/critical/chaotic phase) using mean-field theory — covering **MLPs, ConvNets, ResNets, DenseNets, UNets, and Transformers** (18 architectures across 6 families).
+Diagnose and fix neural network initialization in one line. PhaseKit predicts training dynamics (ordered/critical/chaotic phase) using mean-field theory — covering **MLPs, ConvNets, ResNets, DenseNets, UNets, MobileNets, Transformers**, and arbitrary computation graphs (**61 architectures across 19 families**, 95.1% phase classification accuracy, including 8 real torchvision models).
 
 ## 30-Second Quickstart
 
@@ -19,13 +19,27 @@ sigma_w = recommend_init(model)
 print(f"Recommended σ_w = {sigma_w:.4f}")  # Depth-aware critical init
 ```
 
-### Analyze any PyTorch model
+### Analyze any PyTorch model (DAG propagator)
+
+```python
+from dag_propagator import analyze_dag
+
+# Works on any nn.Module — ResNets, Transformers, DenseNets, UNets, MobileNets, etc.
+import torchvision.models as models
+resnet = models.resnet18()
+result = analyze_dag(resnet, input_shape=(1, 3, 224, 224))
+print(f"Phase: {result.phase}, χ_total: {result.chi_total:.4f}")
+print(f"DAG: {result.n_nodes} nodes, {result.n_branches} branches, {result.n_residual} residual")
+# Also provides per-layer sigma_w recommendations for criticality
+for name, rec in result.recommendations.items():
+    print(f"  {name}: σ_w* = {rec:.4f}")
+```
+
+### Analyze any PyTorch model (compositional baseline)
 
 ```python
 from compositional_mf import CompositionalMeanField
 
-# Works on ResNets, Transformers, UNets — any nn.Module
-import torchvision.models as models
 resnet = models.resnet18()
 cmf = CompositionalMeanField()
 result = cmf.analyze_arbitrary_graph(resnet, input_shape=(1, 3, 32, 32))

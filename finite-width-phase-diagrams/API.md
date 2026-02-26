@@ -42,6 +42,37 @@ diag = tmf.diagnose(spec)                      # Actionable recommendations
 
 Returns `TransformerMFReport` with: `phase`, `chi_1_attn`, `chi_1_ffn`, `chi_1_block`, `chi_1_total`, `variance_trajectory`, `sigma_w_star`.
 
+### `DAGAnalysisResult` (dag_propagator.py)
+DAG-based variance propagation for arbitrary PyTorch computation graphs. **Recommended over CompositionalMeanField** — uses `torch.fx` symbolic tracing to build a proper DAG, achieving 95.1% accuracy vs 86.9%.
+
+```python
+from dag_propagator import analyze_dag
+
+# Works on any nn.Module — ResNets, Transformers, DenseNets, UNets, MobileNets, etc.
+import torchvision.models as models
+result = analyze_dag(models.resnet50(), input_shape=(1, 3, 224, 224))
+print(f"Phase: {result.phase}, χ: {result.chi_total:.4f}")
+```
+
+**`analyze_dag(model, input_shape, n_samples=100, seed=42, input_variance=1.0, apply_finite_width=True) -> DAGAnalysisResult`**
+- `model`: Any `torch.nn.Module`
+- `input_shape`: Input tensor shape (batch dimension included)
+- `n_samples`: Number of samples for empirical variance estimation
+- `input_variance`: Input variance q_0
+
+Returns `DAGAnalysisResult` with:
+- `phase`: "ordered", "critical", or "chaotic"
+- `chi_total`: Total susceptibility (product over weight layers)
+- `predicted_variances`: Dict of per-node predicted second moments
+- `empirical_variances`: Dict of per-node empirical second moments
+- `variance_error_pct`: Mean relative error between predicted and empirical
+- `n_nodes`, `n_weight_layers`, `n_branches`, `n_residual`: Architecture stats
+- `recommendations`: Dict of per-layer σ_w recommendations for criticality
+
+**Supported layer types:** Linear, Conv1d/2d/3d, ReLU, GELU, SiLU, Tanh, Sigmoid, ELU, LeakyReLU, Mish, Softplus, LayerNorm, BatchNorm, GroupNorm, MultiheadAttention, Dropout, AvgPool, MaxPool, Embedding, Identity.
+
+**Merge types:** ADD (residual/skip), CAT (concatenation), MUL (gating/attention).
+
 ### `CompositionalMeanField` (compositional_mf.py)
 Compositional MF engine for arbitrary PyTorch computation graphs.
 
@@ -149,6 +180,7 @@ result = tracer.trace(model, input_shape=(1, 3, 32, 32))
 | Script | Description |
 |---|---|
 | `run_graph_generalization.py` | 18-architecture graph generalization |
+| `run_universal_graph_experiment.py` | 61-architecture DAG validation (19 families) |
 | `run_z3_finite_width.py` | Z3 finite-width verification (P13-P20) |
 | `run_data_aware_experiment.py` | 240-config dataset-aware experiment |
 | `run_transformer_experiments.py` | 180-config transformer validation |
