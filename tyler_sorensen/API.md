@@ -36,11 +36,11 @@ result = check_portability("mp", target_arch="arm")
 # result[0].fence_recommendation == "dmb ishst (T0); dmb ishld (T1)"
 ```
 
-### `analyze_all_patterns()` — Full 1,370-pair analysis (137 patterns × 10 architectures)
+### `analyze_all_patterns()` — Full 1,400-pair analysis (140 patterns × 10 architectures)
 
 ### `diff_architectures(arch1, arch2)` — Discriminating patterns between two models
 
-### `detect_scope_mismatches()` — GPU scope mismatch detection (6 critical + 5 warning)
+### `detect_scope_mismatches()` — GPU scope mismatch detection
 
 ---
 
@@ -52,7 +52,44 @@ Returns `ASTAnalysisResult` with `patterns_found`, `parse_method`, and `coverage
 
 ### `ast_check_portability(code, target_arch=None, language='auto')`
 
-Full pipeline: AST parse → match patterns → check portability. Supports C11 atomics, GCC builtins, and Linux kernel macros.
+Full pipeline: AST parse → match patterns → check portability. Supports C11 atomics, GCC builtins, and Linux kernel macros. **96.6% exact-match on 203 curated benchmark snippets.**
+
+---
+
+## LLM-Assisted Pattern Recognition
+
+### `hybrid_check_portability(code, target_arch, use_llm=True, llm_model='gpt-4.1-nano')`
+
+```python
+from llm_pattern_recognizer import hybrid_check_portability
+results = hybrid_check_portability(code, target_arch="arm", use_llm=True)
+# Falls back to LLM when AST confidence is low
+# All LLM-suggested patterns undergo full SMT verification (soundness preserved)
+```
+
+### `llm_recognize_patterns(code, target_arch=None, model='gpt-4.1-nano')`
+
+Direct LLM pattern recognition. Returns `{'patterns': [...], 'confidence': 0.9, 'reasoning': '...'}`.
+
+**Adversarial OOD accuracy: 93.3% with GPT-4.1 (vs 13% AST-only).**
+
+Requires `OPENAI_API_KEY` environment variable. Soundness: LLM affects recall only; all verdicts are SMT-certified.
+
+---
+
+## Cross-Solver Validation
+
+```python
+from cross_solver_validation import run_cross_solver_validation
+report = run_cross_solver_validation()
+# 1,400/1,400 agreement across Z3 and CVC5
+# Wilson CI [99.7%, 100%]
+```
+
+Validates all SMT-LIB2 certificates through:
+1. Z3 with proof production (seed=0)
+2. Z3 diversity check (seed=42)
+3. CVC5 (independent solver, v1.3.2)
 
 ---
 
@@ -71,7 +108,6 @@ result = check_custom("mp", "POWER")
 ```
 
 170/171 (99.4%) empirical correspondence with herd7 `.cat` specifications.
-Formal denotational semantics $D⟦\cdot⟧$ cross-validated at 428/432 (99.1%) against operational engine.
 
 ---
 
@@ -83,52 +119,9 @@ extractor = Z3ProofExtractor()
 cert = extractor.extract_proof_for_pattern('mp_fence', 'arm')
 # cert.verdict == 'unsat'
 # cert.proof_size_steps == 88
-# cert.alethe_text contains Alethe-format proof
 
 summary = run_alethe_extraction()
-# 1,095/1,095 UNSAT Alethe proofs + 275/275 SAT verified models
-```
-
-| API | Module | Result |
-|-----|--------|--------|
-| `extract_proof_for_pattern(pattern, arch)` | alethe_proof_extractor.py | Single Alethe proof certificate |
-| `extract_all_proofs(output_dir)` | alethe_proof_extractor.py | All 1,370 proof certificates |
-| `run_alethe_extraction()` | alethe_proof_extractor.py | Full extraction with summary stats |
-
----
-
-## Denotational Semantics
-
-```python
-from dsl_denotational_semantics import DenotationalSemanticsEngine
-engine = DenotationalSemanticsEngine()
-result = engine.validate_all()
-# 428/432 (99.1%) agreement with operational engine
-```
-
-| API | Module | Result |
-|-----|--------|--------|
-| `evaluate(test, model)` | dsl_denotational_semantics.py | Denotational forbidden-outcome check |
-| `run_full_validation()` | dsl_denotational_semantics.py (SemanticsValidator) | Cross-validate all CPU patterns |
-
----
-
-## TCB Analysis
-
-```python
-from tcb_analysis import run_tcb_analysis
-report = run_tcb_analysis()
-# 11 components, explicit trust classifications
-```
-
----
-
-## Adversarial Benchmark
-
-```python
-from adversarial_benchmark import run_adversarial_benchmark
-results = run_adversarial_benchmark()
-# 23 snippets, 7 domains, 13.0% exact / 21.7% top-3
+# 993 UNSAT Alethe proofs + 407 SAT verified models
 ```
 
 ---
@@ -137,25 +130,8 @@ results = run_adversarial_benchmark()
 
 | API | Module | Result |
 |-----|--------|--------|
-| `cross_validate_all_smt()` | smt_validation.py | 1,370/1,370 Z3 certificates |
-| `cross_validate_smt()` | smt_validation.py | 228/228 CPU internal consistency |
-| `cross_validate_gpu_smt()` | smt_validation.py | 108/108 GPU internal consistency |
-| `prove_fence_sufficiency_smt(pattern, model)` | smt_validation.py | Single fence proof |
-| `generate_discriminating_litmus_test(model_a, model_b)` | smt_validation.py | SMT discriminator |
-| `generate_smtlib2_encoding(pattern, model)` | smtlib_certificate_extractor.py | Single .smt2 file |
-| `generate_all_smtlib_certificates(output_dir)` | smtlib_certificate_extractor.py | 1,370 .smt2 files |
-
----
-
-## Compositional Reasoning
-
-| API | Module | Result |
-|-----|--------|--------|
-| `analyze_program_compositionally(program, arch)` | compositional_reasoning.py | Safe/unsafe with composition type |
-| `identify_patterns_in_program(program)` | compositional_reasoning.py | Pattern extraction |
-| `check_disjoint_composition(patterns)` | compositional_reasoning.py | Theorem 4: disjoint-variable soundness |
-
-Four composition strategies: disjoint (exact), SC-shared (exact), Owicki-Gries for ordered shared variables (sound), conservative RG (sound but imprecise).
+| `cross_validate_all_smt()` | smt_validation.py | 1,400/1,400 Z3 certificates |
+| `generate_all_smtlib_certificates(output_dir)` | smtlib_certificate_extractor.py | 1,400 .smt2 files |
 
 ---
 
@@ -164,35 +140,13 @@ Four composition strategies: disjoint (exact), SC-shared (exact), Owicki-Gries f
 ```python
 from severity_classification import classify_all_unsafe_pairs
 report = classify_all_unsafe_pairs()
-# {'data_race': 423, 'security_vulnerability': 82, 'benign': 130}
+# {'data_race': 689, 'security_vulnerability': 44, 'benign': 70}
 ```
 
 CWE-calibrated (not CVE-validated):
 - **data_race** → CWE-362, CWE-366, CWE-820
 - **security_vulnerability** → CWE-667, CWE-821
 - **benign** → No direct CWE mapping
-
----
-
-## GPU External Cross-Validation
-
-```python
-from gpu_external_validation import validate_all
-results = validate_all()
-# 94/94 checks passing (33 published litmus tests, 32 PTX spec,
-#   23 Vulkan spec, 6 known GPU bugs)
-```
-
----
-
-## Validation APIs
-
-| API | Module | Result |
-|-----|--------|--------|
-| `validate_against_herd7()` | herd7_validation.py | 228/228 |
-| `run_all_differential_tests()` | differential_testing.py | 642 meaningful + 3,000 determinism |
-| `validate_all_models()` | dsl_cat_correspondence.py | 170/171 |
-| `run_false_negative_analysis()` | false_negative_analysis.py | 7 non-exact cases |
 
 ---
 

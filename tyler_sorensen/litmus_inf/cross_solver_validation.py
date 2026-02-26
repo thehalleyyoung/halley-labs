@@ -327,7 +327,12 @@ def validate_with_z3_tactic(smt2_path: str, expected: str,
 
 
 def check_cvc5_available() -> bool:
-    """Check if CVC5 is available on the system."""
+    """Check if CVC5 is available (Python API or command-line)."""
+    try:
+        import cvc5
+        return True
+    except ImportError:
+        pass
     try:
         result = subprocess.run(
             ['cvc5', '--version'],
@@ -338,8 +343,24 @@ def check_cvc5_available() -> bool:
         return False
 
 
+def _get_cvc5_version() -> str:
+    """Get CVC5 version string."""
+    try:
+        import cvc5
+        return getattr(cvc5, '__version__', 'unknown')
+    except ImportError:
+        return "not available"
+
+
 def validate_with_cvc5(smt2_path: str, expected: str) -> SolverResult:
-    """Validate an SMT-LIB2 file using CVC5 (independent solver)."""
+    """Validate an SMT-LIB2 file using CVC5 Python API (independent solver).
+
+    This is the critical cross-solver validation: CVC5 is developed by
+    a completely independent team (Stanford/Iowa) from Z3 (Microsoft),
+    using different algorithms and code. Agreement between Z3 and CVC5
+    provides genuine independent validation that eliminates single-solver
+    TCB risk for the QF_LIA fragment.
+    """
     with open(smt2_path, 'r') as f:
         content = f.read()
 
@@ -352,16 +373,108 @@ def validate_with_cvc5(smt2_path: str, expected: str) -> SolverResult:
             model = line.split(':', 1)[1].strip()
 
     clean_content = prepare_smt2_for_proof(content)
-    # CVC5 needs (set-logic QF_LIA) and (check-sat) but no (get-model)
+    # Ensure set-logic and check-sat are present (don't double-add)
     if '(set-logic' not in clean_content:
         clean_content = '(set-logic QF_LIA)\n' + clean_content
-    # Ensure check-sat is present
     if '(check-sat)' not in clean_content:
         clean_content += '\n(check-sat)\n'
 
     file_hash = hashlib.sha256(content.encode()).hexdigest()[:16]
 
-    # Write temp file
+    # Try Python API first, fall back to CLI
+    try:
+        import cvc5
+        return _validate_cvc5_api(smt2_path, expected, pattern, model,
+                                   clean_content, file_hash)
+    except ImportError:
+        return _validate_cvc5_cli(smt2_path, expected, pattern, model,
+                                   clean_content, file_hash)
+
+
+def _validate_cvc5_api(smt2_path, expected, pattern, model,
+                        clean_content, file_hash):
+    """Validate using CVC5 Python API.
+
+    Uses CVC5's InputParser to parse the SMT-LIB2 file natively, then
+    calls checkSat() directly to get the Result object.
+    """
+    import cvc5
+    import tempfile
+
+    # Remove (check-sat) so we can call it ourselves via API
+    lines = []
+    for line in clean_content.split('\n'):
+        s = line.strip()
+        if s == '(check-sat)':
+            continue
+        lines.append(line)
+    parse_content = '\n'.join(lines)
+
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix='.smt2')
+    start = time.time()
+    try:
+        with os.fdopen(tmp_fd, 'w') as f:
+            f.write(parse_content)
+
+        tm = cvc5.TermManager()
+        solver = cvc5.Solver(tm)
+        solver.setOption("tlimit", "30000")
+
+        parser = cvc5.InputParser(solver)
+        parser.setFileInput(cvc5.InputLanguage.SMT_LIB_2_6, tmp_path)
+        sm = parser.getSymbolManager()
+
+        while True:
+            cmd = parser.nextCommand()
+            if cmd.isNull():
+                break
+            cmd.invoke(solver, sm)
+
+        # Call checkSat via the API to get a Result object
+        result = solver.checkSat()
+        elapsed_ms = (time.time() - start) * 1000
+
+        if result.isSat():
+            actual = "sat"
+        elif result.isUnsat():
+            actual = "unsat"
+        else:
+            actual = "unknown"
+
+        return SolverResult(
+            file_path=smt2_path,
+            pattern=pattern,
+            model_name=model,
+            expected_status=expected,
+            solver_name="cvc5",
+            solver_config="cvc5_python_api",
+            actual_status=actual,
+            time_ms=elapsed_ms,
+            file_hash=file_hash,
+        )
+
+    except Exception as e:
+        elapsed_ms = (time.time() - start) * 1000
+        return SolverResult(
+            file_path=smt2_path,
+            pattern=pattern,
+            model_name=model,
+            expected_status=expected,
+            solver_name="cvc5",
+            solver_config="cvc5_python_api",
+            actual_status="error",
+            time_ms=elapsed_ms,
+            error_message=str(e)[:200],
+            file_hash=file_hash,
+        )
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def _validate_cvc5_cli(smt2_path, expected, pattern, model,
+                        clean_content, file_hash):
+    """Validate using CVC5 command-line (fallback)."""
     tmp_path = smt2_path + '.cvc5.tmp.smt2'
     try:
         with open(tmp_path, 'w') as f:
@@ -388,7 +501,7 @@ def validate_with_cvc5(smt2_path: str, expected: str) -> SolverResult:
             model_name=model,
             expected_status=expected,
             solver_name="cvc5",
-            solver_config="cvc5_default",
+            solver_config="cvc5_cli",
             actual_status=actual,
             time_ms=elapsed_ms,
             file_hash=file_hash,
@@ -401,7 +514,7 @@ def validate_with_cvc5(smt2_path: str, expected: str) -> SolverResult:
             model_name=model,
             expected_status=expected,
             solver_name="cvc5",
-            solver_config="cvc5_default",
+            solver_config="cvc5_cli",
             actual_status="error",
             time_ms=0,
             error_message=str(e),
@@ -590,6 +703,7 @@ def run_cross_solver_validation(
         'solver_configs': configs,
         'z3_version': _get_z3_version(),
         'cvc5_available': cvc5_available,
+        'cvc5_version': _get_cvc5_version() if cvc5_available else "not available",
         'agreement': {
             'all_agree': all_agree,
             'disagreements': any_disagree,

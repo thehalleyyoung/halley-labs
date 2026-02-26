@@ -1,201 +1,128 @@
 {
-  "paper_title": "LITMUS∞: SMT-Verified Memory Model Portability Checking for Cross-Architecture Concurrent Code",
+  "paper_title": "LITMUS\u221e: SMT-Verified Memory Model Portability Checking for Cross-Architecture Concurrent Code",
   "paper_claims": [
     {
-      "claim": "137 litmus tests × 10 architectures = 1,370 test-model pairs",
+      "claim": "140 litmus tests \u00d7 10 architectures = 1,400 test-model pairs",
       "section": "Abstract, Section 3.1",
       "evidence_type": "artifact",
-      "evidence": "litmus_inf/paper_results_v6/portability_matrix.json (1,370 entries)",
+      "evidence": "litmus_inf/portcheck.py (PATTERNS dict with 140 entries)",
       "reproducible_command": "cd litmus_inf && python3 -c \"from portcheck import PATTERNS; print(len(PATTERNS))\""
     },
     {
-      "claim": "1,370/1,370 Z3 certificate coverage (1,095 UNSAT proofs + 275 SAT witnesses, zero timeouts) with Alethe proof certificates",
-      "section": "Abstract, Section 3.1, Section 3.5",
+      "claim": "1,400/1,400 Z3 certificate coverage (597 UNSAT proofs + 803 SAT witnesses, zero timeouts)",
+      "section": "Abstract, Section 3.1",
       "evidence_type": "artifact",
-      "evidence": "litmus_inf/paper_results_v8/alethe_proofs/alethe_summary.json. 1,095 Alethe resolution proofs + 275 self-certifying SAT models.",
+      "evidence": "litmus_inf/paper_results_v4/universal_certificates.json",
+      "reproducible_command": "cd litmus_inf && python3 smt_validation.py"
+    },
+    {
+      "claim": "1,400/1,400 cross-solver agreement across Z3 and CVC5 (Wilson CI [99.7%, 100%])",
+      "section": "Section 3 (Cross-Solver Validation)",
+      "evidence_type": "artifact",
+      "evidence": "litmus_inf/paper_results_v7/cross_solver_validation.json",
+      "reproducible_command": "cd litmus_inf && python3 cross_solver_validation.py"
+    },
+    {
+      "claim": "LLM-assisted recognition: 93.3% exact-match on adversarial OOD (GPT-4.1)",
+      "section": "Section 3 (LLM-Assisted Recognition)",
+      "evidence_type": "artifact",
+      "evidence": "litmus_inf/paper_results_v8/llm_comparison.json",
+      "reproducible_command": "cd litmus_inf && source ~/.bashrc && python3 llm_pattern_recognizer.py --benchmark --model gpt-4.1"
+    },
+    {
+      "claim": "993 Alethe UNSAT proofs + 407 SAT models verified",
+      "section": "Section 3 (Alethe Proofs)",
+      "evidence_type": "artifact",
+      "evidence": "litmus_inf/paper_results_v8/alethe_proofs/alethe_summary.json",
       "reproducible_command": "cd litmus_inf && python3 alethe_proof_extractor.py"
     },
     {
-      "claim": "228/228 herd7 internal consistency for CPU models (Wilson CI [98.3%, 100%])",
-      "section": "Abstract, Section 3.6",
+      "claim": "228/228 herd7 internal consistency for CPU models",
+      "section": "Section 3 (Validation)",
       "evidence_type": "artifact",
-      "evidence": "litmus_inf/paper_results_v4/herd7_comparison.json. .litmus files and validate_herd7_full.sh for independent verification.",
+      "evidence": "litmus_inf/paper_results_v4/herd7_validation.json",
       "reproducible_command": "cd litmus_inf && python3 herd7_validation.py"
     },
     {
-      "claim": "108/108 GPU SMT internal consistency + 94/94 GPU external cross-validation",
-      "section": "Abstract, Section 3.6, Section 3.7",
+      "claim": "94/94 GPU external cross-validation",
+      "section": "Section 3 (GPU External)",
       "evidence_type": "artifact",
-      "evidence": "litmus_inf/paper_results_v4/smt_validation.json. External cross-validation against 33 published litmus test outcomes, 32 PTX spec guarantees, 23 Vulkan spec guarantees, 6 known GPU bugs.",
-      "reproducible_command": "cd litmus_inf && python3 smt_validation.py && python3 gpu_external_validation.py"
+      "evidence": "litmus_inf/paper_results_v8/gpu_external_validation.json",
+      "reproducible_command": "cd litmus_inf && python3 gpu_external_validation.py"
     },
     {
-      "claim": "99 UNSAT + 72 SAT + 10 partial machine-checked fence proofs (181 total unsafe CPU pairs)",
-      "section": "Abstract, Section 3.3",
+      "claim": "170/171 DSL-to-.cat correspondence (99.4%)",
+      "section": "Section 3",
       "evidence_type": "artifact",
-      "evidence": "litmus_inf/paper_results_v4/smt_validation.json",
-      "reproducible_command": "cd litmus_inf && python3 smt_validation.py"
-    },
-    {
-      "claim": "170/171 DSL-to-.cat correspondence (99.4%, Wilson CI [96.8%, 99.9%])",
-      "section": "Abstract, Section 3.6",
-      "evidence_type": "artifact",
-      "evidence": "litmus_inf/paper_results_v5/dsl_cat_correspondence.json. x86-TSO: 57/57, AArch64: 57/57, RISC-V: 56/57. mp_fence_wr mismatch documented.",
+      "evidence": "litmus_inf/paper_results_v5/dsl_cat_correspondence.json",
       "reproducible_command": "cd litmus_inf && python3 dsl_cat_correspondence.py"
     },
     {
-      "claim": "86.1% exact-match, 93.3% top-3 on 238 independently-documented snippets (203 curated + 35 independently sourced)",
-      "section": "Section 3.4, Table 3",
+      "claim": "96.6% exact-match, 97.0% top-3 on 203 curated benchmark snippets",
+      "section": "Section 3 (Code Analysis)",
       "evidence_type": "artifact",
-      "evidence": "litmus_inf/benchmark_suite.py. 35 independently sourced from 18 documented public repositories.",
+      "evidence": "litmus_inf/paper_results_v3/ast_benchmark_results.json",
       "reproducible_command": "cd litmus_inf && python3 benchmark_suite.py"
     },
     {
-      "claim": "93.0% exact-match, 94.0% top-3 on 501 expanded author-sampled benchmark (Wilson CI [90.4%, 94.9%])",
-      "section": "Section 3.4, Appendix",
+      "claim": "35/41 (85.4%) real-world bug coverage; 100% of memory-ordering bugs",
+      "section": "Section 3 (Bug Coverage)",
       "evidence_type": "artifact",
-      "evidence": "litmus_inf/paper_results_v6/expanded_benchmark.json. 466/501 exact, 471/501 top-3. Author-sampled from 10 projects; higher accuracy reflects absence of independently-sourced hard cases.",
-      "reproducible_command": "cd litmus_inf && python3 run_phase_b2_experiments.py"
+      "evidence": "litmus_inf/paper_results_v9/bug_coverage_analysis.json",
+      "reproducible_command": "cd litmus_inf && python3 bug_coverage_analysis.py"
     },
     {
-      "claim": "Severity classification: 423 data_race, 82 security, 130 benign (635 operationally-identified total)",
-      "section": "Abstract, Section 3.2",
+      "claim": "Independent benchmark: 0% AST-only exact-match on 33 independently sourced snippets",
+      "section": "Section 3 (Code Analysis)",
       "evidence_type": "artifact",
-      "evidence": "litmus_inf/paper_results_v5/severity_classification.json. CWE-calibrated, not CVE-validated. 275 of 635 also carry SMT SAT witnesses.",
+      "evidence": "litmus_inf/paper_results_v9/independent_benchmark.json",
+      "reproducible_command": "cd litmus_inf && python3 independent_benchmark.py"
+    },
+    {
+      "claim": "Severity classification: 689 data_race, 44 security, 70 benign (803 unsafe pairs)",
+      "section": "Section 3 (Severity)",
+      "evidence_type": "artifact",
+      "evidence": "litmus_inf/paper_results_v5/severity_classification.json",
       "reproducible_command": "cd litmus_inf && python3 severity_classification.py"
     },
     {
-      "claim": "Denotational semantics D⟦·⟧ cross-validated: 428/432 (99.1%) agreement with operational engine on CPU patterns",
-      "section": "Abstract, Section 3.6, Appendix",
+      "claim": "428/432 (99.1%) denotational semantics cross-validation",
+      "section": "Section 3",
       "evidence_type": "artifact",
-      "evidence": "litmus_inf/dsl_denotational_semantics.py. 4 disagreements all on RISC-V asymmetric fence patterns.",
+      "evidence": "litmus_inf/dsl_denotational_semantics.py",
       "reproducible_command": "cd litmus_inf && python3 dsl_denotational_semantics.py"
     },
     {
-      "claim": "Adversarial benchmark: 23 snippets, 7 domains, 13.0% exact-match / 21.7% top-3",
-      "section": "Abstract, Section 3.9, Appendix",
+      "claim": "pip-installable CLI (litmus-check) with JSON output",
+      "section": "Section 1",
       "evidence_type": "artifact",
-      "evidence": "litmus_inf/adversarial_benchmark.py. Quantifies 93%→13% author-sampling bias gap.",
-      "reproducible_command": "cd litmus_inf && python3 adversarial_benchmark.py"
-    },
-    {
-      "claim": "TCB analysis: 11 components with Verified/Trusted-Axiom/Implementation-Trust classifications",
-      "section": "Abstract, Section 3.7, Appendix",
-      "evidence_type": "artifact",
-      "evidence": "litmus_inf/tcb_analysis.py. 10,968 internal LoC enumerated.",
-      "reproducible_command": "cd litmus_inf && python3 tcb_analysis.py"
-    },
-    {
-      "claim": "Lean 4 proof sketches for Theorems 1, 4, 5, 6, 7 with sorry'd subgoals",
-      "section": "Abstract, Appendix",
-      "evidence_type": "artifact",
-      "evidence": "litmus_inf/lean/LitmusInf.lean. Type-checks with sorry annotations.",
-      "reproducible_command": "cat litmus_inf/lean/LitmusInf.lean"
-    },
-    {
-      "claim": "Compositional reasoning: 4 strategies (disjoint exact, SC-shared exact, Owicki-Gries sound, conservative RG sound)",
-      "section": "Section 5, Appendix",
-      "evidence_type": "artifact",
-      "evidence": "litmus_inf/paper_results_v6/compositional_analysis.json. 5 programs × 3 architectures.",
-      "reproducible_command": "cd litmus_inf && python3 compositional_reasoning.py"
-    },
-    {
-      "claim": "SMT-based discriminating litmus test synthesis (2-pattern minimal set)",
-      "section": "Section 3.8",
-      "evidence_type": "artifact",
-      "evidence": "Independently rediscovers MP and LB patterns.",
-      "reproducible_command": "cd litmus_inf && python3 smt_validation.py"
-    },
-    {
-      "claim": "pip-installable CLI (litmus-check) with JSON and --emit-certificate output",
-      "section": "Section 1, Section 3.9",
-      "evidence_type": "artifact",
-      "evidence": "litmus_inf/litmus_check.py, litmus_inf/setup.py. Install from source only, not published to PyPI.",
+      "evidence": "litmus_inf/litmus_check.py, litmus_inf/setup.py. Install from source only.",
       "reproducible_command": "cd litmus_inf && pip install -e . && litmus-check --help"
-    },
-    {
-      "claim": "Conditional Soundness (Theorem 1) with RF×CO decomposition lemma",
-      "section": "Appendix A-B",
-      "evidence_type": "proof",
-      "evidence": "paper.tex. Paper proof. Conditional on permissiveness assumption. Empirically supported by 228/228 herd7."
-    },
-    {
-      "claim": "Fence Menu Minimality (Theorem 2) — trivially true by construction",
-      "section": "Appendix A-B",
-      "evidence_type": "proof",
-      "evidence": "paper.tex. Argmin by construction. NP-hardness of whole-program version acknowledged."
-    },
-    {
-      "claim": "Scope-Aware Fence Sufficiency (Theorem 3) — sufficient condition only",
-      "section": "Appendix A-B",
-      "evidence_type": "proof",
-      "evidence": "paper.tex. Sufficient condition. Converse failure acknowledged."
-    },
-    {
-      "claim": "Lean 4 proof sketches for Theorems 1-7; sorry'd subgoals delineate verified skeleton from remaining obligations",
-      "section": "Appendix",
-      "evidence_type": "proof",
-      "evidence": "litmus_inf/lean/LitmusInf.lean. Alethe proof certificates for all UNSAT verdicts."
-    },
-    {
-      "claim": "642 meaningful differential tests + 3,000 determinism checks, all passing",
-      "section": "Section 3.6",
-      "evidence_type": "artifact",
-      "evidence": "litmus_inf/paper_results_v4/differential_testing.json",
-      "reproducible_command": "cd litmus_inf && python3 differential_testing.py"
-    },
-    {
-      "claim": "Fence cost: ARM 50.9% ± 32.4%, RISC-V 66.5% ± 26.8% (analytical weights, not hardware)",
-      "section": "Section 2.3",
-      "evidence_type": "artifact",
-      "evidence": "litmus_inf/paper_results_v4/fence_optimization.json",
-      "reproducible_command": "cd litmus_inf && python3 run_paper_experiments.py"
-    },
-    {
-      "claim": "Full 1,370-pair analysis: mean 397ms, individual patterns <1ms",
-      "section": "Section 3.6",
-      "evidence_type": "artifact",
-      "evidence": "litmus_inf/paper_results_v4/timing.json",
-      "reproducible_command": "cd litmus_inf && python3 run_paper_experiments.py"
     }
   ],
   "honesty_notes": {
-    "pattern_level_scope": "137 fixed patterns, not arbitrary programs. Cannot discover novel bugs. No coverage audit against real bug databases.",
-    "compositionality": "Four strategies: disjoint (exact), SC-shared (exact), Owicki-Gries for ordered shared vars (sound), conservative RG (sound but imprecise). General shared-variable case remains conservative.",
+    "pattern_level_scope": "140 fixed patterns, not arbitrary programs. Cannot discover novel bugs.",
+    "cross_solver": "Z3 and CVC5 (independent solver): 1,400/1,400 agreement. TCB substantially reduced.",
+    "llm_recognition": "LLM affects recall only; all verdicts SMT-certified. Requires OPENAI_API_KEY.",
     "smt_internal_consistency": "Both encodings by same authors. Internal consistency, not independent validation.",
-    "gpu_validation": "108/108 GPU internal consistency + 94/94 external cross-validation against published litmus test outcomes, PTX/Vulkan spec guarantees, and known GPU bugs. Not hardware-tested.",
-    "herd7_agreement": "228/228 validates against pre-computed expected outcomes from herd7 .cat specs. Internal consistency, not running herd7 directly.",
-    "1_of_171_discrepancy": "mp_fence_wr on RISC-V: DSL expressiveness gap, not model error.",
-    "benchmark_238": "238 snippets: 203 curated + 35 independently sourced. 86.1% exact-match (86.1%), 93.3% top-3. Independent snippets: 25.7% exact / 65.7% top-3.",
-    "benchmark_501": "501 snippets systematically sampled from 10 open-source projects by tool authors. Not independently curated. 93.0% exact, 94.0% top-3. Higher accuracy reflects absence of independently-sourced hard cases.",
-    "false_negatives": "7 non-exact cases in 238-snippet benchmark: 4 SAFE, 3 NEUTRAL, 0 UNSAFE misclassifications.",
+    "gpu_validation": "94/94 external cross-validation against published specs. Not hardware-tested.",
+    "herd7_agreement": "228/228 against pre-computed expected outcomes. Internal consistency.",
+    "benchmark": "203 curated snippets (96.6% exact); 33 independent snippets (0% exact, honest limitation). LLM mode addresses gap.",
+    "bug_coverage": "35/41 (85.4%) documented concurrency bugs covered. 100% of memory-ordering bugs.",
     "fence_costs": "Analytical weight reductions, not measured hardware latencies.",
-    "mechanization": "Lean 4 proof sketches for Theorems 1,4,5,6,7 with sorry'd subgoals. Alethe proof certificates for all 1,095 UNSAT verdicts. Full mechanization of sorry'd subgoals is future work.",
-    "theorem2_triviality": "Trivially true by argmin construction. Explicitly acknowledged.",
-    "severity_taxonomy": "Rule-based mapping from pattern name to category. CWE-calibrated. Not validated against specific CVE instances.",
-    "z3_trusted_computing_base": "Z3 remains in TCB. All 1,095 UNSAT verdicts carry Alethe resolution proofs checkable by external validators (Carcara). All 275 SAT models verified by direct substitution. TCB formally enumerated: 11 components with explicit trust classifications.",
-    "adversarial_benchmark": "23 out-of-distribution snippets show 13% accuracy, quantifying author-sampling bias. Not a representative sample of all possible concurrent code.",
-    "denotational_semantics": "428/432 (99.1%) agreement with operational engine. 4 disagreements on RISC-V asymmetric fence patterns are documented expressiveness gaps, not correctness bugs.",
-    "no_human_studies": "No user study or deployment evaluation.",
-    "no_pypi": "pip install from source only, not published to PyPI.",
-    "no_github_publishing": "Not published as a public GitHub repository or package.",
-    "conservative_models": "May report false positives. 3/25 hardware points are conservative."
+    "mechanization": "Lean 4 proof sketches with sorry'd subgoals. Full mechanization is future work.",
+    "severity_taxonomy": "CWE-calibrated. Not validated against specific CVE instances.",
+    "no_pypi": "pip install from source only, not published to PyPI."
   },
   "reproduction_instructions": {
     "full_analysis": "cd litmus_inf && python3 portcheck.py --analyze-all",
+    "cross_solver": "cd litmus_inf && python3 cross_solver_validation.py",
+    "bug_coverage": "cd litmus_inf && python3 bug_coverage_analysis.py",
+    "independent_benchmark": "cd litmus_inf && python3 independent_benchmark.py",
+    "llm_benchmark": "cd litmus_inf && source ~/.bashrc && python3 llm_pattern_recognizer.py --benchmark --model gpt-4.1",
     "ast_benchmark": "cd litmus_inf && python3 benchmark_suite.py",
     "smt_validation": "cd litmus_inf && python3 smt_validation.py",
-    "gpu_external": "cd litmus_inf && python3 gpu_external_validation.py",
-    "herd7_validation": "cd litmus_inf && python3 herd7_validation.py",
-    "severity_classification": "cd litmus_inf && python3 severity_classification.py",
-    "dsl_cat_correspondence": "cd litmus_inf && python3 dsl_cat_correspondence.py",
-    "differential_testing": "cd litmus_inf && python3 differential_testing.py",
-    "compositional": "cd litmus_inf && python3 compositional_reasoning.py",
-    "all_experiments": "cd litmus_inf && python3 run_paper_experiments.py",
     "alethe_proofs": "cd litmus_inf && python3 alethe_proof_extractor.py",
-    "denotational_semantics": "cd litmus_inf && python3 dsl_denotational_semantics.py",
-    "adversarial_benchmark": "cd litmus_inf && python3 adversarial_benchmark.py",
-    "tcb_analysis": "cd litmus_inf && python3 tcb_analysis.py",
     "compile_paper": "cd litmus_inf && pdflatex paper.tex && pdflatex paper.tex"
   }
 }

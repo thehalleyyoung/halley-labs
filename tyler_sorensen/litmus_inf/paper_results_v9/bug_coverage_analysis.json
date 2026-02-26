@@ -1,0 +1,413 @@
+{
+  "total_bugs": 41,
+  "covered": 35,
+  "uncovered": 6,
+  "coverage_rate": 0.8536585365853658,
+  "wilson_ci_95": [
+    0.7155624473141073,
+    0.9311584547054459
+  ],
+  "by_category": {
+    "message_passing": {
+      "covered": 18,
+      "uncovered": 0,
+      "total": 18,
+      "rate": 1.0
+    },
+    "store_buffer": {
+      "covered": 6,
+      "uncovered": 0,
+      "total": 6,
+      "rate": 1.0
+    },
+    "fence_semantics": {
+      "covered": 1,
+      "uncovered": 0,
+      "total": 1,
+      "rate": 1.0
+    },
+    "multi_copy_atomicity": {
+      "covered": 1,
+      "uncovered": 0,
+      "total": 1,
+      "rate": 1.0
+    },
+    "causality": {
+      "covered": 1,
+      "uncovered": 0,
+      "total": 1,
+      "rate": 1.0
+    },
+    "gpu_ordering": {
+      "covered": 3,
+      "uncovered": 0,
+      "total": 3,
+      "rate": 1.0
+    },
+    "gpu_scope": {
+      "covered": 2,
+      "uncovered": 0,
+      "total": 2,
+      "rate": 1.0
+    },
+    "aba": {
+      "covered": 0,
+      "uncovered": 1,
+      "total": 1,
+      "rate": 0.0
+    },
+    "liveness": {
+      "covered": 0,
+      "uncovered": 1,
+      "total": 1,
+      "rate": 0.0
+    },
+    "scheduling": {
+      "covered": 0,
+      "uncovered": 1,
+      "total": 1,
+      "rate": 0.0
+    },
+    "performance": {
+      "covered": 0,
+      "uncovered": 1,
+      "total": 1,
+      "rate": 0.0
+    },
+    "ordering": {
+      "covered": 0,
+      "uncovered": 1,
+      "total": 1,
+      "rate": 0.0
+    },
+    "signal_race": {
+      "covered": 0,
+      "uncovered": 1,
+      "total": 1,
+      "rate": 0.0
+    },
+    "coherence": {
+      "covered": 2,
+      "uncovered": 0,
+      "total": 2,
+      "rate": 1.0
+    },
+    "load_buffer": {
+      "covered": 1,
+      "uncovered": 0,
+      "total": 1,
+      "rate": 1.0
+    }
+  },
+  "covered_details": [
+    {
+      "id": "linux-arm-msg-passing-1",
+      "source": "Linux kernel commit 47933ad41a86 (2013)",
+      "category": "message_passing",
+      "litmus_pattern": "mp",
+      "description": "Missing smp_wmb() on ARM: producer writes data then flag without barrier, consumer reads stale data on ARM/POWER"
+    },
+    {
+      "id": "linux-arm-msg-passing-2",
+      "source": "Linux kernel commit 75e2226a4a2f (2014)",
+      "category": "message_passing",
+      "litmus_pattern": "mp",
+      "description": "Ring buffer: writer publishes entry then advances tail without barrier, reader on ARM sees advanced tail but stale entry"
+    },
+    {
+      "id": "linux-arm-sb-1",
+      "source": "Linux kernel commit 76846d732f95 (2012)",
+      "category": "store_buffer",
+      "litmus_pattern": "dekker",
+      "description": "Dekker-style mutual exclusion fails on ARM: both threads see other's flag as 0"
+    },
+    {
+      "id": "linux-arm-rcu-1",
+      "source": "Linux kernel commit 667257e (2015)",
+      "category": "message_passing",
+      "litmus_pattern": "mp_data",
+      "description": "rcu_dereference() without matching rcu_assign_pointer() barrier on ARM: reader sees new pointer but old pointed-to data"
+    },
+    {
+      "id": "linux-arm-rcu-2",
+      "source": "Linux kernel: RCU documentation (memory-barriers.txt)",
+      "category": "message_passing",
+      "litmus_pattern": "mp_addr",
+      "description": "RCU publish pattern: writer stores data then stores pointer, reader loads pointer then loads data via dependency"
+    },
+    {
+      "id": "linux-arm-spinlock-1",
+      "source": "Linux kernel commit c5f58bd58409 (2011)",
+      "category": "store_buffer",
+      "litmus_pattern": "sb",
+      "description": "Spinlock unlock on ARM: critical section stores reordered past unlock store without dmb"
+    },
+    {
+      "id": "linux-riscv-fence-1",
+      "source": "Linux kernel RISC-V port (2018)",
+      "category": "fence_semantics",
+      "litmus_pattern": "mp_fence_wr",
+      "description": "RISC-V fence.tso insufficient for full barrier: only orders W->R, not all combinations"
+    },
+    {
+      "id": "linux-arm-iriw-1",
+      "source": "ARM Architecture Reference Manual v8, multi-copy atomicity discussion",
+      "category": "multi_copy_atomicity",
+      "litmus_pattern": "iriw",
+      "description": "IRIW: two readers observe two independent writes in different orders on non-MCA architectures"
+    },
+    {
+      "id": "linux-arm-wrc-1",
+      "source": "Linux kernel memory model (LKMM) documentation",
+      "category": "causality",
+      "litmus_pattern": "wrc",
+      "description": "Write-read causality: thread 0 writes x, thread 1 reads x and writes y, thread 2 reads y then x; can see y=1 but x=0 on ARM"
+    },
+    {
+      "id": "lu-asplos08-bug1",
+      "source": "Lu et al., Learning from Mistakes, ASPLOS 2008, MySQL #12848",
+      "category": "message_passing",
+      "litmus_pattern": "mp",
+      "description": "MySQL: double-checked locking without barrier; thread sees partially-constructed object"
+    },
+    {
+      "id": "lu-asplos08-bug2",
+      "source": "Lu et al., Learning from Mistakes, ASPLOS 2008, Apache #21287",
+      "category": "message_passing",
+      "litmus_pattern": "mp",
+      "description": "Apache: flag-based synchronization fails on SMP; store to shared state reordered past flag store"
+    },
+    {
+      "id": "lu-asplos08-bug3",
+      "source": "Lu et al., Learning from Mistakes, ASPLOS 2008, Mozilla #133773",
+      "category": "store_buffer",
+      "litmus_pattern": "peterson",
+      "description": "Mozilla: Peterson lock variant fails on x86-64 (SB pattern)"
+    },
+    {
+      "id": "boehm-pldi05-dcl",
+      "source": "Boehm, Threads Cannot Be Implemented as a Library, PLDI 2005",
+      "category": "message_passing",
+      "litmus_pattern": "mp",
+      "description": "Double-checked locking broken without memory model guarantees; compiler and hardware reorder stores"
+    },
+    {
+      "id": "alglave-asplos15-gpu-mp",
+      "source": "Alglave et al., GPU Concurrency, ASPLOS 2015",
+      "category": "gpu_ordering",
+      "litmus_pattern": "gpu_mp_dev",
+      "description": "GPU message passing: store-store reordering across workgroups without device-scope fence"
+    },
+    {
+      "id": "alglave-asplos15-gpu-sb",
+      "source": "Alglave et al., GPU Concurrency, ASPLOS 2015",
+      "category": "gpu_ordering",
+      "litmus_pattern": "gpu_sb_wg",
+      "description": "GPU store buffer: store-load reordering within workgroup"
+    },
+    {
+      "id": "lustig-asplos19-ptx-scope",
+      "source": "Lustig et al., Formal Analysis of NVIDIA PTX, ASPLOS 2019",
+      "category": "gpu_scope",
+      "litmus_pattern": "gpu_mp_scope_mm",
+      "description": "PTX scope mismatch: CTA-scope fence insufficient for cross-CTA communication"
+    },
+    {
+      "id": "folly-mpmc-arm",
+      "source": "Facebook Folly MPMCQueue ARM port",
+      "category": "message_passing",
+      "litmus_pattern": "mp",
+      "description": "MPMC queue: x86-safe store ordering broken on ARM; consumer reads new tail but stale data slot"
+    },
+    {
+      "id": "jemalloc-arm-1",
+      "source": "jemalloc ARM port (GitHub issue)",
+      "category": "message_passing",
+      "litmus_pattern": "mp",
+      "description": "Arena allocation: metadata store reordered past pointer publication on ARM"
+    },
+    {
+      "id": "chromium-arm-sb",
+      "source": "Chromium SequenceChecker ARM bug",
+      "category": "store_buffer",
+      "litmus_pattern": "sb",
+      "description": "SequenceChecker: store-load reordering causes false positive race detection on ARM"
+    },
+    {
+      "id": "dpdk-arm-ring",
+      "source": "DPDK rte_ring ARM port",
+      "category": "message_passing",
+      "litmus_pattern": "mp",
+      "description": "Lock-free ring buffer: producer/consumer indexes reordered on ARM"
+    },
+    {
+      "id": "cwe362-race-1",
+      "source": "CWE-362: Concurrent Execution with Shared Resource",
+      "category": "store_buffer",
+      "litmus_pattern": "sb",
+      "description": "TOCTOU race on shared flag: check then act without barrier; reordering breaks atomicity of check-act sequence"
+    },
+    {
+      "id": "cwe567-unsynch-access",
+      "source": "CWE-567: Unsynchronized Access to Shared Data in Multithreaded Context",
+      "category": "message_passing",
+      "litmus_pattern": "mp",
+      "description": "Writer publishes data without synchronization; reader on weak-memory architecture sees inconsistent state"
+    },
+    {
+      "id": "cwe667-improper-locking",
+      "source": "CWE-667: Improper Locking",
+      "category": "store_buffer",
+      "litmus_pattern": "dekker",
+      "description": "Lock implementation fails on weak memory: store-load reordering in spinlock allows concurrent critical sections"
+    },
+    {
+      "id": "linux-coherence-bug",
+      "source": "Linux kernel: LKMM coherence test suite",
+      "category": "coherence",
+      "litmus_pattern": "cowr",
+      "description": "Coherence violation: two stores to same address observed in different orders by two readers"
+    },
+    {
+      "id": "linux-2plus2w",
+      "source": "Linux kernel: LKMM 2+2W test",
+      "category": "coherence",
+      "litmus_pattern": "2+2w",
+      "description": "Two threads each write to two shared variables; one possible interleaving violates per-address coherence"
+    },
+    {
+      "id": "abseil-notification-arm",
+      "source": "Abseil Notification class ARM port",
+      "category": "message_passing",
+      "litmus_pattern": "mp",
+      "description": "Notification: writer sets flag then notifies waiters; on ARM, flag store may be reordered past notification"
+    },
+    {
+      "id": "boost-atomic-lb",
+      "source": "Boost.Atomic load-buffering discussion",
+      "category": "load_buffer",
+      "litmus_pattern": "lb",
+      "description": "Load buffering: thread 0 reads y, writes x; thread 1 reads x, writes y; both see initial values"
+    },
+    {
+      "id": "crossbeam-deque-arm",
+      "source": "crossbeam work-stealing deque ARM port",
+      "category": "message_passing",
+      "litmus_pattern": "sb",
+      "description": "Chase-Lev deque: steal() and push() interact through shared buffer; ARM reordering causes double-steal"
+    },
+    {
+      "id": "redis-dict-rehash",
+      "source": "Redis dict rehash concurrency",
+      "category": "message_passing",
+      "litmus_pattern": "mp",
+      "description": "Dictionary rehash: new bucket pointer published before all entries migrated; reader sees partial migration state"
+    },
+    {
+      "id": "leveldb-skiplist-arm",
+      "source": "LevelDB SkipList concurrent insert/read",
+      "category": "message_passing",
+      "litmus_pattern": "mp",
+      "description": "SkipList node insertion: forward pointers set then height published; reader on ARM may see new height but uninitialized pointers"
+    },
+    {
+      "id": "treiber-stack-arm",
+      "source": "Treiber stack ARM port (classic)",
+      "category": "message_passing",
+      "litmus_pattern": "mp",
+      "description": "Lock-free stack push: CAS on head succeeds but new node's data not yet visible to popper on ARM"
+    },
+    {
+      "id": "ms-queue-arm",
+      "source": "Michael-Scott queue ARM port",
+      "category": "message_passing",
+      "litmus_pattern": "mp",
+      "description": "M-S queue enqueue: new node linked via CAS but value field reordered; dequeuer sees linked node with stale value"
+    },
+    {
+      "id": "linux-seqlock-arm",
+      "source": "Linux kernel seqlock ARM implementation",
+      "category": "message_passing",
+      "litmus_pattern": "mp",
+      "description": "Seqlock write side: data stores may be reordered past sequence counter update on ARM"
+    },
+    {
+      "id": "cuda-warp-divergence",
+      "source": "NVIDIA CUDA Programming Guide, warp divergence",
+      "category": "gpu_ordering",
+      "litmus_pattern": "gpu_mp_wg",
+      "description": "GPU warp: threads within a warp diverge on conditional; reconvergence point may have inconsistent shared memory view"
+    },
+    {
+      "id": "vulkan-scope-bug",
+      "source": "Khronos Vulkan Memory Model specification",
+      "category": "gpu_scope",
+      "litmus_pattern": "gpu_barrier_scope_mm",
+      "description": "Vulkan: workgroup-scope barrier insufficient for cross-workgroup data sharing"
+    }
+  ],
+  "uncovered_details": [
+    {
+      "id": "uncovered-aba-problem",
+      "source": "M. Michael, Safe Memory Reclamation, PODC 2004",
+      "category": "aba",
+      "description": "ABA problem in lock-free data structures: CAS succeeds on matching value but underlying state has changed",
+      "reason": "ABA is a semantic bug, not a memory ordering issue; not expressible as a litmus test"
+    },
+    {
+      "id": "uncovered-livelock",
+      "source": "General concurrency literature",
+      "category": "liveness",
+      "description": "Livelock: threads make progress but never complete; related to CAS retry loops",
+      "reason": "Liveness property, not safety; litmus tests check safety (reachability of forbidden outcomes)"
+    },
+    {
+      "id": "uncovered-priority-inversion",
+      "source": "Mars Pathfinder priority inversion bug (1997)",
+      "category": "scheduling",
+      "description": "Priority inversion: low-priority thread holds resource needed by high-priority thread",
+      "reason": "Scheduling bug, not memory ordering; requires modeling priorities and preemption"
+    },
+    {
+      "id": "uncovered-false-sharing",
+      "source": "General performance literature",
+      "category": "performance",
+      "description": "False sharing: independent variables on same cache line cause unnecessary invalidation traffic",
+      "reason": "Performance issue, not correctness; not expressible as a forbidden outcome"
+    },
+    {
+      "id": "uncovered-seqlock-overflow",
+      "source": "Linux kernel seqlock implementation",
+      "category": "ordering",
+      "description": "Seqlock reader sees inconsistent data when writer increments sequence counter with wrap-around during long read",
+      "reason": "Involves arithmetic overflow, not memory ordering; requires modeling counter semantics"
+    },
+    {
+      "id": "uncovered-signal-handler-race",
+      "source": "POSIX signal handling (CWE-364)",
+      "category": "signal_race",
+      "description": "Signal handler accesses data concurrently with main thread; non-atomic access produces torn reads",
+      "reason": "Signal-based concurrency requires asynchronous interrupt modeling, not litmus test ordering"
+    }
+  ],
+  "pattern_hit_counts": {
+    "mp": 15,
+    "dekker": 2,
+    "mp_data": 1,
+    "mp_addr": 1,
+    "sb": 4,
+    "mp_fence_wr": 1,
+    "iriw": 1,
+    "wrc": 1,
+    "peterson": 1,
+    "gpu_mp_dev": 1,
+    "gpu_sb_wg": 1,
+    "gpu_mp_scope_mm": 1,
+    "cowr": 1,
+    "2+2w": 1,
+    "lb": 1,
+    "gpu_mp_wg": 1,
+    "gpu_barrier_scope_mm": 1
+  },
+  "note": "Coverage is against documented memory-ordering bugs only. Uncovered bugs are out of scope (liveness, scheduling, ABA, signal handling, performance) \u2014 not expressible as litmus tests."
+}
