@@ -389,4 +389,153 @@ class TextReportFormatter(ReportFormatter)
 class JSONReportFormatter(ReportFormatter)   # __init__(indent=2)
 class HTMLReportFormatter(ReportFormatter)
 class LaTeXReportFormatter(ReportFormatter)
+
+# TCB analysis
+class TCBAnalyzer:
+    def analyze_codebase(self, root_path: str) -> TCBReport
+    def compute_tcb_size(self) -> int
+    def identify_critical_path(self) -> List[str]
+
+class AletheCertificateAdapter:
+    def convert(self, certificate: Dict) -> str   # returns Alethe s-expression
+    @staticmethod
+    def parse(alethe_str: str) -> Dict             # parse back
+
+class IndependentChecker:
+    def check(self, certificate: Dict) -> CheckResult
+```
+
+---
+
+## 12. CEGAR Refinement (`marace.abstract.cegar`)
+
+```python
+class CEGARVerifier:
+    def __init__(self, max_refinements=10, max_splits=8, timeout_s=60.0) -> None
+    def verify(self, initial_zonotope: Zonotope,
+               transfer_fn: Callable, safety_predicate: Callable,
+               concrete_eval: Callable) -> CEGARResult
+
+@dataclass
+class CEGARResult:
+    verdict: Verdict            # SAFE | UNSAFE | UNKNOWN
+    counterexample: Optional[np.ndarray]
+    refinement_iterations: int
+    refinement_history: List[RefinementRecord]
+    total_time_s: float
+
+class SpuriousnessChecker:
+    def __init__(self, concrete_eval_fn, num_samples=100) -> None
+    def check(self, zonotope: Zonotope, safety_predicate: Callable) -> bool
+
+class AbstractionRefinement:
+    @staticmethod
+    def split_counterexample_guided(z: Zonotope, cx: np.ndarray) -> List[Zonotope]
+    @staticmethod
+    def split_dimension(z: Zonotope, dim: int) -> Tuple[Zonotope, Zonotope]
+    @staticmethod
+    def split_gradient_guided(z: Zonotope, gradient: np.ndarray) -> List[Zonotope]
+
+class CompositionalCEGARVerifier:
+    def __init__(self, max_refinements=10) -> None
+    def verify_groups(self, groups: Dict[str, Tuple]) -> Dict[str, CEGARResult]
+
+class Verdict(Enum):
+    SAFE = "safe"
+    UNSAFE = "unsafe"
+    UNKNOWN = "unknown"
+
+def make_cegar_verifier(max_refinements=10, max_splits=8,
+                        timeout_s=60.0, strategy="counterexample_guided") -> CEGARVerifier:
+    """Convenience factory. strategy: 'counterexample_guided' | 'dimension' | 'gradient'"""
+```
+
+**Typical usage (from `run_cegar_experiments.py`):**
+```python
+from marace.abstract.cegar import make_cegar_verifier, Verdict
+
+verifier = make_cegar_verifier(max_refinements=10, max_splits=32,
+                                strategy="counterexample_guided")
+result = verifier.verify(
+    initial_zonotope=zonotope,
+    transfer_fn=lambda z: z.affine_transform(W, b).relu(),
+    safety_predicate=collision_predicate,
+    concrete_eval=evaluate_network_concrete
+)
+if result.verdict == Verdict.SAFE:
+    print("Race is spurious (false positive)")
+elif result.verdict == Verdict.UNSAFE:
+    print(f"Real race — witness: {result.counterexample}")
+```
+
+---
+
+## 13. Recurrent Policies (`marace.policy.recurrent`)
+
+```python
+@dataclass
+class RecurrentNetworkArchitecture:
+    cell_type: str            # "lstm" or "gru"
+    input_dim: int
+    hidden_dim: int
+    output_dim: int
+    unroll_horizon: int
+    # Gate weight matrices (W_ih, W_hh, b_ih, b_hh for each gate)
+    output_projection: Optional[Tuple[np.ndarray, np.ndarray]]
+
+class LSTMCell:
+    def __init__(self, arch: RecurrentNetworkArchitecture) -> None
+    def forward(self, x: np.ndarray, h: np.ndarray, c: np.ndarray) -> Tuple
+    def forward_abstract(self, x_z: Zonotope, h_z: Zonotope,
+                         c_z: Zonotope) -> Tuple[Zonotope, Zonotope]
+
+class GRUCell:
+    def __init__(self, arch: RecurrentNetworkArchitecture) -> None
+    def forward(self, x: np.ndarray, h: np.ndarray) -> np.ndarray
+    def forward_abstract(self, x_z: Zonotope, h_z: Zonotope) -> Zonotope
+
+class RecurrentAbstractEvaluator:
+    def __init__(self, arch: RecurrentNetworkArchitecture,
+                 max_generators: int = 50) -> None
+    def evaluate(self, input_zonotope: Zonotope) -> AbstractOutput
+
+class RecurrentLipschitzBound:
+    def __init__(self, arch: RecurrentNetworkArchitecture) -> None
+    def naive_bound(self) -> float          # Lip(f)^K
+    def interval_bound(self) -> float       # with gate activation masking
+    def exponential_decay_bound(self) -> float  # with forget gate analysis
+```
+
+---
+
+## 14. Adaptive SIS (`marace.sampling.adaptive_sis`)
+
+```python
+class AdaptiveSISEngine:
+    def __init__(self, target_log_prob, proposal, num_particles=200,
+                 ess_threshold=0.5, resampling='systematic') -> None
+    def run(self, num_steps=10, rng=None) -> AdaptiveSISResult
+
+class PlackettLuceValidator:
+    def __init__(self, num_permutation_samples=1000) -> None
+    def validate(self, schedules: List[Schedule]) -> IIAValidationResult
+
+class MixedLogitProposal(ProposalDistribution):
+    def __init__(self, num_components=3) -> None
+    def fit(self, schedules: List[Schedule], weights: np.ndarray) -> None
+    def sample(self, n: int, rng) -> List[Schedule]
+    def log_prob(self, schedule: Schedule) -> float
+
+class NestedLogitProposal(ProposalDistribution):
+    def __init__(self, nests: Dict[str, List[str]], scale=1.0) -> None
+    def sample(self, n: int, rng) -> List[Schedule]
+    def log_prob(self, schedule: Schedule) -> float
+
+class StoppingCriteria:
+    def __init__(self) -> None
+    def should_stop(self, ess_history, estimates, target_ci_width=0.05) -> bool
+
+class JointErrorAnalysis:
+    def __init__(self) -> None
+    def decompose(self, ai_error, is_estimates, is_weights) -> ErrorDecomposition
 ```

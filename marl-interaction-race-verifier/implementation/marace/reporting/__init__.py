@@ -42,6 +42,16 @@ from .proof_certificates import (
     InductiveWitnessStep,
     HBDerivationStep,
 )
+from .tcb_analysis import (
+    TCBComponent,
+    TCBReport,
+    TCBAnalyzer,
+    TrustLevel,
+    SoundnessArgument,
+    AletheCertificateAdapter,
+    IndependentChecker as StandaloneChecker,
+    StandaloneCheckResult,
+)
 from .visualization import (
     StateSpaceVisualizer,
     ScheduleSpaceVisualizer,
@@ -90,4 +100,12 @@ __all__ = [
     "ConvergenceVisualizer",
     "MetricsDashboard",
     "ASCIIVisualizer",
+    "TCBComponent",
+    "TCBReport",
+    "TCBAnalyzer",
+    "TrustLevel",
+    "SoundnessArgument",
+    "AletheCertificateAdapter",
+    "StandaloneChecker",
+    "StandaloneCheckResult",
 ]

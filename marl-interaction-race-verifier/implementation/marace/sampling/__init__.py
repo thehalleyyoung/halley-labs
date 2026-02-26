@@ -72,6 +72,21 @@ from marace.sampling.concentration import (
     HoeffdingSelfNormalizedBound,
     MartingaleStoppingCriterion,
 )
+from marace.sampling.adaptive_sis import (
+    AdaptiveSISEngine,
+    SISResult,
+    PlackettLuceValidator,
+    IIATestResult,
+    MixedLogitProposal,
+    NestedLogitProposal,
+    StoppingCriteria,
+    StoppingDecision,
+    JointErrorAnalysis,
+    ErrorDecomposition,
+    MultinomialResampling,
+    SystematicResampling,
+    ResidualResampling,
+)
 
 __all__ = [
     "Schedule",
@@ -128,4 +143,17 @@ __all__ = [
     "ConvergenceTheory",
     "HoeffdingSelfNormalizedBound",
     "MartingaleStoppingCriterion",
+    "AdaptiveSISEngine",
+    "SISResult",
+    "PlackettLuceValidator",
+    "IIATestResult",
+    "MixedLogitProposal",
+    "NestedLogitProposal",
+    "StoppingCriteria",
+    "StoppingDecision",
+    "JointErrorAnalysis",
+    "ErrorDecomposition",
+    "MultinomialResampling",
+    "SystematicResampling",
+    "ResidualResampling",
 ]

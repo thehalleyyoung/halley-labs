@@ -42,6 +42,17 @@ from marace.abstract.fixpoint import (
     SoundOverApproximation,
     ParallelFixpoint,
 )
+from marace.abstract.cegar import (
+    AbstractionRefinement,
+    CEGARResult,
+    CEGARVerifier,
+    CompositionalCEGARVerifier,
+    RefinementRecord,
+    RefinementStrategy,
+    SpuriousnessChecker,
+    Verdict,
+    make_cegar_verifier,
+)
 from marace.abstract.domains import (
     IntervalDomain,
     HybridDomain,
@@ -54,6 +65,15 @@ from marace.abstract.domains import (
 
 __all__ = [
     "Zonotope",
+    "AbstractionRefinement",
+    "CEGARResult",
+    "CEGARVerifier",
+    "CompositionalCEGARVerifier",
+    "RefinementRecord",
+    "RefinementStrategy",
+    "SpuriousnessChecker",
+    "Verdict",
+    "make_cegar_verifier",
     "BoundedReduction",
     "PCAMerging",
     "ReductionChain",

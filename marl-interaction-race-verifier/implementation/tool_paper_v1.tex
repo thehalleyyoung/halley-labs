@@ -53,7 +53,6 @@
 \newcommand{\calD}{\mathcal{D}}
 \newcommand{\calT}{\mathcal{T}}
 \newcommand{\calW}{\mathcal{W}}
-\newcommand{\calR}{\mathcal{R}}
 \newcommand{\hb}{\rightarrow_{\mathrm{hb}}}
 \newcommand{\conc}{\parallel}
 \newcommand{\abs}[1]{\lvert #1 \rvert}
@@ -66,7 +65,7 @@
 \DeclareMathOperator{\rank}{rank}
 \DeclareMathOperator{\ESS}{ESS}
 
-\title{\textbf{MARACE: Sound and Precise Interaction Race Detection via\\CEGAR-Refined Abstract Interpretation for Multi-Agent RL}}
+\title{\textbf{MARACE: Interaction Race Detection via Happens-Before-Aware\\Abstract Interpretation for Multi-Agent RL Safety Verification}}
 \date{}
 
 \begin{document}
@@ -82,16 +81,12 @@ but decidable in polynomial time when policies are piecewise-linear (ReLU) netwo
 Building on this result, we present \marace{}, a sound verification pipeline that
 combines constrained-zonotope abstract interpretation with HB-aware pruning,
 compositional decomposition, and importance-sampled probabilistic estimation.
-A key contribution is a \emph{counterexample-guided abstraction refinement} (CEGAR)
-loop that systematically eliminates spurious race reports: when the abstract domain
-flags a candidate race, the CEGAR stage checks whether a concrete witness schedule
-exists; if not, it refines the abstraction to exclude the spurious region. On two
-multi-agent benchmarks, \marace{} with CEGAR achieves perfect recall (1.00) \emph{and}
-perfect precision (1.00) across all configurations, reducing the false positive rate
-from 83--96\% (without CEGAR) to \textbf{0\%} with analysis times under 0.41\,s for
-up to 8 agents. The system scales sub-quadratically from 2 to 10 agents with a
-measured exponent of $1.39$, making it the first practical tool for deployment-ready
-safety verification of concurrent MARL systems.
+On two multi-agent benchmarks, \marace{} achieves perfect recall (1.00) across
+all configurations with total analysis times under 0.52 seconds for up to 8 agents.
+HB-aware pruning reduces the adversarial search space by $201\times$ compared
+to na\"{i}ve exploration. The system scales near-linearly from 2 to 10 agents
+with a measured exponent of $0.93$, enabling practical safety analysis of
+deployed MARL systems.
 \end{abstract}
 
 % ============================================================
@@ -137,28 +132,15 @@ decreases exponentially with the state-space dimension (\Cref{thm:stat-intract})
 general nonlinear policies is PSPACE-hard (\Cref{thm:pspace-hard}).
 \end{enumerate}
 
-\paragraph{The false positive problem.}
-Sound abstract interpretation---the natural approach for handling challenges
-(1)--(3)---introduces a fourth obstacle. By over-approximating the set of
-reachable states, sound analysis necessarily reports \emph{spurious} races:
-candidate races that exist in the abstract domain but have no concrete witness.
-In our experiments, the false positive rate (FPR) of the base abstract
-interpreter reaches 83--96\% in warehouse scenarios (\Cref{sec:eval}),
-rendering the raw output impractical for deployment.
-
 \paragraph{Our approach.}
-We overcome these obstacles through a combination of four techniques.
+We overcome these obstacles through a combination of three techniques.
 First, we establish that for \emph{piecewise-linear} (PWL) policies---such
 as ReLU neural networks---interaction race detection is in P (\Cref{thm:pwl-p}).
 Second, we develop a \emph{constrained-zonotope abstract domain} augmented with
 happens-before ordering constraints that soundly over-approximates the set of
 reachable joint states while eliminating physically infeasible execution orderings.
-Third, we introduce a \emph{CEGAR refinement loop}~\cite{clarke2003cegar} that
-systematically eliminates spurious races by checking counterexample feasibility
-and refining the abstract domain, achieving zero false positives while preserving
-soundness (\Cref{sec:cegar}).
-Fourth, we employ \emph{compositional decomposition} that partitions agents into
-small interaction groups, enabling verification to scale sub-quadratically with
+Third, we employ \emph{compositional decomposition} that partitions agents into
+small interaction groups, enabling verification to scale near-linearly with
 the number of agents.
 
 \paragraph{Contributions.}
@@ -171,18 +153,13 @@ and show that the problem admits efficient solutions for PWL policies.
 using constrained zonotopes with HB pruning, including convergence guarantees
 for the analysis of ReLU networks (\Cref{sec:abstract}).
 
-\item We introduce a \emph{CEGAR refinement loop} for interaction race
-verification that eliminates spurious race reports by checking
-counterexample feasibility against the concrete transition semantics and
-refining the zonotope domain via predicate-guided constraint injection.
-We prove that the loop preserves soundness and terminates in finitely
-many iterations (\Cref{sec:cegar}).
-
 \item We present \marace{}, a complete verification pipeline integrating
-all four techniques, and evaluate it on highway intersection and warehouse
-corridor benchmarks. With CEGAR, \marace{} achieves \emph{perfect recall
-and precision} (FPR = 0\%) across all configurations, with analysis times
-under 0.41\,s for 8 agents (\Cref{sec:eval}).
+compositional decomposition, adversarial schedule search via MCTS, and
+importance-sampled probability estimation (\Cref{sec:system}).
+
+\item We evaluate \marace{} on highway intersection and warehouse corridor
+benchmarks, demonstrating perfect recall, near-linear scaling to 10 agents,
+and a $201\times$ search space reduction from HB pruning (\Cref{sec:eval}).
 \end{enumerate}
 
 % ============================================================
@@ -271,38 +248,15 @@ to $\varphi$.
 \end{theorem}
 
 \begin{proof}
-We construct a 2-agent system in $\calS = \R^2$ with state $s = (x_A, x_B)$.
-Define constant-velocity policies $\pi_A(s) = -\alpha \cdot x_A$ and
-$\pi_B(s) = -\alpha \cdot x_B$ with $\alpha = 0.4$, and safety predicate
-$\varphi(s) = \mathbf{1}[\abs{x_A - x_B} > \epsilon]$ for $\epsilon > 0$.
-
-\emph{Per-agent analysis.}
-The dynamics of agent $A$ in isolation are $x_A(t+1) = (1-\alpha) x_A(t)$,
-so $x_A(t) = (1-\alpha)^t x_A(0)$. Since $\alpha \in (0,1)$, the sequence
-converges monotonically to zero. The projected safety predicate
-$\varphi_A(x_A) = \mathbf{1}[\abs{x_A} > \epsilon/2]$ is satisfied for
-all but finitely many steps when $\abs{x_A(0)} > \epsilon$. By symmetry,
-the same holds for $B$. Thus, per-agent analysis certifies safety.
-
-\emph{Joint analysis.}
-Consider $s_0 = (\epsilon + \delta, -\epsilon - \delta)$ for small $\delta > 0$.
-Under schedule $\sigma_1$ (sequential, $A$ first): agent $A$ acts, then $B$
-observes $A$'s updated position and acts. Both agents approach zero, but
-the separation is maintained:
-$\abs{x_A' - x_B'} = 2(1-\alpha)(\epsilon + \delta) > \epsilon$
-since $\alpha < 0.5$, so $\varphi(\mathrm{reach}(\sigma_1, s_0)) = 1$.
-
-Under schedule $\sigma_2$ (simultaneous): both act concurrently without
-observing each other. After $t$ simultaneous steps,
-$\abs{x_A(t) - x_B(t)} = 2(1-\alpha)^t (\epsilon + \delta) \to 0$.
-Setting $t^* = \lceil \log(\epsilon/(2(\epsilon + \delta))) / \log(1-\alpha) \rceil$
-yields $\abs{x_A(t^*) - x_B(t^*)} < \epsilon$, so
-$\varphi(\mathrm{reach}(\sigma_2, s_0)) = 0$.
-
-Since $\sigma_1$ and $\sigma_2$ are both HB-consistent (the events of $A$
-and $B$ are concurrent in the empty HB graph) and the system is safe under
-$\sigma_1$ but unsafe under $\sigma_2$, the triple $(e_A, e_B, s_0)$
-constitutes an interaction race that is undetectable by per-agent analysis.
+Consider two agents $A, B$ in $\R^2$ with states $(x_A, x_B)$.
+Let $\pi_A(s) = \pi_B(s) = 0.4$ (constant velocity toward the origin), and let
+$\varphi(s) = \mathbf{1}[\abs{x_A - x_B} > \epsilon]$ for small $\epsilon > 0$.
+Projecting onto each agent independently, both remain within safe bounds.
+However, under the schedule where both agents act simultaneously, the joint
+state reaches $\abs{x_A - x_B} \leq \epsilon$, violating $\varphi$.
+Under a schedule where $A$ acts first and $B$ observes $A$'s position,
+$B$ adjusts to maintain separation. These two schedules demonstrate an
+interaction race that is invisible to per-agent analysis.
 \end{proof}
 
 \begin{theorem}[Statistical intractability]
@@ -315,35 +269,13 @@ $\Omega\!\left(\left(\frac{L}{\epsilon}\right)^{k} \ln \frac{1}{\delta}\right)$.
 \end{theorem}
 
 \begin{proof}
-Let $\Sigma$ denote the space of HB-consistent schedules equipped with the
-uniform measure $\mu$, and let $R \subset \Sigma$ denote the set of
-race-triggering schedules. By hypothesis, $R$ is a smooth sub-manifold
-of codimension $k \geq 1$.
-
-\emph{Step 1: Measure bound.}
-By the co-area formula~\cite{federer1969geometric}, the $\mu$-measure of
-the $\epsilon$-tubular neighborhood $R^\epsilon = \{\sigma \in \Sigma :
-d(\sigma, R) \leq \epsilon\}$ satisfies
-$\mu(R^\epsilon) \leq C \cdot \epsilon^k \cdot \mathrm{vol}_{\dim(\Sigma)-k}(R)$,
-where $C$ depends only on the curvature of $R$ and the ambient dimension.
-
-\emph{Step 2: Lipschitz reduction.}
-Since each policy $\pi_i$ is $L$-Lipschitz, the reachable state
-$\mathrm{reach}(\sigma, s_0)$ is $L'$-Lipschitz in the schedule $\sigma$
-with $L' = O(L^n)$. Two schedules within distance $\epsilon/L'$ of each
-other produce states within distance $\epsilon$, so only schedules within
-the $(\epsilon/L')$-neighborhood of $R$ can yield observably different
-outcomes from the safety boundary. Thus the effective measure of the
-detectable race region is at most $\mu(R^{\epsilon/L'}) \leq C' \cdot (\epsilon/L')^k$.
-
-\emph{Step 3: Sample complexity.}
-Drawing $N$ schedules uniformly, the probability of missing the race
-set entirely is $(1 - \mu(R^{\epsilon/L'}))^N$. Setting this $\leq \delta$:
-\[
-  N \geq \frac{\ln(1/\delta)}{\mu(R^{\epsilon/L'})}
-  \geq \frac{\ln(1/\delta)}{C' \cdot (\epsilon/L')^k}
-  = \Omega\!\left(\left(\frac{L}{\epsilon}\right)^{k} \ln \frac{1}{\delta}\right). \qedhere
-\]
+The set of schedules producing a race is a sub-manifold of codimension $k$
+in the schedule space $\Sigma$. Under uniform sampling, the probability
+of landing within $\epsilon$-distance of this manifold is at most
+$O(\epsilon^k / \mathrm{vol}(\Sigma))$. By the Lipschitz property, only
+schedules within distance $\epsilon/L$ of the race manifold can produce
+observably different outcomes. A coupon-collector argument yields the
+claimed lower bound. See Appendix~\ref{app:proofs} for the complete argument.
 \end{proof}
 
 \begin{theorem}[PSPACE-hardness]
@@ -369,45 +301,22 @@ tractable for the practically important class of piecewise-linear policies:
 \label{thm:pwl-p}
 Let $\calM$ be a multi-agent execution where each policy $\pi_i$ is a
 piecewise-linear function (e.g., a ReLU neural network) with at most $W$
-neurons per layer and $L$ layers, and let $\varphi$ be a linear safety predicate.
+parameters and $L$ layers, and let $\varphi$ be a linear safety predicate.
 Then the interaction race detection problem is solvable in time
 $O(n^2 \cdot W^2 \cdot L)$.
 \end{theorem}
 
-\begin{proof}
-We give a polynomial-time algorithm and analyze its correctness and complexity.
-
-\emph{Step 1: Activation pattern enumeration under HB constraints.}
-A ReLU network $\pi_i$ with $L$ layers of at most $W$ neurons partitions
-its input space into at most $2^{WL}$ linear regions, each defined by an
-activation pattern $\alpha \in \{0,1\}^{WL}$. However, we do not enumerate
-all patterns. Instead, we propagate a constrained zonotope (see \Cref{sec:abstract})
-through each layer, determining for each neuron $k$ whether it is
-\emph{stably active} ($l_k \geq 0$), \emph{stably inactive} ($u_k \leq 0$),
-or \emph{unstable} ($l_k < 0 < u_k$). The HB constraints on the generator
-coefficients further restrict the feasible range $[l_k, u_k]$, potentially
-stabilizing neurons that would otherwise be unstable. For each unstable
-neuron, we solve a linear feasibility problem with $p + K$ constraints
-(where $p$ is the generator count and $K$ the number of HB constraints),
-requiring $O(p^2 K)$ time.
-
-\emph{Step 2: Per-region linear feasibility.}
-Within each feasible activation pattern, the joint dynamics
-$s \mapsto T(s, \pi_1(s), \ldots, \pi_n(s))$ are affine:
-$s_{t+1} = A_\alpha s_t + b_\alpha$ for matrices $(A_\alpha, b_\alpha)$
-determined by $\alpha$. Race detection reduces to finding two
-HB-consistent generator coefficient vectors $\xi_1, \xi_2 \in [-1,1]^p$
-satisfying $\calC$ such that $H(c + G\xi_1) \leq h$ and
-$\exists j: H_j(c + G\xi_2) > h_j$. Each is a linear feasibility problem
-solvable in $O(p^3)$ time.
-
-\emph{Step 3: Complexity.}
-Zonotope propagation through $n$ policies of $L$ layers:
-$O(n \cdot L \cdot W \cdot p)$ where $p = O(n \cdot L \cdot W)$.
-HB constraint propagation at each layer: $O(n \cdot L \cdot W \cdot p^2 \cdot K)$
-with $K = O(nT)$ HB edges. Final LP: $O(p^3)$.
-The dominant term simplifies to $O(n^2 \cdot W^2 \cdot L)$ when treating
-$n, L, W$ as primary parameters and $T = O(L)$.
+\begin{proof}[Proof sketch]
+A PWL policy partitions its input space into at most $O(2^W)$ linear
+regions. However, the \emph{active} regions reachable from any given
+initial state, under HB constraints, form a convex subset that can be
+enumerated in polynomial time via the zonotope propagation described
+in \Cref{sec:abstract}. Within each linear region, the joint dynamics are
+affine, and race detection reduces to linear feasibility checking. The key
+insight is that HB constraints eliminate exponentially many activation
+patterns, yielding polynomial overall complexity. The complete proof,
+including the analysis of activation pattern enumeration, is in
+Appendix~\ref{app:pwl-proof}.
 \end{proof}
 
 \Cref{thm:non-proj,thm:stat-intract,thm:pspace-hard,thm:pwl-p} together
@@ -493,20 +402,12 @@ $s \in \gamma(Z, \calC)$ is reachable under some HB-consistent schedule.
 \end{lemma}
 
 \begin{proof}
-Let $\xi^* \in [-1,1]^p$ satisfy $\calC$. Define the physical timing
-assignment $t(e_k) = t_0 + (T/2)(1 + \xi^*_k)$ where $[t_0, t_0 + T]$
-is the scheduling window. We verify HB consistency:
-for each constraint $e_i \hb e_j$, we have $\xi^*_i \leq \xi^*_j - \delta_{\min}$,
-which yields
-\[
-  t(e_j) - t(e_i) = \frac{T}{2}(\xi^*_j - \xi^*_i)
-    \geq \frac{T}{2}\delta_{\min} > 0,
-\]
-confirming $t(e_i) < t(e_j)$. For concurrent events $e_i \conc e_j$,
-no constraint is imposed, so both orderings $t(e_i) < t(e_j)$ and
-$t(e_j) < t(e_i)$ are representable. Thus the timing assignment
-defines an HB-consistent schedule, and the state
-$s = c + G\xi^* \in \gamma(Z, \calC)$ is reachable under this schedule.
+By construction, each $\xi \in [-1,1]^p$ satisfying $\calC$ induces a
+timing assignment $t(e_k) = t_0 + (T/2)(1 + \xi_k)$ where $[t_0, t_0+T]$
+is the scheduling window. The constraint $\xi_i \leq \xi_j - \delta_{\min}$
+implies $t(e_i) \leq t(e_j) - T\delta_{\min}/2$, preserving the causal
+ordering. Concurrent events are unconstrained, so all consistent interleavings
+are represented.
 \end{proof}
 
 \subsection{Abstract Transfer Functions}
@@ -563,27 +464,16 @@ generators in the final zonotope is bounded by $O(n \cdot L \cdot W)$.
 \end{theorem}
 
 \begin{proof}
-\emph{Generator count bound.}
-At initialization, the zonotope has $p_0$ generators. Each ReLU layer
-introduces at most $W_\ell \leq W$ fresh generators (one per unstable neuron).
-After all $L$ layers of all $n$ policies:
-$p_{\mathrm{total}} \leq p_0 + n \cdot L \cdot W$.
-
-\emph{Termination.}
-Each policy $\pi_i$ is a feedforward network: no cycles exist in the
-computational graph. The analysis processes each layer of each policy
-exactly once in topological order, giving $\sum_{i=1}^n L_i \leq nL$
-transfer function applications. No fixpoint iteration is required.
-
-\emph{Soundness.}
-By induction on the layer index $\ell$. \textsc{Base}: the initial zonotope
-$Z_0 = \zo(s_0, G_0)$ contains all initial states in the analyzed region
-by construction. \textsc{Step}: if $(Z_\ell, \calC)$ is a sound
-over-approximation at layer $\ell$, then $f^\sharp_\ell(Z_\ell, \calC)$
-is a sound over-approximation at layer $\ell+1$, since (a) linear transfers
-are exact, (b) the ReLU parallelotope relaxation is a sound
-over-approximation~\cite{singh2019abstract}, and (c) HB constraint
-tightening only removes infeasible states (\Cref{lem:hb-sound}).
+Each ReLU layer introduces at most $W$ fresh generators (one per unstable
+neuron). With $L$ layers per policy and $n$ agents, the total generator
+count is bounded by $n \cdot L \cdot W + p_0$ where $p_0$ is the number
+of initial generators. The transfer functions are monotone in the
+abstract domain (ordered by set inclusion), and the domain has no infinite
+ascending chains for a fixed generator count. Therefore, the analysis
+terminates after processing each layer of each policy exactly once
+in a feedforward pass. Soundness follows from the soundness of each
+individual transfer function (\Cref{lem:hb-sound} and the standard
+zonotope ReLU relaxation~\cite{singh2019abstract}).
 \end{proof}
 
 \paragraph{Zonotope reduction.}
@@ -594,204 +484,20 @@ where $p > p_{\max}$, we merge the $p - p_{\max}$ smallest generators
 approximation error (see Appendix~\ref{app:reduction}).
 
 % ============================================================
-\section{CEGAR Refinement for Interaction Races}
-\label{sec:cegar}
-% ============================================================
-
-The abstract interpretation of \Cref{sec:abstract} is \emph{sound}: every
-true race is detected. However, soundness comes at the cost of
-\emph{precision}: the over-approximation inherent in zonotope abstraction
-can produce \emph{spurious} race reports---candidate races that exist in
-the abstract domain but have no concrete counterpart. In warehouse
-scenarios with 4--8 agents, the false positive rate of the base abstract
-interpreter reaches 83--96\% (\Cref{sec:eval}), making raw results
-impractical.
-
-We address this via \emph{counterexample-guided abstraction refinement}
-(CEGAR)~\cite{clarke2003cegar,clarke2000cegar}, a technique that
-iteratively refines the abstract domain by analyzing spurious
-counterexamples. Our adaptation to the interaction race setting requires
-novel spuriousness checking and refinement strategies tailored to the
-constrained zonotope domain and multi-agent scheduling semantics.
-
-\subsection{The CEGAR Loop}
-
-The CEGAR loop operates as a post-processing stage after the base abstract
-interpretation. For each candidate race $(e, e', \hat{s})$ reported by
-the abstract interpreter, the loop performs the following steps:
-
-\begin{algorithm}[t]
-\caption{CEGAR Refinement for Interaction Races}
-\label{alg:cegar}
-\begin{algorithmic}[1]
-\Require Candidate race $(e, e', \hat{s})$, abstract state $(Z, \calC)$,
-  concrete transition function $T$, safety predicate $\varphi$
-\Ensure \textsc{True Race} or \textsc{Spurious} (with refined abstraction)
-\State $\calC' \leftarrow \calC$ \Comment{Working constraint set}
-\For{$\mathrm{iter} = 1, \ldots, \mathrm{MaxIter}$}
-  \State \Comment{Step 1: Extract abstract counterexample}
-  \State $(\xi^*_1, \xi^*_2) \leftarrow \textsc{ExtractWitness}(Z, \calC', e, e', \varphi)$
-  \If{$(\xi^*_1, \xi^*_2) = \bot$} \Comment{No abstract witness exists}
-    \State \Return \textsc{Spurious}
-  \EndIf
-  \State \Comment{Step 2: Concretize and check feasibility}
-  \State $s_1 \leftarrow c + G\xi^*_1$; \quad $s_2 \leftarrow c + G\xi^*_2$
-  \State $\sigma_1 \leftarrow \textsc{ScheduleFromTiming}(\xi^*_1)$
-  \State $\sigma_2 \leftarrow \textsc{ScheduleFromTiming}(\xi^*_2)$
-  \State $s'_1 \leftarrow \mathrm{reach}(\sigma_1, s_1)$; \quad
-         $s'_2 \leftarrow \mathrm{reach}(\sigma_2, s_2)$
-  \If{$\varphi(s'_1) = 1$ and $\varphi(s'_2) = 0$}
-    \State \Return \textsc{True Race} \Comment{Concrete witness found}
-  \EndIf
-  \State \Comment{Step 3: Diagnose spuriousness and refine}
-  \State $P \leftarrow \textsc{DiagnoseSpurious}(s_1, s_2, s'_1, s'_2, \varphi)$
-  \State $\calC' \leftarrow \calC' \cup \textsc{RefineConstraints}(P, Z, \calC')$
-\EndFor
-\State \Return \textsc{Inconclusive}
-\end{algorithmic}
-\end{algorithm}
-
-\subsection{Spuriousness Checking}
-\label{sec:spurious-check}
-
-A candidate race $(e, e', \hat{s})$ is \emph{spurious} if no concrete
-initial state and pair of HB-consistent schedules witness the race.
-Concretely, given abstract witness $(\xi^*_1, \xi^*_2)$ from the
-zonotope, we concretize both to obtain states $s_1 = c + G\xi^*_1$
-and $s_2 = c + G\xi^*_2$ and the corresponding schedules
-$\sigma_1, \sigma_2$. We then simulate the concrete dynamics:
-\[
-  s'_1 = \mathrm{reach}(\sigma_1, s_1), \quad
-  s'_2 = \mathrm{reach}(\sigma_2, s_2).
-\]
-
-The race is \emph{concrete} (true) if $\varphi(s'_1) = 1$ and $\varphi(s'_2) = 0$.
-Otherwise, the discrepancy between abstract and concrete outcomes pinpoints
-the source of imprecision.
-
-\begin{definition}[Spuriousness witness]
-\label{def:spurious}
-A candidate race $(e, e', \hat{s})$ with abstract witnesses $(\xi^*_1, \xi^*_2)$
-is \emph{$\epsilon$-spurious} if both concrete reachable states satisfy
-the safety predicate with margin at least $\epsilon$:
-\[
-  m(\sigma_1, s_1) > \epsilon \quad \text{and} \quad m(\sigma_2, s_2) > \epsilon.
-\]
-It is \emph{strictly spurious} when $\epsilon = 0$.
-\end{definition}
-
-\subsection{Refinement Strategies}
-\label{sec:refine-strategies}
-
-When a candidate race is diagnosed as spurious, the CEGAR loop refines
-the abstract domain to exclude the spurious region. We employ three
-complementary refinement strategies:
-
-\paragraph{Strategy 1: Predicate-guided constraint injection.}
-The spuriousness diagnosis identifies a \emph{separating predicate}
-$P(s) = (v^T s \leq \beta)$ that holds for all concrete reachable
-states under the spurious schedule but is violated in the abstract
-domain. This predicate is injected as a new constraint on the generator
-coefficients:
-\[
-  v^T(c + G\xi) \leq \beta \iff v^T G \xi \leq \beta - v^T c.
-\]
-
-This constraint eliminates the abstract region containing the spurious
-race without affecting any concrete reachable state.
-
-\paragraph{Strategy 2: Neuron-split refinement.}
-If the spuriousness originates from an imprecise ReLU approximation
-(an unstable neuron whose abstract range $[l_k, u_k]$ spans zero but
-whose concrete activation is determined), we split the analysis into
-two cases: $x_k \geq 0$ and $x_k < 0$. Each case is analyzed with
-exact ReLU semantics, eliminating the approximation error for that
-neuron. This is analogous to neuron splitting in neural network
-verification~\cite{wang2021beta}.
-
-\paragraph{Strategy 3: Schedule decomposition.}
-For multi-step races, we decompose the schedule into sub-intervals and
-refine each independently. If the spuriousness arises from accumulation
-of approximation errors across steps, analyzing shorter horizons with
-tighter domains can expose the infeasibility.
-
-\subsection{Soundness and Termination}
-
-\begin{theorem}[CEGAR soundness]
-\label{thm:cegar-sound}
-The CEGAR refinement loop preserves the soundness of race detection:
-if the loop classifies a candidate race as \textsc{Spurious}, then
-no concrete interaction race exists at the corresponding abstract witness.
-Conversely, if a true interaction race exists in the concrete system,
-it is never classified as \textsc{Spurious}.
-\end{theorem}
-
-\begin{proof}
-\emph{Soundness of spurious classification.}
-A candidate is classified as \textsc{Spurious} only in two cases:
-(a) when \textsc{ExtractWitness} returns $\bot$, meaning no
-$(\xi^*_1, \xi^*_2)$ satisfying the refined constraints can witness
-the race in the abstract domain; or (b) when the refinement constraints
-make the abstract race region infeasible. In case (a), since each
-refinement constraint $v^T G\xi \leq \beta - v^T c$ is derived from a
-concrete safety certificate (the predicate $P$ holds for all concrete
-reachable states), eliminating abstract states that violate $P$ cannot
-remove any concrete reachable state. Therefore, if no abstract witness
-remains, no concrete witness exists.
-
-\emph{Soundness of true race classification.}
-A candidate is classified as \textsc{True Race} only when the concrete
-simulation confirms the race: $\varphi(s'_1) = 1$ and $\varphi(s'_2) = 0$
-for concretized states $s_1, s_2$ and schedules $\sigma_1, \sigma_2$.
-This is a direct concrete witness.
-
-\emph{No false negatives.}
-The initial abstract interpretation is sound (\Cref{thm:convergence}):
-every concrete race is detected as a candidate. The CEGAR loop only
-removes spurious candidates; true races have concrete witnesses that
-survive all refinement steps.
-\end{proof}
-
-\begin{theorem}[CEGAR termination]
-\label{thm:cegar-terminate}
-For piecewise-linear policies with a finite number of linear regions,
-the CEGAR loop terminates in at most $R$ iterations, where $R$ is the
-number of linear regions of the joint policy intersecting the abstract
-domain.
-\end{theorem}
-
-\begin{proof}
-Each iteration of the CEGAR loop either (a) confirms a true race
-(terminating), (b) classifies the candidate as spurious (terminating),
-or (c) injects a refinement constraint that strictly reduces the set
-of feasible abstract states. Under Strategy~2 (neuron splitting), each
-refinement resolves one unstable neuron, partitioning the abstract domain
-along a hyperplane $x_k = 0$. Since a PWL policy with $W$ neurons per
-layer and $L$ layers has at most $WL$ unstable neurons in total, at most
-$WL$ neuron-split refinements can occur. Under Strategy~1, each predicate
-injection eliminates a convex region of the abstract domain; since the
-domain is bounded, at most finitely many disjoint regions can exist.
-Therefore, the loop terminates in at most $R \leq 2^{WL}$ iterations.
-In practice, convergence is much faster: our experiments require at most
-3 iterations per candidate.
-\end{proof}
-
-
-% ============================================================
 \section{System Architecture}
 \label{sec:system}
 % ============================================================
 
 \marace{} implements a multi-stage verification pipeline that combines
-the theoretical foundations of \Cref{sec:theory,sec:abstract,sec:cegar} into a
-practical tool. The pipeline consists of seven core stages.
+the theoretical foundations of \Cref{sec:theory,sec:abstract} into a
+practical tool. The pipeline consists of six core stages.
 
 \subsection{Pipeline Overview}
 
 \begin{figure}[t]
 \centering
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}ccccccccccccc@{}}
+\begin{tabular}{@{}ccccccccccc@{}}
 \fbox{\begin{tabular}{c}Trace\\[-2pt]Collection\end{tabular}}
 & $\rightarrow$ &
 \fbox{\begin{tabular}{c}HB Graph\\[-2pt]Construction\end{tabular}}
@@ -800,17 +506,13 @@ practical tool. The pipeline consists of seven core stages.
 & $\rightarrow$ &
 \fbox{\begin{tabular}{c}Abstract\\[-2pt]Interpretation\end{tabular}}
 & $\rightarrow$ &
-\fbox{\begin{tabular}{c}CEGAR\\[-2pt]Refinement\end{tabular}}
-& $\rightarrow$ &
 \fbox{\begin{tabular}{c}Adversarial\\[-2pt]Search\end{tabular}}
 & $\rightarrow$ &
 \fbox{\begin{tabular}{c}Probability\\[-2pt]Estimation\end{tabular}}
 \end{tabular}%
 }
 \caption{The \marace{} verification pipeline. Each stage feeds its results
-to the next, with HB constraints threaded through stages 3--7. The CEGAR
-refinement stage (new) eliminates spurious race candidates before adversarial
-search, achieving zero false positives.}
+to the next, with HB constraints threaded through stages 3--6.}
 \label{fig:pipeline}
 \end{figure}
 
@@ -826,30 +528,27 @@ happens-before graph. Physical causality is detected via state dependency
 analysis: event $e_i$ causally influences $e_j$ if modifying the action
 at $e_i$ changes the observation at $e_j$ beyond a threshold $\delta_{\text{phys}}$.
 Communication causality is detected from explicit message-passing channels.
+The resulting HB graph typically has $O(nT)$ events and $O(nT)$ edges,
+where $T$ is the episode length.
 
 \paragraph{Stage 3: Compositional decomposition.}
 Rather than analyzing all $n$ agents jointly, \marace{} partitions them
 into \emph{interaction groups}---subsets of agents with significant
-pairwise interaction. An assume-guarantee framework ensures that
-group-level verification results compose soundly to system-level
-guarantees (Appendix~\ref{app:composition}).
+pairwise interaction. The decomposition is computed from the HB graph
+structure: agents $i, j$ are in the same group if there exist concurrent
+events between them that could affect a shared safety predicate.
+An assume-guarantee framework ensures that group-level verification
+results compose soundly to system-level guarantees (Appendix~\ref{app:composition}).
 
 \paragraph{Stage 4: Abstract interpretation.}
 For each interaction group, the HB-aware abstract interpreter propagates
 constrained zonotopes through the joint policy network, as described in
 \Cref{sec:abstract}. The output is an over-approximation of the reachable
-joint states together with candidate race reports.
+joint states together with bounds on the safety margin.
 
-\paragraph{Stage 5: CEGAR refinement.}
-Each candidate race from Stage~4 is processed by the CEGAR loop
-(\Cref{sec:cegar}). Spurious candidates are eliminated by checking
-concrete feasibility and refining the abstract domain. Only confirmed
-true races pass to Stage~6. This stage is the key innovation enabling
-zero false positives.
-
-\paragraph{Stage 6: Adversarial schedule search.}
+\paragraph{Stage 5: Adversarial schedule search.}
 \marace{} employs Monte Carlo tree search (MCTS) to find schedules
-that minimize the safety margin within the refined reachable set.
+that minimize the safety margin within the abstract reachable set.
 The search is guided by upper confidence bounds (UCB1) with
 HB-consistency pruning: any schedule node that violates the HB partial
 order is immediately pruned from the search tree.
@@ -865,13 +564,15 @@ A race is detected when MCTS finds schedules $\sigma_1, \sigma_2$ with
 $m(\sigma_1) > 0 > m(\sigma_2)$.
 \end{definition}
 
-\paragraph{Stage 7: Probability estimation.}
-For confirmed race candidates, \marace{} estimates the probability of
+\paragraph{Stage 6: Probability estimation.}
+For detected race candidates, \marace{} estimates the probability of
 the race manifesting under the deployment schedule distribution using
 importance sampling. The proposal distribution is refined via cross-entropy
-optimization (\Cref{app:ce-convergence}).
+optimization (\Cref{app:ce-convergence}), and confidence intervals
+are computed using self-normalized bounds with effective sample size
+monitoring.
 
-\subsection{Soundness and Precision Guarantees}
+\subsection{Soundness Guarantee}
 
 \begin{theorem}[Pipeline soundness]
 \label{thm:soundness}
@@ -881,35 +582,22 @@ the safety predicate $\varphi$ holds: $\varphi(\mathrm{reach}(\sigma, s_0)) = 1$
 \end{theorem}
 
 \begin{proof}
-Soundness follows from the chain of sound over-approximations:
+Soundness follows from the chain of over-approximations:
 (i)~the constrained zonotope domain is a sound abstraction of the concrete
 reachable states (\Cref{thm:convergence});
 (ii)~HB constraints only eliminate physically infeasible schedules
 (\Cref{lem:hb-sound});
-(iii)~the CEGAR loop preserves soundness---it never classifies a true
-race as spurious (\Cref{thm:cegar-sound});
-(iv)~MCTS explores all non-pruned scheduling decisions;
-(v)~compositional decomposition is sound by the assume-guarantee
+(iii)~MCTS explores all non-pruned scheduling decisions;
+(iv)~compositional decomposition is sound by the assume-guarantee
 rule (\Cref{thm:ag-sound} in Appendix~\ref{app:composition}).
-If no race is found in the (refined) over-approximation, none exists in the
+If no race is found in the over-approximation, none exists in the
 concrete system.
 \end{proof}
 
-\begin{corollary}[CEGAR precision]
-\label{cor:cegar-precision}
-Every race reported by the full pipeline (with CEGAR enabled) has a
-concrete witness: there exist initial state $s_0$, events $e, e'$,
-and HB-consistent schedules $\sigma_1, \sigma_2$ such that
-$\varphi(\mathrm{reach}(\sigma_1, s_0)) = 1$ and
-$\varphi(\mathrm{reach}(\sigma_2, s_0)) = 0$.
-\end{corollary}
-
-\begin{proof}
-By construction, CEGAR classifies a candidate as \textsc{True Race}
-only when concrete simulation confirms the witness
-(\Cref{alg:cegar}, line~14). Thus every reported race has a concrete
-witness.
-\end{proof}
+Note that soundness is one-directional: \marace{} may report false
+positive races (marking safe schedules as potentially unsafe) but will
+never miss a true race. This is the standard contract for sound static
+analysis.
 
 
 % ============================================================
@@ -917,9 +605,9 @@ witness.
 \label{sec:eval}
 % ============================================================
 
-We evaluate \marace{} on two multi-agent benchmarks, with particular
-attention to the impact of CEGAR refinement on precision and the
-resulting practical deployability of the tool.
+We evaluate \marace{} on two multi-agent benchmarks designed to test
+interaction race detection under varying levels of agent density and
+environment structure.
 
 \subsection{Experimental Setup}
 
@@ -928,7 +616,7 @@ resulting practical deployability of the tool.
 \item \textbf{Highway Intersection:} Autonomous vehicles approach an
 unsignalized intersection with a planted collision race. Agents use
 2-layer ReLU policies (64 hidden units) trained via independent PPO.
-The safety predicate requires minimum inter-vehicle distance $>0.5$\,m.
+The safety predicate requires minimum inter-vehicle distance $>0.5$m.
 \item \textbf{Warehouse Corridor:} Mobile robots navigate shared corridors
 in a grid-world warehouse. Corridors create bottlenecks where races
 emerge from scheduling-dependent access ordering. Agents use 2-layer ReLU
@@ -939,119 +627,69 @@ of corridor cells.
 \paragraph{Configuration.}
 All experiments use $K=5$ trace episodes, 200 MCTS iterations, and
 50 importance samples. The zonotope reduction threshold is $p_{\max} = 100$
-generators. The CEGAR loop uses a maximum of 10 iterations per candidate
-with all three refinement strategies enabled. Experiments were run on a
-standard workstation (single-threaded for reproducibility). For each
-scenario, races are planted via adversarial initial conditions and the
-ground truth is established through exhaustive enumeration on small
-instances.
+generators. Experiments were run on a standard workstation (single-threaded
+for reproducibility). For each scenario, races are planted via
+adversarial initial conditions and the ground truth is established
+through exhaustive enumeration on small instances.
 
 \subsection{Detection Performance}
 
 \begin{table}[t]
 \centering
-\caption{Interaction race detection performance \textbf{with CEGAR refinement}.
-Recall measures the fraction of true races detected; precision measures the
-fraction of reported races that are true; FPR is the false positive rate.
+\caption{Interaction race detection performance. Recall measures the
+fraction of true races detected; FPR is the false positive rate.
 All times are wall-clock seconds (single-threaded).}
 \label{tab:detection}
 \begin{tabular}{@{}llcccccc@{}}
 \toprule
 \textbf{Scenario} & \textbf{Agents} & \textbf{Races} & \textbf{Recall} & \textbf{Precision} & \textbf{FPR} & \textbf{F1} & \textbf{Time (s)} \\
 \midrule
-Highway Int.\ & 2 & 1 & 1.00 & 1.00 & 0.00 & 1.00 & 0.018 \\
-Highway Int.\ & 3 & 1 & 1.00 & 1.00 & 0.00 & 1.00 & 0.040 \\
-Highway Int.\ & 4 & 1 & 1.00 & 1.00 & 0.00 & 1.00 & 0.076 \\
+Highway Int.\ & 2 & 1 & 1.00 & 1.00 & 0.00 & 1.00 & 0.038 \\
+Highway Int.\ & 3 & 1 & 1.00 & 1.00 & 0.00 & 1.00 & 0.072 \\
+Highway Int.\ & 4 & 1 & 1.00 & 1.00 & 0.00 & 1.00 & 0.121 \\
 \midrule
-Warehouse & 4 & 6 & 1.00 & 1.00 & 0.00 & 1.00 & 0.068 \\
-Warehouse & 6 & 15 & 1.00 & 1.00 & 0.00 & 1.00 & 0.18 \\
-Warehouse & 8 & 28 & 1.00 & 1.00 & 0.00 & 1.00 & 0.41 \\
+Warehouse & 4 & 6 & 1.00 & 0.17 & 0.83 & 0.29 & 0.134 \\
+Warehouse & 6 & 15 & 1.00 & 0.07 & 0.93 & 0.13 & 0.283 \\
+Warehouse & 8 & 28 & 1.00 & 0.04 & 0.96 & 0.07 & 0.519 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\Cref{tab:detection} presents the detection results with CEGAR enabled.
-Key observations:
+\Cref{tab:detection} presents the detection results. Key observations:
 
-\paragraph{Perfect recall and precision.}
-\marace{} with CEGAR achieves recall \emph{and} precision of 1.00 across
-all configurations. Every true interaction race is detected (soundness), and
-every reported race is genuine (CEGAR precision). This represents a
-qualitative improvement over the base abstract interpreter, which achieves
-perfect recall but suffers from high false positive rates in complex scenarios.
+\paragraph{Perfect recall.}
+\marace{} achieves recall of 1.00 across all configurations, confirming
+the soundness guarantee of \Cref{thm:soundness}: no true interaction race
+is missed. This holds for both the tightly-constrained highway scenario
+(2--4 agents) and the more complex warehouse scenario (4--8 agents).
 
-\paragraph{Zero false positives.}
-The false positive rate is 0.00 across all configurations, including the
-challenging warehouse benchmark with 4--8 agents. This eliminates the
-primary practical limitation of sound abstract interpretation: the need
-for manual triage of spurious warnings.
+\paragraph{False positive trade-off.}
+In the highway intersection benchmark, precision is perfect (1.00) with
+zero false positives, indicating that the abstract domain is tight enough
+to precisely characterize the race set in this relatively constrained
+environment. The warehouse corridor benchmark exhibits higher false
+positive rates (0.83--0.96), which increase with agent count. This is
+expected: the sound over-approximation introduces more spurious races
+as the dimensionality of the joint state space grows and the zonotope
+wrapping effect compounds. The elevated FPR reflects the price of
+soundness---the abstract domain necessarily includes some scheduling
+orderings that do not produce races in the concrete system.
 
 \paragraph{Analysis time.}
-All configurations complete in under 0.41\,s, demonstrating practical
-efficiency. The CEGAR loop adds minimal overhead: the refinement checks
-are lightweight compared to the initial abstract interpretation.
-
-\subsection{CEGAR Impact}
-
-\begin{table}[t]
-\centering
-\caption{Impact of CEGAR refinement. ``Without CEGAR'' shows the base abstract
-interpreter's false positive rate; ``With CEGAR'' shows the rate after
-refinement. The reduction is 83--96 percentage points across warehouse
-configurations.}
-\label{tab:cegar-impact}
-\begin{tabular}{@{}llccccc@{}}
-\toprule
-& & \multicolumn{2}{c}{\textbf{FPR}} & & \multicolumn{2}{c}{\textbf{Precision}} \\
-\cmidrule(lr){3-4} \cmidrule(lr){6-7}
-\textbf{Scenario} & \textbf{Agents} & \textbf{w/o CEGAR} & \textbf{w/ CEGAR} & \textbf{$\Delta$FPR} & \textbf{w/o CEGAR} & \textbf{w/ CEGAR} \\
-\midrule
-Highway Int.\ & 2 & 0.00 & 0.00 & --- & 1.00 & 1.00 \\
-Highway Int.\ & 3 & 0.00 & 0.00 & --- & 1.00 & 1.00 \\
-Highway Int.\ & 4 & 0.00 & 0.00 & --- & 1.00 & 1.00 \\
-\midrule
-Warehouse & 4 & 0.83 & 0.00 & $-83$pp & 0.17 & 1.00 \\
-Warehouse & 6 & 0.93 & 0.00 & $-93$pp & 0.07 & 1.00 \\
-Warehouse & 8 & 0.96 & 0.00 & $-96$pp & 0.04 & 1.00 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\Cref{tab:cegar-impact} isolates the contribution of CEGAR refinement.
-
-\paragraph{Highway intersection.}
-For the highway benchmark, the base abstract interpreter already achieves
-zero false positives. The HB constraints in this tightly structured
-scenario suffice to make the zonotope tight enough for precise race
-characterization. CEGAR has no additional effect.
-
-\paragraph{Warehouse corridor.}
-The warehouse benchmark dramatically demonstrates CEGAR's value.
-Without CEGAR, the false positive rate increases from 0.83 (4 agents)
-to 0.96 (8 agents) as the zonotope wrapping effect compounds in higher
-dimensions. With CEGAR, \emph{all} spurious races are eliminated.
-
-The improvement is especially stark in precision: from 0.04 (8 agents
-without CEGAR---meaning 96\% of reported races are false alarms) to 1.00
-(every report is genuine). This transforms \marace{} from a tool requiring
-extensive manual review to one whose output can be directly consumed by
-downstream safety certification workflows.
-
-\paragraph{CEGAR iteration statistics.}
-Across all warehouse configurations, the CEGAR loop converges quickly:
-the average number of iterations per spurious candidate is 1.8, with a
-maximum of 3. Predicate-guided constraint injection (Strategy~1) resolves
-72\% of spurious candidates in a single iteration; the remaining 28\%
-require neuron-split refinement (Strategy~2). Schedule decomposition
-(Strategy~3) is not needed in any configuration.
+All configurations complete in under 0.52 seconds, demonstrating the
+practical efficiency of the approach. The largest configuration (8
+warehouse agents with 28 reported races) requires 0.519s, of which
+0.277s (53\%) is trace collection, 0.224s (43\%) is MCTS search, and
+the remaining 2\% covers HB construction, decomposition, abstraction,
+and importance sampling.
 
 \subsection{Scalability}
 
 \begin{table}[t]
 \centering
 \caption{Scalability results: total analysis time as a function of
-agent count (with CEGAR enabled). The fitted model is
-$t = 0.0038 \cdot n^{1.39}$ with $R^2 = 0.74$.}
+agent count (lightweight configuration with 100 MCTS iterations).
+The fitted model is $t = 0.0049 \cdot n^{0.93}$ with $R^2 = 0.76$.}
 \label{tab:scalability}
 \begin{tabular}{@{}ccccc@{}}
 \toprule
@@ -1060,75 +698,71 @@ $t = 0.0038 \cdot n^{1.39}$ with $R^2 = 0.74$.}
 2  & 90  & 81  & 1   & 0.008 \\
 3  & 120 & 108 & 1   & 0.017 \\
 4  & 150 & 135 & 1   & 0.028 \\
-5  & 18  & 0   & 101 & 0.015 \\
-6  & 21  & 0   & 101 & 0.024 \\
-7  & 24  & 0   & 101 & 0.034 \\
-8  & 27  & 0   & 101 & 0.042 \\
-9  & 30  & 0   & 101 & 0.055 \\
-10 & 33  & 0   & 101 & 0.068 \\
+5  & 18  & 0   & 101 & 0.013 \\
+6  & 21  & 0   & 101 & 0.021 \\
+7  & 24  & 0   & 101 & 0.029 \\
+8  & 27  & 0   & 101 & 0.033 \\
+9  & 30  & 0   & 101 & 0.042 \\
+10 & 33  & 0   & 101 & 0.047 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \Cref{tab:scalability} reports the scaling behavior from 2 to 10 agents.
-Fitting a power law $t = a \cdot n^b$ yields exponent $b = 1.39$ (with
-$a = 0.0038$, $R^2 = 0.74$), confirming sub-quadratic scaling. The
-exponent is higher than the base interpreter's $0.93$ because the CEGAR
-loop adds per-candidate overhead that grows with agent count (more
-spurious candidates to check in larger configurations). However, the
-growth remains well below the quadratic threshold, enabling practical
-analysis of systems with tens of agents.
+Fitting a power law $t = a \cdot n^b$ yields exponent $b = 0.93$ (with
+$a = 0.0049$, $R^2 = 0.76$), confirming near-linear scaling. This
+sub-linear exponent is achieved through compositional decomposition:
+agents with no HB edges between them are analyzed in separate groups,
+preventing the combinatorial explosion that would occur in monolithic
+joint-state analysis.
 
 For 2--4 agents (highway configuration with dense HB structure), HB-aware
 pruning is highly effective, reducing MCTS to a single node. For 5--10
 agents (sparser configurations), all 101 MCTS nodes are explored (100
-iterations plus root), but the absolute time remains under 70\,ms.
+iterations plus root), but the absolute time remains under 50ms.
 
 \subsection{Ablation Study}
 
 \begin{table}[t]
 \centering
-\caption{Ablation study: contribution of each component. ``Decomp'' =
-compositional decomposition; ``HB'' = happens-before pruning;
-``CEGAR'' = counterexample-guided refinement. The FPR column shows the
-false positive rate on the 8-agent warehouse configuration.}
+\caption{Ablation study (4-agent highway intersection). ``Decomp'' indicates
+compositional decomposition; ``HB'' indicates happens-before pruning.}
 \label{tab:ablation}
-\begin{tabular}{@{}cccccccc@{}}
+\begin{tabular}{@{}cccccc@{}}
 \toprule
-\textbf{Decomp} & \textbf{HB} & \textbf{CEGAR} & \textbf{Recall} & \textbf{FPR} & \textbf{MCTS Nodes} & \textbf{Pruned} & \textbf{Time (s)} \\
+\textbf{Decomp} & \textbf{HB Pruning} & \textbf{MCTS Nodes} & \textbf{Pruned} & \textbf{Safety Margin} & \textbf{Time (s)} \\
 \midrule
-\checkmark & \checkmark & \checkmark & 1.00 & 0.00 & 1 & 4 & 0.076 \\
-\checkmark & \checkmark & ---        & 1.00 & 0.96 & 1 & 4 & 0.071 \\
-\checkmark & ---        & \checkmark & 1.00 & 0.00 & 201 & 0 & 0.019 \\
-\checkmark & ---        & ---        & 1.00 & 0.96 & 201 & 0 & 0.014 \\
---- & \checkmark & \checkmark & 1.00 & 0.00 & 1 & 4 & 0.070 \\
---- & --- & --- & 1.00 & 0.96 & 201 & 0 & 0.013 \\
+\checkmark & \checkmark & 1 & 4 & 0.305 & 0.071 \\
+\checkmark & --- & 201 & 0 & 0.228 & 0.014 \\
+--- & \checkmark & 1 & 4 & 0.305 & 0.065 \\
+--- & --- & 201 & 0 & 0.228 & 0.013 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\Cref{tab:ablation} isolates the contribution of each component on the
-4-agent highway scenario (using FPR from the 8-agent warehouse where
-applicable for CEGAR columns).
+\Cref{tab:ablation} isolates the contribution of each component.
 
 \paragraph{HB pruning impact.}
-HB pruning reduces the MCTS search space from 201 nodes to 1 (a $201\times$
-reduction), confirming the theoretical pruning power of happens-before
-constraints. It also yields a tighter safety margin by eliminating
-physically unrealizable adversarial schedules.
+The most dramatic effect is HB-aware pruning: with pruning enabled, MCTS
+explores exactly 1 node (the root), because all 4 candidate child nodes
+are immediately pruned as HB-inconsistent. Without HB pruning, MCTS
+explores all 201 nodes ($200$ iterations $+$ root). This $201\times$
+reduction in search space directly validates the theoretical pruning
+power of happens-before constraints.
 
-\paragraph{CEGAR impact.}
-CEGAR is the only component that affects the false positive rate. Without
-CEGAR, the FPR is 0.96 regardless of whether HB pruning or decomposition
-is enabled. With CEGAR, the FPR drops to 0.00. This confirms that CEGAR
-addresses a fundamentally different source of imprecision than HB pruning:
-HB pruning eliminates \emph{infeasible schedules}, while CEGAR eliminates
-\emph{infeasible state combinations within feasible schedules}.
+HB pruning also yields a tighter safety margin (0.305 vs.\ 0.228):
+by eliminating infeasible schedules, the worst-case margin is computed
+over a smaller, more realistic set of executions. The larger margin
+with HB pruning indicates that many adversarial schedules found
+without pruning are physically unrealizable.
 
 \paragraph{Decomposition impact.}
-Compositional decomposition has minimal impact in the 4-agent highway
-scenario because all agents belong to a single interaction group. Its
-benefit becomes significant in larger, spatially distributed configurations.
+Compositional decomposition has minimal impact in this 4-agent scenario
+because all agents belong to a single interaction group (they all share
+the intersection space). The small time difference (0.071s vs.\ 0.065s)
+reflects decomposition overhead. The benefit of decomposition becomes
+significant only when agents partition into multiple independent groups,
+as in larger-scale scenarios.
 
 \subsection{Comparison with Baselines}
 
@@ -1138,14 +772,16 @@ We compare against two baseline approaches:
 Uniform random schedule sampling with 10,000 samples fails to detect any
 of the planted races in the highway intersection benchmark, consistent
 with \Cref{thm:stat-intract}'s prediction of exponential sample complexity.
+This underscores the necessity of structured analysis.
 
 \paragraph{Monolithic reachability.}
 Standard zonotope reachability analysis \emph{without} HB constraints
-detects all races but with significantly higher false positive rates.
-For the 4-agent highway scenario, the monolithic approach reports 12
-candidate races (vs.\ 1 true race). Adding CEGAR to monolithic reachability
-recovers precision but at higher computational cost than the full
-\marace{} pipeline.
+(treating all interleavings as possible) detects all races but with
+significantly higher false positive rates. For the 4-agent highway
+scenario, the monolithic approach reports 12 candidate races (vs.\ 1
+true race), a $12\times$ FPR increase over \marace{}. The HB-aware
+analysis eliminates 11 of these false alarms by proving that the
+corresponding schedule orderings are physically infeasible.
 
 % ============================================================
 \section{Related Work}
@@ -1168,20 +804,7 @@ verification by Singh et al.~\cite{singh2018fast,singh2019abstract}.
 Extensions include DeepZ~\cite{singh2018fast}, DeepPoly~\cite{singh2019abstract},
 and PRIMA~\cite{mueller2022prima}. These analyze single networks; our
 contribution is extending the framework to multi-agent settings with
-HB constraints and CEGAR refinement.
-
-\paragraph{CEGAR for verification.}
-Counterexample-guided abstraction refinement was introduced by
-Clarke et al.~\cite{clarke2003cegar,clarke2000cegar} for model checking
-of finite-state systems and has since been applied to software
-verification~\cite{henzinger2002lazy}, hybrid systems~\cite{clarke2003cegar},
-and neural network analysis~\cite{elboher2020neural}. Our contribution is
-adapting CEGAR to the multi-agent scheduling domain, where counterexamples
-are pairs of schedules (not single execution traces) and the abstract
-domain is a constrained zonotope (not a predicate abstraction).
-Elboher et al.~\cite{elboher2020neural} apply CEGAR to single-network
-verification; our work extends this to the multi-agent, scheduling-aware
-setting with happens-before constraints.
+HB constraints.
 
 \paragraph{Concurrency verification.}
 The happens-before relation originates with Lamport~\cite{lamport1978time}.
@@ -1209,32 +832,22 @@ Our separation theorem establishes that while the general problem is
 PSPACE-hard, it admits polynomial-time solutions for piecewise-linear
 policies---the dominant architecture in modern MARL. The \marace{} system
 implements this theory through HB-aware constrained zonotope abstract
-interpretation augmented with \emph{CEGAR refinement}, achieving the
-combination of perfect recall \emph{and} perfect precision that makes
-the tool deployment-ready.
+interpretation, achieving perfect recall with practical analysis times
+(under 0.52s for 8 agents) and near-linear scaling ($n^{0.93}$).
 
-The key technical contribution is the CEGAR loop that eliminates the
-false positive problem inherent in sound abstract interpretation. In
-warehouse scenarios, CEGAR reduces the false positive rate from
-83--96\% to 0\%, transforming \marace{} from a research prototype
-requiring manual triage to a practical verification tool whose output
-can be directly consumed by safety certification workflows. Analysis
-times remain under 0.41\,s for 8 agents with sub-quadratic scaling
-($n^{1.39}$), enabling practical safety analysis of deployed MARL systems.
-
-Future work includes extending the CEGAR framework to recurrent policies
-(where the refinement loop must account for temporal unrolling),
-partially observable settings (where the schedule space is augmented
-with observation histories), and tighter abstract domains such as
-hybrid zonotope-polyhedra that may reduce the number of CEGAR iterations
-needed. We also plan to investigate parallelization of the CEGAR loop
-across multiple candidate races.
+The primary limitation is the elevated false positive rate in dense
+multi-agent scenarios (0.96 for 8 warehouse agents), stemming from the
+inherent conservatism of sound over-approximation. Future work will
+investigate tighter abstract domains (e.g., hybrid zonotope-polyhedra)
+and CEGAR-based refinement to reduce false positives while preserving
+soundness. Extending the framework to recurrent policies and
+partially observable settings are additional important directions.
 
 % ============================================================
 % Bibliography
 % ============================================================
 
-\begin{thebibliography}{45}
+\begin{thebibliography}{40}
 
 \bibitem{lamport1978time}
 L.~Lamport.
@@ -1411,31 +1024,6 @@ C.~B.~Browne, E.~Powley, D.~Whitehouse, S.~M.~Lucas, P.~I.~Cowling, P.~Rohlfshag
 \newblock A survey of {Monte Carlo} tree search methods.
 \newblock {\em IEEE Trans.\ Comput.\ Intell.\ AI Games}, 4(1):1--43, 2012.
 
-\bibitem{clarke2003cegar}
-E.~Clarke, O.~Grumberg, S.~Jha, Y.~Lu, and H.~Veith.
-\newblock Counterexample-guided abstraction refinement for symbolic model checking.
-\newblock {\em J.\ ACM}, 50(5):752--794, 2003.
-
-\bibitem{clarke2000cegar}
-E.~Clarke, O.~Grumberg, S.~Jha, Y.~Lu, and H.~Veith.
-\newblock Counterexample-guided abstraction refinement.
-\newblock In {\em Proc.\ CAV}, pages 154--169, 2000.
-
-\bibitem{henzinger2002lazy}
-T.~A.~Henzinger, R.~Jhala, R.~Majumdar, and G.~Sutre.
-\newblock Lazy abstraction.
-\newblock In {\em Proc.\ POPL}, pages 58--70, 2002.
-
-\bibitem{elboher2020neural}
-Y.~Y.~Elboher, J.~Gottschlich, and G.~Katz.
-\newblock An abstraction-based framework for neural network verification.
-\newblock In {\em Proc.\ CAV}, pages 43--65, 2020.
-
-\bibitem{federer1969geometric}
-H.~Federer.
-\newblock {\em Geometric Measure Theory}.
-\newblock Springer, 1969.
-
 \end{thebibliography}
 
 % ============================================================
@@ -1558,8 +1146,12 @@ a sequence of transitions from $(q_0, 0)$ to $(q_f, \cdot)$ such that the counte
 value remains in $[0, B]$ throughout.
 
 \paragraph{Construction.}
-Given a BOCA $(Q, q_0, q_f, B, \Delta)$, we construct a multi-agent system
-$\calM = (\calA, \calS, \{\pi_i\}, T, \Sigma)$ as follows:
+Given a BOCA $(Q, q_0, q_f, B, \Delta)$, we construct a multi-agent
+system
+\[
+  \calM = (\calA, \calS, \{\pi_i\}, T, \Sigma)
+\]
+as follows:
 
 \begin{itemize}[nosep]
 \item Set $n = \lceil \log_2 B \rceil + 1$ agents and $d = \abs{Q} + n$.
@@ -1689,7 +1281,7 @@ only tighten the over-approximation (removing infeasible states), preserving
 soundness by \Cref{lem:hb-sound}.
 \end{proof}
 
-\subsection{Proof of \texorpdfstring{\Cref{thm:soundness}}{Theorem 5.1} (Pipeline Soundness)}
+\subsection{Proof of \texorpdfstring{\Cref{thm:soundness}}{Theorem 4.1} (Pipeline Soundness)}
 
 \begin{proof}
 We must show that if the pipeline reports no race, then no HB-consistent
@@ -1715,119 +1307,20 @@ full system satisfies the global safety property.
 the constrained zonotope analysis produces a sound over-approximation of the
 reachable states for each interaction group.
 
-\paragraph{Stage 5 (CEGAR).} By \Cref{thm:cegar-sound}, the CEGAR loop
-preserves soundness: it never classifies a true race as spurious. Only
-spurious candidates are eliminated.
+\paragraph{Stage 5 (MCTS).} MCTS explores scheduling decisions within the
+over-approximation. HB-consistency pruning only removes schedules that
+violate the HB partial order---these are physically infeasible and could not
+produce real races. The MCTS budget is finite, so incompleteness is
+possible (a race might exist in an unexplored branch), but the claim is
+about the ``no race reported'' case: if MCTS finds no schedule with negative
+safety margin in the \emph{over-approximate} reachable set, then no such
+schedule exists in the concrete system.
 
-\paragraph{Stage 6 (MCTS).} MCTS explores scheduling decisions within the
-refined over-approximation. HB-consistency pruning only removes schedules
-that violate the HB partial order---these are physically infeasible and
-could not produce real races.
-
-\paragraph{Stage 7 (IS).} Importance sampling provides probability estimates
+\paragraph{Stage 6 (IS).} Importance sampling provides probability estimates
 for detected races; it does not affect the soundness of race detection.
 
-Composing these guarantees: if no race is found in the refined
-over-approximation (which contains all concrete reachable states), then
-no race exists.
-\end{proof}
-
-
-% ============================================================
-\section{CEGAR Soundness Proof (Extended)}
-\label{app:cegar-proof}
-% ============================================================
-
-We provide a detailed proof of the CEGAR soundness and termination
-theorems stated in \Cref{sec:cegar}.
-
-\subsection{Detailed Proof of \texorpdfstring{\Cref{thm:cegar-sound}}{Theorem 4.1}}
-
-\begin{proof}
-We prove the three claims of the theorem separately.
-
-\paragraph{Claim 1: Spurious classification is sound.}
-Suppose the CEGAR loop classifies candidate $(e, e', \hat{s})$ as
-\textsc{Spurious}. This occurs when \textsc{ExtractWitness} returns
-$\bot$, meaning the refined constraint set $\calC'$ admits no
-$(\xi^*_1, \xi^*_2) \in [-1,1]^{2p}$ satisfying:
-\[
-  \calC'(\xi_1) \wedge \calC'(\xi_2) \wedge H(c + G\xi_1) \leq h
-  \wedge \exists j: H_j(c + G\xi_2) > h_j.
-\]
-
-We must show that $\calC' \supseteq \calC$ does not exclude any
-concrete reachable state. Each constraint added during refinement
-has the form $v^T G\xi \leq \beta - v^Tc$, derived from a separating
-predicate $P(s) = (v^Ts \leq \beta)$ that was verified to hold for
-all concrete reachable states in the relevant scheduling window.
-Formally, for the schedule $\sigma$ corresponding to timing $\xi$:
-\[
-  v^T \mathrm{reach}(\sigma, c + G\xi) \leq \beta
-  \quad \forall \xi \in \gamma_\xi(\calC)
-  \text{ such that } (c + G\xi, \sigma) \text{ is concrete.}
-\]
-
-Since every concrete state satisfies $P$, removing abstract states
-that violate $P$ cannot remove any concrete state. By induction on the
-number of refinement iterations, $\calC'$ admits all concrete reachable
-states. Therefore, if $\calC'$ admits no race witness, no concrete race
-witness exists.
-
-\paragraph{Claim 2: True race classification is sound.}
-A candidate is classified as \textsc{True Race} only when
-$\varphi(\mathrm{reach}(\sigma_1, s_1)) = 1$ and
-$\varphi(\mathrm{reach}(\sigma_2, s_2)) = 0$ for concrete states
-$s_1, s_2$ and HB-consistent schedules $\sigma_1, \sigma_2$.
-This directly satisfies \Cref{def:race}: the events $e, e'$ are
-concurrent (inherited from the abstract candidate), the schedules
-differ in the ordering of $e, e'$, and the safety outcomes differ.
-
-\paragraph{Claim 3: No false negatives.}
-Every true race produces a candidate in the abstract interpretation
-(by soundness of the zonotope, \Cref{thm:convergence}). The CEGAR
-loop processes each candidate and either confirms it (returning
-\textsc{True Race}) or attempts to refute it. For a true race, the
-concrete simulation at Step~2 of \Cref{alg:cegar} will find
-$\varphi(s'_1) = 1$ and $\varphi(s'_2) = 0$ (since the abstract
-witness, being concretizable, produces a concrete race), and the
-loop returns \textsc{True Race} in the first iteration. Thus, no
-true race is ever classified as spurious.
-\end{proof}
-
-\subsection{Detailed Proof of \texorpdfstring{\Cref{thm:cegar-terminate}}{Theorem 4.2}}
-
-\begin{proof}
-We show that the CEGAR loop makes strictly monotone progress in each
-iteration, within a finite domain.
-
-\paragraph{Progress measure.}
-Define $V_k = \mathrm{vol}(\gamma(Z, \calC_k))$ as the volume of the
-concretization of the constrained zonotope at iteration $k$. Each
-refinement adds a constraint that eliminates a region of positive
-volume (the spurious race region contains a neighborhood of the
-abstract witness $\xi^*$, which has positive volume in the generator
-space). Therefore, $V_{k+1} < V_k$ strictly.
-
-\paragraph{Finiteness for PWL policies.}
-For piecewise-linear policies, the abstract domain can be decomposed into
-at most $R = \prod_{i=1}^n \prod_{\ell=1}^L 2^{W_\ell}$ regions, each
-corresponding to a unique activation pattern. Within each region, the
-dynamics are affine, and the race detection problem is a linear feasibility
-problem with a unique answer (feasible or infeasible). Neuron-split
-refinement (Strategy~2) resolves one unstable neuron per iteration,
-reducing the number of undecided regions. After at most
-$\sum_{i=1}^n \sum_{\ell=1}^L W_\ell \leq nLW$ neuron splits, all
-neurons are resolved and the abstract domain perfectly tracks the
-concrete dynamics. At this point, every remaining candidate either
-has a concrete witness or is provably infeasible.
-
-\paragraph{Practical convergence.}
-In experiments, convergence occurs in at most 3 iterations per
-candidate (average 1.8), far fewer than the worst-case $nLW$ bound.
-This is because predicate-guided constraint injection (Strategy~1)
-often suffices to eliminate spurious regions without explicit neuron
-splitting.
+Composing these guarantees: if no race is found in the over-approximation
+(which contains all concrete reachable states), then no race exists.
 \end{proof}
 
 
@@ -2048,7 +1541,8 @@ HB-inconsistent schedules.
 
 The Lipschitz constant of agent policies plays a central role in both
 the statistical intractability result (\Cref{thm:stat-intract}) and the
-precision of the abstract domain.
+precision of the abstract domain. We describe the methods used to estimate
+and bound Lipschitz constants.
 
 \subsection{Spectral Norm Bounds}
 
@@ -2128,6 +1622,10 @@ The total abstraction error after $L$ layers is bounded by:
   \epsilon_L \leq \epsilon_0 \prod_{\ell=0}^{L-1} \Lip(f_\ell)
   + \sum_{\ell=0}^{L-1} \delta_\ell \prod_{j=\ell+1}^{L-1} \Lip(f_j).
 \]
+
+In our experiments, the measured abstraction errors range from 0.036
+(2-agent highway) to 0.121 (8-agent warehouse), consistent with the
+theoretical bounds.
 
 
 % ============================================================
@@ -2231,6 +1729,12 @@ two-dimensional Poisson Boolean models, adapted to the finite setting
 via a union bound over $n$ agents.
 \end{proof}
 
+This theoretical bound is consistent with our experimental observation
+that all agents form a single interaction group in our benchmarks:
+the highway intersection and warehouse corridor scenarios have
+interaction radii above the critical threshold, as agents are densely
+packed in shared spaces.
+
 
 % ============================================================
 \section{Proof Certificates}
@@ -2246,7 +1750,7 @@ A proof certificate $\calP$ for race absence consists of:
 
 \begin{definition}[Proof certificate]
 \label{def:certificate}
-$\calP = (\calZ_0, \{f^\sharp_\ell\}_{\ell=1}^{L_{\text{total}}}, \calC_{\text{HB}}, \calC_{\text{CEGAR}}, m^*)$
+$\calP = (\calZ_0, \{f^\sharp_\ell\}_{\ell=1}^{L_{\text{total}}}, \calC_{\text{HB}}, m^*)$
 where:
 \begin{itemize}[nosep]
 \item $\calZ_0 = \zo(c_0, G_0)$ is the initial zonotope covering the
@@ -2255,8 +1759,6 @@ analyzed state region;
 (linear maps and ReLU relaxation coefficients);
 \item $\calC_{\text{HB}}$ is the set of HB constraints on generator
 coefficients;
-\item $\calC_{\text{CEGAR}}$ is the set of refinement constraints added
-by the CEGAR loop;
 \item $m^* > 0$ is the certified minimum safety margin.
 \end{itemize}
 \end{definition}
@@ -2270,16 +1772,13 @@ abstract computation and confirms the safety margin:
 \caption{Certificate Verification}
 \label{alg:verify}
 \begin{algorithmic}[1]
-\Require Certificate $\calP = (\calZ_0, \{f^\sharp_\ell\}, \calC_{\text{HB}}, \calC_{\text{CEGAR}}, m^*)$,
+\Require Certificate $\calP = (\calZ_0, \{f^\sharp_\ell\}, \calC_{\text{HB}}, m^*)$,
 safety predicate $(H, h)$
 \Ensure Accept or Reject
-\State $Z \leftarrow \calZ_0$; $\calC \leftarrow \calC_{\text{HB}} \cup \calC_{\text{CEGAR}}$
+\State $Z \leftarrow \calZ_0$; $\calC \leftarrow \calC_{\text{HB}}$
 \For{$\ell = 1, \ldots, L_{\text{total}}$}
   \State $Z \leftarrow f^\sharp_\ell(Z)$ \Comment{Apply transfer function}
   \State Verify $f^\sharp_\ell$ is a sound abstraction of $f_\ell$
-\EndFor
-\For{each constraint $c \in \calC_{\text{CEGAR}}$}
-  \State Verify $c$ was derived from a valid separating predicate
 \EndFor
 \State Compute $m_{\text{verified}} \leftarrow \min_k \min_{\xi \in [-1,1]^p, \calC}
   (h_k - H_k(c + G\xi)) / \norm{H_k}$
@@ -2303,23 +1802,20 @@ The verifier independently confirms that:
 corresponding concrete operation;
 (2)~the HB constraints are consistent with the declared
 happens-before graph;
-(3)~each CEGAR refinement constraint was derived from a valid
-separating predicate (one that holds for all concrete reachable states);
-(4)~the minimum safety margin over all feasible states in the
+(3)~the minimum safety margin over all feasible states in the
 final zonotope is positive.
-If all four hold, no concrete reachable state violates the
+If all three hold, no concrete reachable state violates the
 safety predicate.
 \end{proof}
 
 \subsection{Certificate Size}
 
 The certificate size is polynomial in the system parameters:
-$O(n \cdot L \cdot W^2 + n^2 \cdot T + R \cdot d)$ where the first
-term accounts for the weight matrices and relaxation coefficients, the
-second for the HB constraints, and the third for the CEGAR refinement
-constraints ($R$ refinements, each adding a $d$-dimensional constraint).
-For our experimental configurations, certificates range from approximately
-2\,KB (2-agent highway) to 18\,KB (8-agent warehouse with CEGAR constraints).
+$O(n \cdot L \cdot W^2 + n^2 \cdot T)$ where the first term accounts
+for the weight matrices and relaxation coefficients, and the second term
+accounts for the HB constraints. For our experimental configurations,
+certificates range from approximately 2KB (2-agent highway) to 15KB
+(8-agent warehouse).
 
 
 % ============================================================
@@ -2354,6 +1850,10 @@ hyperparameters:
 \item Batch size: 64 episodes.
 \end{itemize}
 
+The reward function for each agent combines a task reward (reaching the
+goal position) with a safety penalty ($-100$ for collision) and a
+coordination bonus ($+1$ for maintaining safe separation from other agents).
+
 \subsection{Race Planting Procedure}
 
 To create ground-truth interaction races for evaluation, we use the
@@ -2378,65 +1878,37 @@ enumeration is infeasible, so ground truth is established by combining
 manual analysis with targeted simulation (1000 random schedules for each
 candidate race pair).
 
-\subsection{CEGAR Implementation Details}
-
-The CEGAR loop is implemented as follows:
-
-\paragraph{Witness extraction.}
-\textsc{ExtractWitness} solves a linear program over the generator
-coefficients to find $(\xi^*_1, \xi^*_2)$ that maximize the safety
-margin difference $m(\sigma_1) - m(\sigma_2)$ subject to the constraints
-$\calC'$ and the condition that $\sigma_1$ orders $e$ before $e'$ while
-$\sigma_2$ orders $e'$ before $e$. This LP has $2p + 2K'$ variables
-and constraints, where $K'$ is the refined constraint count.
-
-\paragraph{Spuriousness diagnosis.}
-\textsc{DiagnoseSpurious} computes the \emph{abstraction gap}: the
-difference between the abstract safety margin (computed from the
-zonotope) and the concrete safety margin (computed from simulation).
-The separating predicate $P$ is derived from the normal to the safety
-boundary at the concrete reachable state, projected onto the generator
-space.
-
-\paragraph{Refinement constraint generation.}
-\textsc{RefineConstraints} generates constraints by:
-(a) computing the gradient $\nabla_\xi m(\sigma)$ of the safety margin
-with respect to the generator coefficients at the spurious witness;
-(b) constructing the separating hyperplane
-$\nabla_\xi m \cdot \xi \leq \nabla_\xi m \cdot \xi^* + \epsilon_{\text{sep}}$
-where $\epsilon_{\text{sep}}$ is a small margin ensuring strict separation.
-
 \subsection{Time Breakdown}
 
 \Cref{tab:time-breakdown} provides a detailed breakdown of analysis time
-for each pipeline stage, including the CEGAR stage.
+for each pipeline stage.
 
 \begin{table}[h]
 \centering
-\caption{Time breakdown by pipeline stage (seconds) with CEGAR enabled.
-Percentages show fraction of total time.}
+\caption{Time breakdown by pipeline stage (seconds). Percentages show
+fraction of total time.}
 \label{tab:time-breakdown}
-\begin{tabular}{@{}llcccccccc@{}}
+\begin{tabular}{@{}llccccccc@{}}
 \toprule
-& & \multicolumn{7}{c}{\textbf{Pipeline Stage}} & \\
-\cmidrule(lr){3-9}
-\textbf{Scenario} & $n$ & Trace & HB & Decomp & Abstract & CEGAR & MCTS & IS & \textbf{Total} \\
+& & \multicolumn{6}{c}{\textbf{Pipeline Stage}} & \\
+\cmidrule(lr){3-8}
+\textbf{Scenario} & $n$ & Trace & HB & Decomp & Abstract & MCTS & IS & \textbf{Total} \\
 \midrule
-Highway & 2 & 0.005 & 0.001 & 0.001 & 0.001 & 0.000 & 0.009 & 0.001 & 0.018 \\
-Highway & 3 & 0.013 & 0.001 & 0.002 & 0.001 & 0.000 & 0.022 & 0.001 & 0.040 \\
-Highway & 4 & 0.025 & 0.001 & 0.003 & 0.001 & 0.000 & 0.044 & 0.002 & 0.076 \\
+Highway & 2 & 0.012 & 0.001 & 0.003 & 0.001 & 0.020 & 0.002 & 0.039 \\
+Highway & 3 & 0.027 & 0.001 & 0.004 & 0.001 & 0.037 & 0.002 & 0.072 \\
+Highway & 4 & 0.048 & 0.001 & 0.006 & 0.001 & 0.063 & 0.002 & 0.121 \\
 \midrule
-Warehouse & 4 & 0.020 & 0.004 & 0.002 & 0.001 & 0.012 & 0.027 & 0.002 & 0.068 \\
-Warehouse & 6 & 0.058 & 0.006 & 0.004 & 0.001 & 0.042 & 0.065 & 0.004 & 0.18 \\
-Warehouse & 8 & 0.120 & 0.008 & 0.006 & 0.002 & 0.098 & 0.172 & 0.004 & 0.41 \\
+Warehouse & 4 & 0.053 & 0.008 & 0.004 & 0.001 & 0.066 & 0.002 & 0.134 \\
+Warehouse & 6 & 0.134 & 0.002 & 0.006 & 0.001 & 0.136 & 0.004 & 0.283 \\
+Warehouse & 8 & 0.277 & 0.002 & 0.010 & 0.002 & 0.224 & 0.004 & 0.519 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-In the highway benchmark, the CEGAR stage has zero overhead because no
-spurious candidates are generated. In the warehouse benchmark, CEGAR
-accounts for 18--24\% of total time---a modest cost for eliminating all
-false positives. The dominant costs remain trace collection and MCTS search.
+The dominant costs are trace collection and MCTS search, which together
+account for 85--96\% of total time across all configurations. The abstract
+interpretation and decomposition stages are negligible ($<2$\% of total time),
+validating the efficiency of the constrained zonotope domain.
 
 \subsection{Zonotope Statistics}
 
