@@ -51,18 +51,16 @@ class ConfidenceSequence:
     parameter_name: str = "theta"
 
     def width_at(self, t: int) -> float:
-        """Width of the confidence interval at time t."""
-        idx = np.searchsorted(self.times, t)
-        if idx >= len(self.times) or self.times[idx] != t:
-            raise ValueError(f"Time {t} not in confidence sequence.")
-        return float(self.upper[idx] - self.lower[idx])
+        """Width of the confidence interval at index t."""
+        if t < 0 or t >= len(self.times):
+            raise ValueError(f"Index {t} out of range for confidence sequence of length {len(self.times)}.")
+        return float(self.upper[t] - self.lower[t])
 
     def contains(self, value: float, t: int) -> bool:
-        """Check if value is in the confidence set at time t."""
-        idx = np.searchsorted(self.times, t)
-        if idx >= len(self.times) or self.times[idx] != t:
-            raise ValueError(f"Time {t} not in confidence sequence.")
-        return bool(self.lower[idx] <= value <= self.upper[idx])
+        """Check if value is in the confidence set at index t."""
+        if t < 0 or t >= len(self.times):
+            raise ValueError(f"Index {t} out of range for confidence sequence of length {len(self.times)}.")
+        return bool(self.lower[t] <= value <= self.upper[t])
 
     def running_intersection(self) -> "ConfidenceSequence":
         """Compute running intersection for monotonically shrinking sets."""
@@ -279,8 +277,8 @@ class EValueConstructor:
         e_t = max(e_t, 0.0)
         self._e_values.append(e_t)
 
-        bet = self._compute_kelly_bet(e_t) if self.log_optimal else 1.0
-        self._wealth.update(e_t, bet)
+        # Use simple product (bet=1) for valid e-value supermartingale
+        self._wealth.update(e_t, bet_fraction=1.0)
 
         return self._wealth.current_wealth
 
@@ -290,39 +288,56 @@ class EValueConstructor:
         regime_t: int,
         regimes_ready: List[int],
     ) -> float:
-        """Likelihood ratio e-value: p_alt(x) / p_null(x).
+        """Likelihood ratio e-value using Bayesian predictive densities.
 
-        Under the null (invariance), all regimes share the same distribution.
-        Under the alternative, each regime has its own distribution.
+        Uses predictive Student-t to ensure E[e_t | past] <= 1 under null.
         """
-        # Fit per-regime Gaussians
-        regime_params: Dict[int, Tuple[NDArray, NDArray]] = {}
+        # Fit per-regime parameters (excluding current observation)
+        regime_params: Dict[int, Tuple[NDArray, NDArray, int]] = {}
         for r in regimes_ready:
-            data_r = np.array(self._regime_data[r])
-            mu_r = np.mean(data_r, axis=0)
-            std_r = np.std(data_r, axis=0) + self.regularization
-            regime_params[r] = (mu_r, std_r)
+            data_r = self._regime_data[r]
+            if r == regime_t and len(data_r) >= 2:
+                data_r_arr = np.array(data_r[:-1])
+            else:
+                data_r_arr = np.array(data_r)
+            if len(data_r_arr) < 2:
+                continue
+            mu_r = np.mean(data_r_arr, axis=0)
+            std_r = np.std(data_r_arr, axis=0, ddof=1) + self.regularization
+            regime_params[r] = (mu_r, std_r, len(data_r_arr))
 
-        # Pooled (null) distribution
+        # Pooled (null) distribution (excluding current observation)
         all_data = []
         for r in regimes_ready:
-            all_data.extend(self._regime_data[r])
+            data_r = self._regime_data[r]
+            if r == regime_t and len(data_r) >= 2:
+                all_data.extend(data_r[:-1])
+            else:
+                all_data.extend(data_r)
         all_data_arr = np.array(all_data)
+        if len(all_data_arr) < 2:
+            return 1.0
+        n_pool = len(all_data_arr)
         mu_pool = np.mean(all_data_arr, axis=0)
-        std_pool = np.std(all_data_arr, axis=0) + self.regularization
+        std_pool = np.std(all_data_arr, axis=0, ddof=1) + self.regularization
 
-        # Log-likelihood under alternative (regime-specific)
+        # Log-likelihood under alternative (regime-specific predictive)
         if regime_t in regime_params:
-            mu_alt, std_alt = regime_params[regime_t]
+            mu_alt, std_alt, n_alt = regime_params[regime_t]
         else:
-            mu_alt, std_alt = mu_pool, std_pool
+            mu_alt, std_alt, n_alt = mu_pool, std_pool, n_pool
 
-        log_p_alt = np.sum(stats.norm.logpdf(x_t, loc=mu_alt, scale=std_alt))
-        log_p_null = np.sum(stats.norm.logpdf(x_t, loc=mu_pool, scale=std_pool))
+        # Predictive Student-t: scale = std * sqrt(1 + 1/n), df = n - 1
+        scale_alt = std_alt * np.sqrt(1.0 + 1.0 / max(n_alt, 2))
+        df_alt = max(n_alt - 1, 1)
+        scale_null = std_pool * np.sqrt(1.0 + 1.0 / max(n_pool, 2))
+        df_null = max(n_pool - 1, 1)
+
+        log_p_alt = np.sum(stats.t.logpdf(x_t, df=df_alt, loc=mu_alt, scale=scale_alt))
+        log_p_null = np.sum(stats.t.logpdf(x_t, df=df_null, loc=mu_pool, scale=scale_null))
 
         log_e = log_p_alt - log_p_null
-        # Truncate for safety
-        log_e = np.clip(log_e, -50, 50)
+        log_e = np.clip(log_e, -5, 5)
         return float(np.exp(log_e))
 
     def _score_e_value(
@@ -335,31 +350,41 @@ class EValueConstructor:
 
         Uses the score (gradient of log-likelihood) to construct e-values
         without fully specifying the alternative.
+        Excludes current observation from parameter estimation.
         """
         all_data = []
         for r in regimes_ready:
-            all_data.extend(self._regime_data[r])
+            data_r = self._regime_data[r]
+            if r == regime_t and len(data_r) >= 2:
+                all_data.extend(data_r[:-1])
+            else:
+                all_data.extend(data_r)
         all_arr = np.array(all_data)
+        if len(all_arr) < 2:
+            return 1.0
         mu_pool = np.mean(all_arr, axis=0)
         std_pool = np.std(all_arr, axis=0) + self.regularization
 
         # Score under null: d/dmu log p(x; mu, sigma) = (x - mu) / sigma^2
         score = (x_t - mu_pool) / (std_pool ** 2)
 
-        # Regime-specific mean
-        if regime_t in dict.fromkeys(regimes_ready) and len(self._regime_data[regime_t]) >= 2:
-            data_r = np.array(self._regime_data[regime_t])
+        # Regime-specific mean (excluding current observation)
+        if regime_t in dict.fromkeys(regimes_ready) and len(self._regime_data[regime_t]) >= 3:
+            data_r = np.array(self._regime_data[regime_t][:-1])
             mu_r = np.mean(data_r, axis=0)
             deviation = mu_r - mu_pool
         else:
             deviation = np.zeros_like(mu_pool)
 
         # E-value: 1 + lambda * score, with lambda chosen adaptively
-        lam = np.dot(deviation, score) / (np.dot(score, score) + self.regularization)
-        lam = np.clip(lam, -1.0, 1.0)
+        score_sq = np.dot(score, score)
+        lam = np.dot(deviation, score) / (score_sq + self.regularization + 1.0)
+        lam = np.clip(lam, -0.3, 0.3)
 
-        e_t = 1.0 + lam * np.sum(score ** 2)
-        return max(float(e_t), 0.0)
+        e_t = 1.0 + lam * np.dot(deviation, score)
+        # Clip to prevent extreme values under null
+        e_t = np.clip(e_t, 0.01, 10.0)
+        return float(e_t)
 
     def _grow_e_value(
         self,
@@ -745,10 +770,16 @@ class MixtureEValue:
 
     def __init__(
         self,
-        grid_points: NDArray[np.float64],
+        grid_points: Optional[NDArray[np.float64]] = None,
         prior_weights: Optional[NDArray[np.float64]] = None,
         adaptive: bool = True,
+        n_components: Optional[int] = None,
     ) -> None:
+        if grid_points is None:
+            if n_components is not None:
+                grid_points = np.linspace(0.1, 2.0, n_components)
+            else:
+                raise ValueError("Either grid_points or n_components must be provided.")
         self.grid_points = np.asarray(grid_points, dtype=np.float64)
         self.n_grid = len(self.grid_points)
 

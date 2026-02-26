@@ -129,7 +129,7 @@ def _fit_kernel_ridge(
     X: NDArray,
     Y: NDArray,
     bandwidth: Optional[float] = None,
-    reg_lambda: float = 1e-3,
+    reg_lambda: float = 0.1,
 ) -> RegressionResult:
     """Kernel ridge regression with Gaussian kernel."""
     if bandwidth is None:
@@ -160,9 +160,12 @@ def _fit_gp(
     X: NDArray,
     Y: NDArray,
     bandwidth: Optional[float] = None,
-    noise_var: float = 1e-2,
+    noise_var: float = 0.1,
 ) -> RegressionResult:
-    """Gaussian process regression (mean prediction) with RBF kernel."""
+    """Gaussian process regression (mean prediction) with RBF kernel.
+
+    Computes leave-one-out cross-validation residuals to avoid overfitting.
+    """
     if bandwidth is None:
         bandwidth = _median_bandwidth(X)
     n = len(X)
@@ -172,7 +175,12 @@ def _fit_gp(
     L = cho_factor(K_noisy)
     alpha = cho_solve(L, Y)
     pred = K @ alpha
-    residuals = Y - pred
+
+    # LOO residuals: r_i = (y_i - f_{-i}(x_i)) = alpha_i / K_inv_ii
+    K_inv = cho_solve(L, np.eye(n))
+    K_inv_diag = np.diag(K_inv)
+    K_inv_diag = np.maximum(K_inv_diag, 1e-10)
+    residuals = alpha / K_inv_diag
 
     # Marginal log-likelihood
     log_lik = (
@@ -279,7 +287,7 @@ class AdditiveNoiseModel:
         degree: int = 3,
         bandwidth: Optional[float] = None,
         reg_lambda: float = 1e-3,
-        noise_var: float = 1e-2,
+        noise_var: float = 0.1,
     ) -> None:
         if isinstance(regression, str):
             regression = RegressionType(regression)
@@ -523,6 +531,40 @@ class ANMDirectionTest:
         elif bwd_indep and not fwd_indep:
             direction = "Y->X"
             confidence = (1.0 - p_fwd) * p_bwd
+        elif fwd_indep and bwd_indep:
+            # Both independent: use multiple tiebreakers
+            resid_fwd = model_fwd.residuals
+            resid_bwd = model_bwd.residuals
+            # 1. Normalized residual variance (lower = better fit)
+            var_fwd = np.var(resid_fwd) / (np.var(Y) + 1e-10)
+            var_bwd = np.var(resid_bwd) / (np.var(X) + 1e-10)
+            # 2. HSIC (lower = more independent)
+            score_fwd = hsic_fwd
+            score_bwd = hsic_bwd
+            # 3. Higher p-value = more independent
+            if abs(p_fwd - p_bwd) > 0.05:
+                if p_fwd > p_bwd:
+                    direction = "X->Y"
+                    confidence = p_fwd - p_bwd
+                else:
+                    direction = "Y->X"
+                    confidence = p_bwd - p_fwd
+            elif abs(var_fwd - var_bwd) > 0.01:
+                if var_fwd < var_bwd:
+                    direction = "X->Y"
+                    confidence = max(0.0, (var_bwd - var_fwd) / (var_bwd + var_fwd + 1e-10))
+                else:
+                    direction = "Y->X"
+                    confidence = max(0.0, (var_fwd - var_bwd) / (var_fwd + var_bwd + 1e-10))
+            elif hsic_fwd < hsic_bwd:
+                direction = "X->Y"
+                confidence = max(0.0, (hsic_bwd - hsic_fwd) / (hsic_bwd + hsic_fwd + 1e-10))
+            elif hsic_bwd < hsic_fwd:
+                direction = "Y->X"
+                confidence = max(0.0, (hsic_fwd - hsic_bwd) / (hsic_fwd + hsic_bwd + 1e-10))
+            else:
+                direction = "undetermined"
+                confidence = 0.0
         else:
             direction = "undetermined"
             confidence = 0.0

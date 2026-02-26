@@ -304,6 +304,9 @@ def _forward_backward(log_pi: NDArray, log_A: NDArray,
     log_gamma = log_alpha + log_beta
     log_gamma -= logsumexp(log_gamma, axis=1, keepdims=True)
 
+    # Return actual probabilities (not log)
+    gamma = np.exp(log_gamma)
+
     log_xi = np.full((T - 1, K, K), -np.inf)
     for t in range(T - 1):
         for j in range(K):
@@ -315,7 +318,7 @@ def _forward_backward(log_pi: NDArray, log_A: NDArray,
                     + log_beta[t + 1, k]
                 )
         log_xi[t] -= logsumexp(log_xi[t].ravel())
-    return log_gamma, log_xi, log_evidence
+    return gamma, log_xi, log_evidence
 
 
 def _viterbi(log_pi: NDArray, log_A: NDArray, log_lik: NDArray) -> Tuple[NDArray, float]:
@@ -1029,8 +1032,8 @@ class StickyHDPHMM:
         log_lik = self._compute_log_lik(X)
         log_A = np.log(self.A_ + 1e-300)
         log_pi = np.log(self.pi_ + 1e-300)
-        log_gamma, _, _ = _forward_backward(log_pi, log_A, log_lik)
-        return np.exp(log_gamma)
+        gamma, _, _ = _forward_backward(log_pi, log_A, log_lik)
+        return gamma
 
     # ------------------------------------------------------------------
     # sample

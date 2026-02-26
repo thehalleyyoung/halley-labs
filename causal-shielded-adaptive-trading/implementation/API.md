@@ -380,3 +380,44 @@ Outputs results to `experiments/results/multi_instrument.json` with per-asset me
 ```bash
 python3 -m experiments.run_multi_instrument
 ```
+
+---
+
+## Baseline Strategies (`causal_trading.evaluation.baseline_strategies`)
+
+### `BuyAndHoldStrategy`
+Always holds a fixed position level.
+
+### `MomentumStrategy`
+Time-series momentum with configurable lookback and threshold.
+
+### `MeanReversionStrategy`
+Fades moves beyond `n_std` standard deviations from rolling mean.
+
+### `RiskParityStrategy`
+Sizes positions inversely proportional to rolling volatility.
+
+### `UnshieldedMeanVarianceStrategy`
+Mean-variance optimizer without safety shield.
+
+### `CSATStrategy`
+Full CSAT pipeline: regime detection → causal discovery → shield → mean-variance.
+
+### `run_walk_forward_backtest`
+Run a walk-forward backtest for one strategy with transaction costs.
+
+```python
+from causal_trading.evaluation.baseline_strategies import (
+    CSATStrategy, BuyAndHoldStrategy, run_walk_forward_backtest
+)
+result = run_walk_forward_backtest(features, returns, CSATStrategy())
+print(f"Sharpe: {result.sharpe_ratio:.3f}")
+```
+
+### `compare_strategies`
+Run multiple strategies on the same data and compare Sharpe, max DD, Calmar.
+
+```python
+from causal_trading.evaluation.baseline_strategies import compare_strategies
+results = compare_strategies(features, returns, [CSATStrategy(), BuyAndHoldStrategy()])
+```

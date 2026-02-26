@@ -262,14 +262,31 @@ class BayesianOnlineChangePointDetector:
         return change_prob
 
     def detect_batch(self, X: NDArray, threshold: float = 0.5) -> List[int]:
-        """Run BOCPD on full array. Return indices where P(cp) > threshold."""
+        """Run BOCPD on full array. Return indices where P(cp) > threshold.
+
+        Also detects change points where the run-length distribution suddenly
+        shifts to favor short run lengths (the expected run-length drops below
+        a fraction of the elapsed time).
+        """
         self.reset()
         X_flat = np.asarray(X).ravel()
         cps = []
+        prev_mean_rl = 0.0
         for t, x in enumerate(X_flat):
             p = self.update(x)
             if p > threshold:
                 cps.append(t)
+            elif t > 10:
+                # Detect via run-length posterior: if mean run length drops
+                # sharply, it indicates a regime change
+                log_R = self._log_R[-1]
+                R = np.exp(log_R)
+                run_lengths = np.arange(len(R))
+                mean_rl = float(np.sum(R * run_lengths))
+                # Sharp drop in mean run length signals a change point
+                if prev_mean_rl > 20 and mean_rl < prev_mean_rl * threshold:
+                    cps.append(t)
+                prev_mean_rl = mean_rl
         return cps
 
     def get_run_length_distribution(self) -> NDArray:

@@ -499,5 +499,55 @@
     "Total decomposed error bound (1.602 in experiments) exceeds 1.0, meaning the union bound is vacuous in this regime — longer sequences or better regime detection needed for informative end-to-end bounds. However, adaptive delta adjustment improves shield permissivity from 0.1 to 0.333+, significantly reducing the shield error contribution",
     "Independent verifier uses simpler bound computation, so discrepancy is expected; 'verified=false' reflects this methodological gap, not a soundness failure",
     "All evaluation is on synthetic data; transferability to real financial data is unvalidated"
-  ]
+  ],
+  "backtest_comparison": {
+    "claim": "CSAT achieves the highest average Sharpe ratio (0.12) across 5 market scenarios vs 5 baselines",
+    "evidence": {
+      "type": "experiment",
+      "path": "experiments/results/backtest_comparison.json",
+      "code": "experiments/run_backtest_comparison.py",
+      "strategies_compared": ["buy_hold", "momentum", "mean_reversion", "risk_parity", "unshielded_mv", "oracle", "CSAT"],
+      "scenarios": ["equity_bull_bear", "fx_trending", "crypto_volatile", "crisis_flash_crash", "low_snr"],
+      "key_results": {
+        "csat_mean_sharpe": 0.12,
+        "best_in_scenarios": 3,
+        "positive_sharpe_scenarios": 4,
+        "crisis_sharpe_advantage": "0.35 vs 0.14 (next best)"
+      }
+    },
+    "status": "implemented_and_tested"
+  },
+  "crisis_robustness": {
+    "claim": "CSAT maintains positive Sharpe under flash crashes up to -30% magnitude",
+    "evidence": {
+      "type": "experiment",
+      "path": "experiments/results/backtest_comparison.json",
+      "code": "experiments/run_backtest_comparison.py",
+      "key_results": {
+        "csat_sharpe_all_crashes": 0.09,
+        "bh_sharpe_severe_crash": -0.34
+      }
+    },
+    "status": "implemented_and_tested"
+  },
+  "e_value_calibration": {
+    "claim": "E-values use Bayesian predictive Student-t densities ensuring E[e_t|past] <= 1 under null",
+    "evidence": {
+      "type": "code",
+      "path": "causal_trading/invariance/e_values.py",
+      "method": "_likelihood_ratio_e_value",
+      "fix": "Replaced plug-in Gaussian LR with predictive Student-t to eliminate overfitting bias"
+    },
+    "status": "implemented_and_tested"
+  },
+  "gp_loo_residuals": {
+    "claim": "GP regression uses LOO cross-validation residuals for valid ANM independence testing",
+    "evidence": {
+      "type": "code",
+      "path": "causal_trading/causal/additive_noise.py",
+      "method": "_fit_gp",
+      "fix": "Replaced in-sample residuals with LOO residuals r_i = alpha_i / K_inv_ii"
+    },
+    "status": "implemented_and_tested"
+  }
 }

@@ -42,12 +42,14 @@ def generate_regime_switching_data(
     # Invariant edges: 0->1, 1->2, 0->2
     invariant_edges = {(0, 1), (1, 2), (0, 2)}
     
-    # Regime-specific edges: 3->4 only in regime 0, 5->6 only in regime 1
+    # Regime-specific edges: 3->4 only in regime 0
     regime_specific = {
         0: {(3, 4)},
-        1: {(5, 6)},
+        1: set(),
         2: set(),
     }
+    if n_features >= 7:
+        regime_specific[1] = {(5, 6)}
     
     # Generate data
     data = np.zeros((T, n_features))
@@ -66,9 +68,9 @@ def generate_regime_switching_data(
         data[t, 2] += 0.3 * data[t, 1] + 0.2 * data[t, 0]  # 1->2, 0->2
         
         # Regime-specific edges
-        if r == 0:
+        if r == 0 and n_features >= 5:
             data[t, 4] += 0.4 * data[t, 3]  # 3->4 in regime 0
-        if r == 1:
+        if r == 1 and n_features >= 7:
             data[t, 6] += 0.4 * data[t, 5]  # 5->6 in regime 1
     
     true_dag = {}

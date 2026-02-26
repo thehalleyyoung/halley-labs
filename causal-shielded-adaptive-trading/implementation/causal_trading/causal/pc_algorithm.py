@@ -461,7 +461,7 @@ class PCAlgorithm:
         """
         data = np.asarray(data, dtype=np.float64)
         _, p = data.shape
-        self._variable_names = variable_names or [f"X{i}" for i in range(p)]
+        self._variable_names = variable_names if variable_names is not None else list(range(p))
 
         # Phase 1: skeleton
         self._skeleton = _discover_skeleton(

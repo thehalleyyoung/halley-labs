@@ -291,6 +291,9 @@ class StructuralCausalModel:
         self, x: Set[str], y: Set[str], z: Set[str]
     ) -> bool:
         """Bayes-ball reachability: returns True iff x ⊥ y | z in the DAG."""
+        # If x and y overlap, they are trivially not d-separated
+        if x & y:
+            return False
         reachable = self._reachable_from(x, z)
         return len(reachable & y) == 0
 
