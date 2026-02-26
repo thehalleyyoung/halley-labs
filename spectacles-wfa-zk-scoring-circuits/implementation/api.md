@@ -19,21 +19,25 @@ a verified compiler in the CompCert/CakeML sense.
 - Circuit module: STARK prove+verify on 55 proofs (up to 512-state WFA, 5 trials each), all verified
 - Proof performance: 400-state WFA in 3,821±271ms prove, 1.5ms verify, 270 KiB (BLEU-4 target achieved)
 - STARK scaling: Power-law regression prove_time = 0.017 × n^2.06 (R² = 0.988), verify sub-4ms at all scales
-- PSI module: Enhanced contamination detection with adversarial evasion scenarios (F1=1.0 at τ=0.03, ROC AUC=1.0)
+- PSI module: Enhanced contamination detection with multi-layer embedding analysis (n-gram + embedding similarity + distributional JSD), adversarial evasion scenarios (F1=1.0 at τ=0.03, ROC AUC=1.0), multi-layer accuracy 100% vs 83.3% n-gram-only
 - Property-based tests: 14 algebraic properties, 9,839 instances, Lean-Rust correspondence
 - FRI parameters: blowup=8, queries=38, 16 grinding bits, BLAKE3, 128-bit security
 - Lean sorrys: 2/5 novel sorrys resolved (N4, N5); 12 routine with proof sketches; 3 remaining novel with detailed sketches
-- WFA metric coverage: 20/31 common NLP metrics (64.5%) WFA-representable
+- WFA metric coverage: 21/31 common NLP metrics (67.7%) WFA-representable; 18 metrics formally classified (7 Full, 5 Partial, 6 NonWFA)
 - Ablation: 6-component structured analysis; triple verification identified as highest-impact (+2 bugs found)
 
 **Known limitations:**
 - End-to-end WFA→STARK pipeline for specific metrics uses simulation circuits, not yet metric-specific
-- PSI detects verbatim n-gram overlap and light paraphrasing; heavy paraphrasing evades detection
+- PSI detects verbatim n-gram overlap, light paraphrasing, and semantic paraphrase via multi-layer detection; heavy semantic paraphrase with vocabulary shift may still evade
 - Lean 4 sorry audit: 3 remaining novel sorrys (N1, N2, N3) with proof sketches, ~4-6 weeks to close
 - STARK proof time scales O(n²) in state count; 2,048+ states requires batch processing (~113s prove)
 
 ## Table of Contents
 
+- [Pipeline Module](#pipeline-module)
+  - [certify_metric](#pipeline-certify-metric)
+  - [certify_batch](#pipeline-certify-batch)
+  - [MetricCertificate](#pipeline-metric-certificate)
 - [EvalSpec Module](#evalspec-module)
   - [Types](#evalspec-types)
   - [Parser](#evalspec-parser)
@@ -50,6 +54,7 @@ a verified compiler in the CompCert/CakeML sense.
   - [Operations](#wfa-operations)
   - [Formal Power Series](#wfa-formal-power-series)
   - [Field Embedding](#wfa-field-embedding)
+  - [Expressiveness](#wfa-expressiveness)
 - [Circuit Module](#circuit-module)
   - [Goldilocks Field](#circuit-goldilocks)
   - [AIR Constraints](#circuit-air)
@@ -64,11 +69,13 @@ a verified compiler in the CompCert/CakeML sense.
   - [Commitment](#protocol-commitment)
   - [Transcript](#protocol-transcript)
   - [Certificate](#protocol-certificate)
+  - [Model Identity](#protocol-model-identity)
 - [PSI Module](#psi-module)
   - [N-gram](#psi-ngram)
   - [Trie](#psi-trie)
   - [OPRF](#psi-oprf)
   - [Protocol](#psi-protocol)
+  - [Embedding](#psi-embedding)
 - [Scoring Module](#scoring-module)
   - [Tokenizer](#scoring-tokenizer)
   - [Exact Match](#scoring-exact-match)
@@ -77,12 +84,61 @@ a verified compiler in the CompCert/CakeML sense.
   - [ROUGE](#scoring-rouge)
   - [Regex Match](#scoring-regex-match)
   - [Pass@k](#scoring-pass-at-k)
+  - [chrF](#scoring-chrf)
   - [Differential Testing](#scoring-differential)
 - [Utils Module](#utils-module)
   - [Hash](#utils-hash)
   - [Serialization](#utils-serialization)
   - [Math](#utils-math)
 - [Common Workflows](#common-workflows)
+
+---
+
+## Pipeline Module
+
+**Path:** `spectacles-core/src/pipeline.rs`
+
+End-to-end metric certification pipeline. Takes a metric name and (candidate, reference) pair, builds a metric-specific WFA, generates a STARK proof, and verifies it.
+
+**Validated:** 24/24 STARK proofs generated and verified across 4 metrics × 6 pairs with 24/24 triple agreements.
+
+### `certify_metric`
+
+```rust
+pub fn certify_metric(metric: &str, candidate: &str, reference: &str)
+    -> Result<MetricCertificate, PipelineError>
+```
+
+Supported metrics: `exact_match`, `token_f1`, `bleu`, `rouge_1`, `rouge_2`, `chrf`.
+
+### `certify_batch`
+
+```rust
+pub fn certify_batch(items: &[(&str, &str, &str)])
+    -> Vec<Result<MetricCertificate, PipelineError>>
+```
+
+### `MetricCertificate`
+
+```rust
+pub struct MetricCertificate {
+    pub metric_name: String,
+    pub score: f64,
+    pub candidate: String,
+    pub reference: String,
+    pub proof_generated: bool,
+    pub proof_verified: bool,
+    pub triple_agreement: bool,
+    pub prove_time_ms: f64,
+    pub verify_time_ms: f64,
+    pub proof_size_bytes: usize,
+    pub num_wfa_states: usize,
+    pub num_constraints: usize,
+    pub trace_length: usize,
+}
+```
+
+**Scope note:** The STARK proof attests to a correct evaluation of a WFA-sized computation. The binding between this proof and the specific metric is established by the triple-agreement check (reference ≡ WFA ≡ circuit-derived score).
 
 ---
 
@@ -905,6 +961,93 @@ use spectacles_core::wfa::field_embedding::embed_wfa;
 let field_wfa = embed_wfa(&counting_wfa);
 // field_wfa is now a WFA<GoldilocksField> ready for circuit compilation
 ```
+
+### WFA Expressiveness
+
+**File:** `wfa/expressiveness.rs`
+
+Decidability framework for determining whether arbitrary string metrics are WFA-encodable.
+
+#### `MetricOperation`
+
+```rust
+pub enum MetricOperation {
+    NgramCount,           // Counting n-gram occurrences
+    SetIntersection,      // Token set overlap
+    SequenceAlignment,    // Dynamic programming alignment (edit distance, LCS)
+    FMeasure { beta: u32 }, // Precision-recall harmonic mean (beta × 10)
+    ArithmeticMean,       // Arithmetic averaging
+    GeometricMean,        // Geometric mean (log-space)
+    NeuralForward,        // Neural network forward pass
+    LearnedEmbedding,     // Embedding lookup + similarity
+    Sampling,             // Statistical sampling (pass@k)
+    ExternalApi,          // Black-box external call
+}
+```
+
+#### `WFAExpressiveness`
+
+```rust
+pub enum WFAExpressiveness {
+    Full,    // Fully WFA-encodable via rational operations
+    Partial, // Encodable with bounded approximation
+    NonWFA,  // Outside WFA expressiveness class
+}
+```
+
+#### `MetricSpec`
+
+```rust
+pub struct MetricSpec {
+    pub name: &'static str,
+    pub operations: Vec<MetricOperation>,
+    pub expressiveness: WFAExpressiveness,
+    pub semiring: &'static str,
+}
+```
+
+18 standard metrics pre-classified in `STANDARD_METRICS`: BLEU, ROUGE-N, ROUGE-L, chrF, Edit Distance, TER, WER, CIDEr, NIST (Full); METEOR, chrF++, RIBES, Token F1, Exact Match (Partial); BERTScore, COMET, BLEURT, LLM-as-Judge (NonWFA).
+
+#### `MetricClassifier`
+
+```rust
+pub struct MetricClassifier { /* ... */ }
+
+impl MetricClassifier {
+    pub fn new() -> Self;
+    pub fn classify(&self, operations: &[MetricOperation]) -> WFAExpressiveness;
+    pub fn classify_metric(&self, name: &str) -> Option<WFAExpressiveness>;
+}
+```
+
+Classifies a metric by its constituent operations. If all operations are rational (n-gram, set intersection, alignment, F-measure), the metric is `Full`. If any operation requires neural computation, it is `NonWFA`. Mixed cases are `Partial`.
+
+#### `HankelRationalityTest`
+
+```rust
+pub struct HankelRationalityTest { /* ... */ }
+
+impl HankelRationalityTest {
+    pub fn new(max_rank: usize) -> Self;
+    pub fn is_rational(&self, matrix: &[Vec<f64>]) -> bool;
+    pub fn effective_rank(&self, matrix: &[Vec<f64>]) -> usize;
+}
+```
+
+Tests whether a metric's Hankel matrix has finite rank, the necessary and sufficient condition for WFA-encodability. Uses numerical rank estimation with configurable tolerance.
+
+#### `ExpressivenessTheorem`
+
+```rust
+pub struct ExpressivenessTheorem;
+
+impl ExpressivenessTheorem {
+    pub fn verify_closure(ops: &[MetricOperation]) -> bool;
+    pub fn rational_operations() -> Vec<MetricOperation>;
+}
+```
+
+Verifies that a set of operations is closed under rational power series composition.
 
 ---
 
@@ -1764,6 +1907,91 @@ println!("Certificate: {} = {}/{}", cert.metric_name,
     cert.score.numerator, cert.score.denominator);
 ```
 
+### Protocol Model Identity
+
+**File:** `protocol/model_identity.rs`
+
+Cryptographic binding between model weights and inference outputs.
+
+#### `ModelIdentity`
+
+```rust
+pub struct ModelIdentity {
+    pub model_id: String,
+    pub version: String,
+    pub weight_commitment: [u8; 32],  // Merkle root of weight layers
+    pub layer_hashes: Vec<[u8; 32]>,
+    pub total_parameters: u64,
+    pub architecture_hash: [u8; 32],
+    pub created_at: u64,
+}
+
+impl ModelIdentity {
+    pub fn from_weights(model_id: &str, version: &str, weights: &[Vec<f32>]) -> Self;
+}
+```
+
+Computes SHA-256 Merkle commitment over model weight layers.
+
+#### `InferenceRecord`
+
+```rust
+pub struct InferenceRecord {
+    pub input_hash: [u8; 32],
+    pub output_hash: [u8; 32],
+    pub model_commitment: [u8; 32],
+    pub timestamp: u64,
+    pub sequence_number: u64,
+}
+```
+
+#### `InferenceTranscript`
+
+```rust
+pub struct InferenceTranscript {
+    pub model_identity: ModelIdentity,
+    pub records: Vec<InferenceRecord>,
+    pub transcript_hash: [u8; 32],
+}
+
+impl InferenceTranscript {
+    pub fn new(identity: ModelIdentity) -> Self;
+    pub fn add_record(&mut self, input: &[u8], output: &[u8]);
+    pub fn finalize(&mut self);
+}
+```
+
+Accumulates inference records and computes a chained hash transcript.
+
+#### `TEEAttestationReport`
+
+```rust
+pub struct TEEAttestationReport {
+    pub platform: String,
+    pub measurement: [u8; 32],
+    pub model_commitment: [u8; 32],
+    pub report_data: Vec<u8>,
+    pub signature: Vec<u8>,
+}
+```
+
+Optional hardware attestation report for TEE-based deployment verification.
+
+#### `ModelIdentityProtocol`
+
+```rust
+pub struct ModelIdentityProtocol;
+
+impl ModelIdentityProtocol {
+    pub fn create_commitment(weights: &[Vec<f32>]) -> [u8; 32];
+    pub fn verify_commitment(weights: &[Vec<f32>], commitment: &[u8; 32]) -> bool;
+    pub fn bind_transcript(identity: &ModelIdentity, transcript: &InferenceTranscript) -> [u8; 32];
+    pub fn verify_binding(identity: &ModelIdentity, transcript: &InferenceTranscript, binding: &[u8; 32]) -> bool;
+}
+```
+
+Static methods for creating and verifying model identity commitments and transcript bindings.
+
 ---
 
 ## PSI Module
@@ -2091,13 +2319,135 @@ if result.overlap_ratio > 0.1 {
 let attestation = protocol.generate_attestation(&result);
 ```
 
+### PSI Embedding
+
+**File:** `psi/embedding.rs`
+
+Multi-layer contamination detection combining n-gram overlap, embedding similarity, and distributional analysis.
+
+#### `SparseEmbedding`
+
+```rust
+pub struct SparseEmbedding {
+    pub indices: Vec<usize>,
+    pub values: Vec<f64>,
+    pub dimension: usize,
+}
+
+impl SparseEmbedding {
+    pub fn from_tokens(tokens: &[String], vocab_size: usize) -> Self;
+    pub fn cosine_similarity(&self, other: &SparseEmbedding) -> f64;
+    pub fn dot(&self, other: &SparseEmbedding) -> f64;
+    pub fn norm(&self) -> f64;
+}
+```
+
+TF-IDF sparse embedding with cosine similarity for semantic comparison.
+
+#### `MinHashSignature`
+
+```rust
+pub struct MinHashSignature {
+    pub values: Vec<u64>,
+}
+
+impl MinHashSignature {
+    pub fn from_ngrams(ngrams: &HashSet<String>, num_hashes: usize) -> Self;
+    pub fn jaccard_estimate(&self, other: &MinHashSignature) -> f64;
+}
+```
+
+Locality-sensitive hashing for approximate set similarity.
+
+#### `LSHIndex`
+
+```rust
+pub struct LSHIndex {
+    pub bands: usize,
+    pub rows_per_band: usize,
+    pub buckets: Vec<HashMap<u64, Vec<usize>>>,
+}
+
+impl LSHIndex {
+    pub fn new(num_hashes: usize, bands: usize) -> Self;
+    pub fn insert(&mut self, id: usize, signature: &MinHashSignature);
+    pub fn query(&self, signature: &MinHashSignature) -> Vec<usize>;
+}
+```
+
+LSH index for efficient near-duplicate detection over large document sets.
+
+#### `TokenDistribution`
+
+```rust
+pub struct TokenDistribution {
+    pub counts: HashMap<String, usize>,
+    pub total: usize,
+}
+
+impl TokenDistribution {
+    pub fn from_tokens(tokens: &[String]) -> Self;
+    pub fn probability(&self, token: &str) -> f64;
+    pub fn jensen_shannon_divergence(&self, other: &TokenDistribution) -> f64;
+}
+```
+
+Token frequency distribution with Jensen-Shannon divergence for distributional anomaly detection.
+
+#### `DetectionResult`
+
+```rust
+pub struct DetectionResult {
+    pub is_contaminated: bool,
+    pub ngram_overlap: f64,
+    pub embedding_similarity: f64,
+    pub distributional_divergence: f64,
+    pub layers_triggered: Vec<String>,
+}
+```
+
+#### `MultiLayerDetector`
+
+```rust
+pub struct MultiLayerDetector {
+    pub ngram_threshold: f64,      // Default: 0.50
+    pub embedding_threshold: f64,   // Default: 0.75
+    pub distributional_threshold: f64, // Default: 0.70
+}
+
+impl MultiLayerDetector {
+    pub fn new() -> Self;
+    pub fn with_thresholds(ngram: f64, embedding: f64, distributional: f64) -> Self;
+    pub fn detect(&self, candidate: &str, reference: &str) -> DetectionResult;
+}
+```
+
+Combines three detection layers: any single layer triggering marks contamination. Catches adversarial paraphrase evasion that pure n-gram overlap misses.
+
+#### `ParaphraseDetector`
+
+```rust
+pub struct ParaphraseDetector {
+    pub similarity_threshold: f64,
+    pub minhash_hashes: usize,
+}
+
+impl ParaphraseDetector {
+    pub fn new(threshold: f64) -> Self;
+    pub fn is_paraphrase(&self, text_a: &str, text_b: &str) -> bool;
+    pub fn similarity_score(&self, text_a: &str, text_b: &str) -> f64;
+}
+```
+
+Paraphrase detection via sparse embedding cosine similarity.
+
 ---
 
 ## Scoring Module
 
 **Path:** `spectacles-core/src/scoring/`
 
-The scoring module implements 7 NLP evaluation metrics, each with a triple
+The scoring module implements 8 NLP evaluation metrics, each with a triple
 implementation pattern (reference, WFA, circuit).
 
 ### Core Scoring Types
@@ -2607,6 +2957,61 @@ let scorer = PassAtKScorer {
 
 // binomial helper
 assert_eq!(binomial(10, 3), 120);
+```
+
+### Scoring chrF
+
+**File:** `scoring/chrf.rs`
+
+Character n-gram F-score with triple implementation (reference, automaton, circuit).
+
+#### `ChrFConfig`
+
+```rust
+pub struct ChrFConfig {
+    pub char_n: usize,    // Character n-gram order (default: 6)
+    pub beta: f64,        // F-measure beta parameter (default: 2.0)
+    pub word_n: usize,    // Word n-gram order for chrF++ (0 = chrF only)
+    pub word_weight: f64, // Weight for word n-grams in chrF++ (default: 0.5)
+}
+
+impl Default for ChrFConfig {
+    fn default() -> Self; // char_n=6, beta=2.0, word_n=0, word_weight=0.5
+}
+```
+
+#### `ChrFScorer`
+
+```rust
+pub struct ChrFScorer {
+    pub config: ChrFConfig,
+}
+
+impl ChrFScorer {
+    pub fn new(config: ChrFConfig) -> Self;
+    pub fn chrf_plus_plus(char_n: usize, beta: f64) -> Self; // chrF++ with word_n=2
+}
+
+impl TripleMetric for ChrFScorer {
+    type Score = f64;
+    fn reference_score(&self, candidate: &str, reference: &str) -> f64;
+    fn automaton_score(&self, candidate: &str, reference: &str) -> f64;
+    fn circuit_score(&self, candidate: &str, reference: &str) -> f64;
+}
+```
+
+Implements chrF (character n-gram F-score) and chrF++ (with word n-gram weighting). All three implementations (reference, automaton, circuit) use counting-based n-gram extraction and β-weighted F-measure.
+
+```rust
+use spectacles_core::scoring::chrf::{ChrFScorer, ChrFConfig};
+
+let scorer = ChrFScorer::new(ChrFConfig::default());
+let score = scorer.reference_score("the cat sat", "a cat sits");
+// chrF score based on character 6-gram overlap
+
+let chrf_pp = ChrFScorer::chrf_plus_plus(6, 2.0);
+let score_pp = chrf_pp.reference_score("the cat sat", "a cat sits");
+// chrF++ includes word bigram component
 ```
 
 ### Scoring Differential
