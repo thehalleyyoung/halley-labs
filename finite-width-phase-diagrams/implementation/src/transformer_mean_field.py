@@ -25,12 +25,20 @@ References:
     Trockman & Kolter, "Mimetic Initialization of Self-Attention Layers", ICML 2023
 """
 
+import math
 import numpy as np
 from scipy.integrate import quad
 from scipy.special import erf
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Dict, Callable
 import warnings
+
+try:
+    import torch
+    import torch.nn as nn
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
 
 from mean_field_theory import (
     ActivationVarianceMaps,
@@ -79,6 +87,8 @@ class TransformerSpec:
     pre_ln: bool = True
     input_variance: float = 1.0
     dropout: float = 0.0
+    seq_len: int = 128
+    is_causal: bool = True
 
 
 @dataclass
@@ -141,25 +151,28 @@ class TransformerMeanField:
         self._mf = MeanFieldAnalyzer()
 
     def attention_output_variance(self, q_in: float, d_k: int,
-                                  sigma_w: float, n_heads: int = 8) -> float:
+                                  sigma_w: float, n_heads: int = 8,
+                                  seq_len: int = 128,
+                                  is_causal: bool = True) -> float:
         """Compute post-attention variance for a single self-attention layer.
 
         For input with variance q_in, QKV projections with scale sigma_w,
         and softmax attention with head dimension d_k:
 
-        The QK^T product has entries ~ N(0, d_k * q_in^2 * sigma_w^4)
-        before the 1/sqrt(d_k) scaling, giving logits ~ N(0, q_in^2 * sigma_w^4).
-        After softmax and value multiplication, the output variance is:
+        The attention output at position i is a weighted average of value
+        vectors: out_i = sum_j p_{ij} v_j, where p = softmax(QK^T/sqrt(d_k)).
 
-            Var[attn_out] ≈ sigma_w^2 * q_in * E[||softmax(s)||^2]
+        The per-component output variance is:
+            Var[out_i] = E[||p_i||^2] * q_V
 
-        where s are the attention logits. For Gaussian logits with variance
-        σ_s^2 = q_in * sigma_w^4, the expected squared softmax norm
-        E[||p||^2] ≈ 1/n_eff where n_eff is the effective number of
-        attended positions (depends on σ_s).
+        For near-uniform attention (small sigma_w):
+        - Bidirectional: E[||p||^2] ≈ 1/T
+        - Causal at position i: E[||p_i||^2] = 1/(i+1)
+        - Average over causal positions: H_T/T (harmonic number / seq_len)
 
-        At initialization (small σ_w), attention is approximately uniform,
-        so E[||p||^2] ≈ 1/seq_len and output variance ≈ σ_w^2 * q_in.
+        As sigma_w grows, attention concentrates and E[||p||^2] → 1.
+
+        After output projection: q_attn_out = sigma_w^2 * E[||p||^2] * q_V
 
         Parameters
         ----------
@@ -171,54 +184,58 @@ class TransformerMeanField:
             Weight scale for Q, K, V projections.
         n_heads : int
             Number of attention heads.
+        seq_len : int
+            Sequence length T.
+        is_causal : bool
+            Whether attention is causally masked.
 
         Returns
         -------
         float
-            Post-attention variance (before output projection).
+            Post-attention variance (after output projection).
         """
         if q_in <= 0:
             return 0.0
 
-        # Logit variance after 1/sqrt(d_k) scaling
-        # Each logit l_ij = (q_i^T k_j) / sqrt(d_k)
-        # With q,k having variance sigma_w^2 * q_in per component,
-        # q^T k / sqrt(d_k) has variance ~ sigma_w^4 * q_in^2 * d_k / d_k = sigma_w^4 * q_in^2
-        # But for properly scaled init (sigma_w ~ 1/sqrt(fan_in)):
-        sigma_logit_sq = sigma_w ** 4 * q_in ** 2
-
-        # For small logit variance (near init), softmax ≈ uniform
-        # E[||softmax(s)||^2] ≈ 1/n + var(s) * (n-1)/n^2 for Gaussian logits
-        # We use the approximation that at init, attention is near-uniform
-        # Key insight: the output projection further scales by sigma_w^2
-        # Total: Var[output] = sigma_w^2 * sigma_w^2 * q_in (V proj + O proj)
-        # = sigma_w^4 * q_in... but for standard init sigma_w ≈ 1, so ≈ q_in
-
         # Value projection variance: sigma_w^2 * q_in
         q_value = sigma_w ** 2 * q_in
 
-        # Attention-weighted output: for near-uniform attention (at init),
-        # output is approx average of values, preserving variance.
-        # For concentrated attention (large sigma_logit), variance can grow.
-        # Softmax concentration factor: higher logit variance → more peaked softmax
-        concentration = 1.0 / (1.0 + sigma_logit_sq)
+        # Logit variance: Var[q^T k / sqrt(d_k)] = sigma_w^4 * q_in^2
+        sigma_logit_sq = sigma_w ** 4 * q_in ** 2
+
+        # Softmax squared norm E[||p||^2]:
+        # - Uniform limit (small sigma_logit): 1/T (bidirectional) or H_T/T (causal)
+        # - Concentrated limit (large sigma_logit): → 1
+        T = max(seq_len, 1)
+        if is_causal:
+            # Harmonic number H_T = sum_{i=1}^{T} 1/i
+            H_T = sum(1.0 / i for i in range(1, T + 1))
+            uniform_concentration = H_T / T
+        else:
+            uniform_concentration = 1.0 / T
+
+        # Interpolation from uniform to concentrated based on logit variance
+        # As sigma_logit grows, softmax concentrates and ||p||^2 approaches 1
+        softmax_sq_norm = uniform_concentration + (1.0 - uniform_concentration) * (
+            1.0 - np.exp(-sigma_logit_sq))
 
         # Output projection: another sigma_w^2 factor
-        q_attn_out = sigma_w ** 2 * q_value * concentration
+        q_attn_out = sigma_w ** 2 * q_value * softmax_sq_norm
 
         return max(q_attn_out, 0.0)
 
-    def attention_chi1(self, q_in: float, d_k: int, sigma_w: float) -> float:
+    def attention_chi1(self, q_in: float, d_k: int, sigma_w: float,
+                       seq_len: int = 128, is_causal: bool = True) -> float:
         """Susceptibility of the attention sublayer.
 
-        The Jacobian of attention w.r.t. input has norm that depends on
-        the attention pattern concentration. At initialization with
-        near-uniform attention:
+        The Jacobian of attention w.r.t. input is dominated by the value
+        pathway at initialization:
+            J_V = W_O @ diag(softmax) @ W_V
 
-            chi_1^attn ≈ sigma_w^4 (from W_Q, W_K, W_V, W_O)
+        The squared Frobenius norm per dimension is:
+            chi_1^attn ≈ sigma_w^4 * E[||softmax||^2]
 
-        More precisely, for the value pathway (which dominates at init):
-            chi_1^attn ≈ sigma_w^4 * (1 + O(sigma_w^4 * q_in))
+        where E[||softmax||^2] depends on sequence length and causal masking.
 
         Parameters
         ----------
@@ -228,17 +245,28 @@ class TransformerMeanField:
             Per-head dimension.
         sigma_w : float
             Weight scale.
+        seq_len : int
+            Sequence length.
+        is_causal : bool
+            Whether attention uses causal masking.
 
         Returns
         -------
         float
             Attention sublayer susceptibility.
         """
-        # At initialization: near-uniform attention
-        # Value path Jacobian: dout/din = W_O @ softmax_weighted @ W_V
-        # ||J||^2_F / d_model ≈ sigma_w^4
-        # The QK path contributes O(sigma_w^8) at init (subdominant)
-        chi_attn = sigma_w ** 4
+        sigma_logit_sq = sigma_w ** 4 * q_in ** 2
+        T = max(seq_len, 1)
+        if is_causal:
+            H_T = sum(1.0 / i for i in range(1, T + 1))
+            uniform_concentration = H_T / T
+        else:
+            uniform_concentration = 1.0 / T
+
+        softmax_sq_norm = uniform_concentration + (1.0 - uniform_concentration) * (
+            1.0 - np.exp(-sigma_logit_sq))
+
+        chi_attn = sigma_w ** 4 * softmax_sq_norm
         return chi_attn
 
     def layernorm_effect(self, q_in: float, gamma: float = 1.0) -> float:
@@ -336,21 +364,20 @@ class TransformerMeanField:
         d_k = spec.d_model // max(spec.n_heads, 1)
 
         if spec.pre_ln:
-            # Pre-LN: LN first, then sublayer, then residual
-            # After LN: variance = 1
             q_ln1 = self.layernorm_effect(q_in)
-            q_attn = self.attention_output_variance(q_ln1, d_k, spec.sigma_w, spec.n_heads)
-            # Residual: Var[h + attn(LN(h))] = q_in + q_attn (uncorrelated at init)
+            q_attn = self.attention_output_variance(
+                q_ln1, d_k, spec.sigma_w, spec.n_heads,
+                spec.seq_len, spec.is_causal)
             q_after_attn = q_in + q_attn
 
             q_ln2 = self.layernorm_effect(q_after_attn)
             q_ffn = self.ffn_variance(q_ln2, spec.sigma_w, spec.activation,
                                       spec.d_ff / spec.d_model)
-            # Residual
             q_out = q_after_attn + q_ffn
         else:
-            # Post-LN: sublayer first, then residual, then LN
-            q_attn = self.attention_output_variance(q_in, d_k, spec.sigma_w, spec.n_heads)
+            q_attn = self.attention_output_variance(
+                q_in, d_k, spec.sigma_w, spec.n_heads,
+                spec.seq_len, spec.is_causal)
             q_after_attn = q_in + q_attn
             q_after_attn = self.layernorm_effect(q_after_attn)
 
@@ -359,7 +386,6 @@ class TransformerMeanField:
             q_out = q_after_attn + q_ffn
             q_out = self.layernorm_effect(q_out)
 
-        # Dropout scales variance by 1/(1-p)^2 during training
         if spec.dropout > 0:
             scale = 1.0 / (1.0 - spec.dropout) ** 2
             q_out *= scale
@@ -379,11 +405,10 @@ class TransformerMeanField:
         affect the leading-order susceptibility.
         """
         d_k = spec.d_model // max(spec.n_heads, 1)
-
-        # LN resets variance to 1
         q_ln = 1.0
 
-        chi_attn = self.attention_chi1(q_ln, d_k, spec.sigma_w)
+        chi_attn = self.attention_chi1(q_ln, d_k, spec.sigma_w,
+                                       spec.seq_len, spec.is_causal)
         chi_ffn = self.ffn_chi1(q_ln, spec.sigma_w, spec.activation)
 
         if spec.pre_ln:
@@ -398,6 +423,38 @@ class TransformerMeanField:
             chi_block = 1.0 + chi_attn + chi_ffn
 
         return chi_block
+
+    def _classify_transformer_phase(self, spec: TransformerSpec, chi_block: float,
+                                     var_traj: List[float]) -> str:
+        """Classify transformer phase using variance growth.
+
+        For Pre-LN transformers, the traditional chi_block (Jacobian norm)
+        is always >= 1 due to residual connections. Phase classification
+        uses the variance growth ratio, which accounts for the additive
+        variance accumulation from sublayer residuals.
+
+        The per-block variance ratio captures practical training stability
+        better than chi_block alone for architectures with LayerNorm.
+        """
+        if chi_block < 0.99:
+            return "ordered"
+
+        # Use variance growth ratio for phase classification
+        if len(var_traj) >= 2 and var_traj[0] > 1e-12:
+            total_ratio = var_traj[-1] / var_traj[0]
+            n_blocks = len(var_traj) - 1
+            per_block_ratio = total_ratio ** (1.0 / max(n_blocks, 1))
+            if per_block_ratio > 1.10:
+                return "chaotic"
+            elif per_block_ratio < 0.95:
+                return "ordered"
+            return "critical"
+
+        # Fallback to chi_block threshold
+        threshold = 1.0 + 0.05 * np.log(10.0) / max(spec.n_layers, 1)
+        if chi_block < threshold:
+            return "critical"
+        return "chaotic"
 
     def analyze(self, spec: TransformerSpec) -> TransformerMFReport:
         """Full mean-field analysis of a Transformer architecture.
@@ -414,14 +471,11 @@ class TransformerMeanField:
         """
         d_k = spec.d_model // max(spec.n_heads, 1)
 
-        # Compute per-block susceptibilities
-        q_ln = 1.0  # LN resets to unit variance
-        chi_attn = self.attention_chi1(q_ln, d_k, spec.sigma_w)
+        q_ln = 1.0
+        chi_attn = self.attention_chi1(q_ln, d_k, spec.sigma_w,
+                                       spec.seq_len, spec.is_causal)
         chi_ffn = self.ffn_chi1(q_ln, spec.sigma_w, spec.activation)
         chi_block = self.block_chi1(q_ln, spec)
-
-        # Total susceptibility across L blocks
-        # For Pre-LN: chi_total = chi_block^L (each block compounds)
         chi_total = chi_block ** spec.n_layers
 
         # Variance propagation through all blocks
@@ -444,37 +498,20 @@ class TransformerMeanField:
         else:
             depth_scale = float("inf")
 
-        # Phase classification
-        # For Transformers with Pre-LN, chi_block >= 1 always due to residual.
-        # Critical: chi_block ≈ 1 (small sublayer contributions)
-        # Chaotic: chi_block >> 1 (gradient explosion)
-        # Ordered: only possible without residual (rare in practice)
-        if chi_block < 0.99:
-            phase = "ordered"
-        elif chi_block < 1.0 + 0.1 * np.log(10.0) / max(spec.n_layers, 1):
-            phase = "critical"
-        else:
-            phase = "chaotic"
+        phase = self._classify_transformer_phase(spec, chi_block, var_traj)
 
-        # Find recommended sigma_w for edge-of-chaos
-        # At edge: chi_block = 1, meaning chi_attn + chi_ffn = 0
-        # With residual this means sigma_w → 0. For Transformers,
-        # the goal is chi_block ≈ 1 + epsilon (slow gradient growth).
-        # Practical target: chi_block^L ≈ e (Noci et al.)
         target_chi_block = np.exp(1.0 / max(spec.n_layers, 1))
-        # chi_block = 1 + sigma_w^4 + sigma_w^4 * chi_act(sigma_w^2)
-        # Solve numerically
         sigma_w_star = self._find_optimal_sigma_w(spec, target_chi_block)
 
         explanation = (
             f"Transformer: {spec.n_layers}L, d_model={spec.d_model}, "
             f"{spec.n_heads}H, d_ff={spec.d_ff}, act={spec.activation}, "
-            f"{'Pre' if spec.pre_ln else 'Post'}-LN. "
+            f"{'Pre' if spec.pre_ln else 'Post'}-LN, T={spec.seq_len}. "
             f"Per-block χ₁={chi_block:.4f} (attn={chi_attn:.4f}, ffn={chi_ffn:.4f}). "
             f"Total χ₁^L={chi_total:.4e} over {spec.n_layers} layers. "
+            f"Variance growth: {var_traj[-1]/max(var_traj[0],1e-12):.2f}×. "
             f"Phase: {phase}. "
-            f"σ_w*={sigma_w_star:.4f} for gradual gradient growth. "
-            f"Depth scale: {depth_scale:.1f} blocks."
+            f"σ_w*={sigma_w_star:.4f}. Depth scale: {depth_scale:.1f} blocks."
         )
 
         return TransformerMFReport(
@@ -522,6 +559,149 @@ class TransformerMeanField:
         except (ValueError, RuntimeError):
             return 1.0
 
+    def finite_width_attention_variance(self, q_in: float, d_k: int,
+                                         sigma_w: float, n_heads: int,
+                                         seq_len: int = 128) -> float:
+        """Finite-width corrected attention output variance.
+
+        Adds O(1/d_k) corrections from the finite head dimension:
+        - Softmax concentration correction: E[||p||^2] = 1/n + O(σ_s^2/n^2)
+        - Value averaging noise: Var correction ~ q_in * σ_w^4 / d_k
+
+        Parameters
+        ----------
+        q_in : float
+            Input variance.
+        d_k : int
+            Per-head dimension.
+        sigma_w : float
+            Weight scale.
+        n_heads : int
+            Number of heads.
+        seq_len : int
+            Sequence length (affects softmax concentration).
+
+        Returns
+        -------
+        float
+            Finite-width corrected post-attention variance.
+        """
+        q_inf = self.attention_output_variance(q_in, d_k, sigma_w, n_heads,
+                                                seq_len)
+
+        # O(1/d_k) correction: at finite head dimension, there's additional
+        # variance from the random projection structure of QKV
+        # This follows from the CLT applied to the d_k-dimensional dot product
+        correction_dk = sigma_w ** 4 * q_in ** 2 / max(d_k, 1)
+
+        # O(1/seq_len) correction: finite sequence softmax concentration
+        sigma_logit_sq = sigma_w ** 4 * q_in ** 2
+        correction_seq = sigma_w ** 2 * q_in * sigma_logit_sq / max(seq_len, 1)
+
+        return max(q_inf + correction_dk + correction_seq, 0.0)
+
+    def finite_width_block_chi1(self, q_in: float, spec: TransformerSpec,
+                                 seq_len: int = 128) -> float:
+        """Per-block susceptibility with finite-width corrections.
+
+        Accounts for O(1/d_model) and O(1/d_k) corrections to the
+        attention and FFN susceptibilities.
+        """
+        d_k = spec.d_model // max(spec.n_heads, 1)
+        q_ln = 1.0
+
+        chi_attn = self.attention_chi1(q_ln, d_k, spec.sigma_w,
+                                       seq_len, spec.is_causal)
+        chi_ffn = self.ffn_chi1(q_ln, spec.sigma_w, spec.activation)
+
+        # Finite-width correction to attention chi: O(1/d_k) from QKV projections
+        chi_attn_correction = spec.sigma_w ** 4 / max(d_k, 1)
+        chi_attn += chi_attn_correction
+
+        # FFN finite-width correction from finite d_ff
+        d_ff = spec.d_ff
+        chi_func = self._mf._get_chi_map(spec.activation)
+        chi_act = chi_func(spec.sigma_w ** 2)
+        chi_ffn_correction = spec.sigma_w ** 4 * chi_act / max(d_ff, 1)
+        chi_ffn += chi_ffn_correction
+
+        chi_block = 1.0 + chi_attn + chi_ffn
+        return chi_block
+
+    def analyze_with_finite_width(self, spec: TransformerSpec,
+                                   seq_len: int = 128) -> TransformerMFReport:
+        """Full analysis including finite-width corrections.
+
+        This is the recommended entry point for analyzing real transformers.
+        Uses variance-growth-aware phase classification that accounts for
+        the additive nature of residual variance accumulation in Pre-LN
+        transformers.
+        """
+        # Use seq_len from spec if explicitly set, otherwise use argument
+        effective_seq_len = spec.seq_len if spec.seq_len != 128 else seq_len
+
+        d_k = spec.d_model // max(spec.n_heads, 1)
+        q_ln = 1.0
+
+        chi_attn = self.attention_chi1(q_ln, d_k, spec.sigma_w,
+                                       effective_seq_len, spec.is_causal)
+        chi_ffn = self.ffn_chi1(q_ln, spec.sigma_w, spec.activation)
+        chi_block = self.finite_width_block_chi1(q_ln, spec, effective_seq_len)
+        chi_total = chi_block ** spec.n_layers
+
+        # Variance propagation with finite-width corrections
+        var_traj = [spec.input_variance]
+        attn_var_traj = []
+        ffn_var_traj = []
+        q = spec.input_variance
+
+        for l in range(spec.n_layers):
+            q_attn, q_ffn, q_out = self.block_variance_propagation(q, spec)
+            # Add finite-width correction to attention output
+            fw_correction = spec.sigma_w ** 4 * q ** 2 / max(d_k, 1)
+            q_attn += fw_correction
+            attn_var_traj.append(q_attn)
+            ffn_var_traj.append(q_ffn)
+            var_traj.append(q_out)
+            q = q_out
+
+        # Depth scale
+        log_chi = np.log(max(chi_block, 1e-30))
+        depth_scale = 1.0 / abs(log_chi) if abs(log_chi) > 1e-10 else float("inf")
+
+        # Phase classification using variance growth
+        phase = self._classify_transformer_phase(spec, chi_block, var_traj)
+
+        target_chi_block = np.exp(1.0 / max(spec.n_layers, 1))
+        sigma_w_star = self._find_optimal_sigma_w(spec, target_chi_block)
+
+        var_growth = var_traj[-1] / max(var_traj[0], 1e-12)
+        explanation = (
+            f"Transformer: {spec.n_layers}L, d_model={spec.d_model}, "
+            f"{spec.n_heads}H, d_ff={spec.d_ff}, act={spec.activation}, "
+            f"{'Pre' if spec.pre_ln else 'Post'}-LN, T={effective_seq_len}. "
+            f"Per-block χ₁={chi_block:.4f} (attn={chi_attn:.4f}, ffn={chi_ffn:.4f}). "
+            f"FW corrections: O(1/d_k)={1.0/max(d_k,1):.4f}. "
+            f"Total χ₁^L={chi_total:.4e}. Variance growth: {var_growth:.2f}×. "
+            f"Phase: {phase}. σ_w*={sigma_w_star:.4f}."
+        )
+
+        return TransformerMFReport(
+            phase=phase,
+            chi_1_attn=chi_attn,
+            chi_1_ffn=chi_ffn,
+            chi_1_block=chi_block,
+            chi_1_total=chi_total,
+            variance_trajectory=var_traj,
+            attn_variance_trajectory=attn_var_traj,
+            ffn_variance_trajectory=ffn_var_traj,
+            depth_scale=depth_scale,
+            sigma_w_star=sigma_w_star,
+            explanation=explanation,
+            has_layernorm=True,
+            head_dim=d_k,
+        )
+
     def diagnose(self, spec: TransformerSpec) -> Dict:
         """Quick diagnostic for a Transformer architecture.
 
@@ -556,3 +736,150 @@ class TransformerMeanField:
             "sigma_w_current": spec.sigma_w,
             "sigma_w_recommended": report.sigma_w_star,
         }
+
+
+# ======================================================================
+# GPT-2 style model for experiments
+# ======================================================================
+
+class CausalSelfAttention(nn.Module):
+    """Multi-head causal self-attention (GPT-2 style)."""
+
+    def __init__(self, d_model: int, n_heads: int, dropout: float = 0.0,
+                 max_seq_len: int = 512):
+        super().__init__()
+        assert d_model % n_heads == 0
+        self.d_model = d_model
+        self.n_heads = n_heads
+        self.d_k = d_model // n_heads
+
+        self.qkv = nn.Linear(d_model, 3 * d_model)
+        self.out_proj = nn.Linear(d_model, d_model)
+        self.dropout = nn.Dropout(dropout)
+
+        # Causal mask
+        self.register_buffer(
+            "causal_mask",
+            torch.tril(torch.ones(max_seq_len, max_seq_len)).view(1, 1, max_seq_len, max_seq_len)
+        )
+
+    def forward(self, x: "Tensor") -> "Tensor":
+        B, T, C = x.size()
+        qkv = self.qkv(x)
+        q, k, v = qkv.split(self.d_model, dim=2)
+
+        q = q.view(B, T, self.n_heads, self.d_k).transpose(1, 2)
+        k = k.view(B, T, self.n_heads, self.d_k).transpose(1, 2)
+        v = v.view(B, T, self.n_heads, self.d_k).transpose(1, 2)
+
+        att = (q @ k.transpose(-2, -1)) / math.sqrt(self.d_k)
+        att = att.masked_fill(self.causal_mask[:, :, :T, :T] == 0, float('-inf'))
+        att = torch.softmax(att, dim=-1)
+        att = self.dropout(att)
+
+        y = att @ v
+        y = y.transpose(1, 2).contiguous().view(B, T, C)
+        y = self.out_proj(y)
+        return y
+
+
+class TransformerBlock(nn.Module):
+    """Pre-LN Transformer block (GPT-2 style)."""
+
+    def __init__(self, d_model: int, n_heads: int, d_ff: int,
+                 activation: str = "gelu", dropout: float = 0.0,
+                 max_seq_len: int = 512):
+        super().__init__()
+        self.ln1 = nn.LayerNorm(d_model)
+        self.attn = CausalSelfAttention(d_model, n_heads, dropout, max_seq_len)
+        self.ln2 = nn.LayerNorm(d_model)
+        self.ffn = nn.Sequential(
+            nn.Linear(d_model, d_ff),
+            nn.GELU() if activation == "gelu" else nn.ReLU(),
+            nn.Linear(d_ff, d_model),
+            nn.Dropout(dropout),
+        )
+
+    def forward(self, x: "Tensor") -> "Tensor":
+        x = x + self.attn(self.ln1(x))
+        x = x + self.ffn(self.ln2(x))
+        return x
+
+
+class MiniGPT(nn.Module):
+    """Minimal GPT-2 style model for phase diagram experiments.
+
+    Parameters
+    ----------
+    vocab_size : int
+    d_model : int
+    n_heads : int
+    n_layers : int
+    d_ff : int
+    max_seq_len : int
+    activation : str
+    dropout : float
+    """
+
+    def __init__(self, vocab_size: int = 1000, d_model: int = 128,
+                 n_heads: int = 4, n_layers: int = 4, d_ff: int = 512,
+                 max_seq_len: int = 128, activation: str = "gelu",
+                 dropout: float = 0.0):
+        super().__init__()
+        self.d_model = d_model
+        self.tok_emb = nn.Embedding(vocab_size, d_model)
+        self.pos_emb = nn.Embedding(max_seq_len, d_model)
+        self.blocks = nn.ModuleList([
+            TransformerBlock(d_model, n_heads, d_ff, activation, dropout, max_seq_len)
+            for _ in range(n_layers)
+        ])
+        self.ln_f = nn.LayerNorm(d_model)
+        self.head = nn.Linear(d_model, vocab_size, bias=False)
+
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+
+    def forward(self, idx: "Tensor") -> "Tensor":
+        B, T = idx.size()
+        pos = torch.arange(0, T, dtype=torch.long, device=idx.device).unsqueeze(0)
+        x = self.tok_emb(idx) + self.pos_emb(pos)
+        for block in self.blocks:
+            x = block(x)
+        x = self.ln_f(x)
+        logits = self.head(x)
+        return logits
+
+    def to_transformer_spec(self, seq_len: int = 128) -> TransformerSpec:
+        """Convert to TransformerSpec for mean-field analysis."""
+        block = self.blocks[0]
+        sigma_ws = []
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                fan_in = m.in_features
+                sigma_ws.append(float(m.weight.data.std().item() * math.sqrt(fan_in)))
+        sigma_w = float(np.median(sigma_ws)) if sigma_ws else 1.0
+
+        # Estimate input variance from embeddings
+        emb_var = float(self.tok_emb.weight.data.var().item())
+        pos_var = float(self.pos_emb.weight.data.var().item())
+        input_variance = emb_var + pos_var
+
+        return TransformerSpec(
+            n_layers=len(self.blocks),
+            d_model=self.d_model,
+            n_heads=block.attn.n_heads,
+            d_ff=block.ffn[0].out_features,
+            activation="gelu",
+            sigma_w=sigma_w,
+            pre_ln=True,
+            input_variance=input_variance,
+            seq_len=seq_len,
+            is_causal=True,
+        )

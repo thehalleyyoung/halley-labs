@@ -864,7 +864,9 @@ def extract_architecture_spec(model: "nn.Module") -> "ArchitectureSpec":
     )
 
 
-def _extract_transformer_spec(model: "nn.Module") -> Optional["TransformerSpec"]:
+def _extract_transformer_spec(model: "nn.Module",
+                              seq_len: int = 128,
+                              is_causal: bool = True) -> Optional["TransformerSpec"]:
     """Extract TransformerSpec from a PyTorch Transformer model.
 
     Returns None if the model is not a Transformer.
@@ -876,7 +878,6 @@ def _extract_transformer_spec(model: "nn.Module") -> Optional["TransformerSpec"]
 
     from transformer_mean_field import TransformerSpec
 
-    # Detect d_model, n_heads, n_layers from module tree
     d_model = None
     n_heads = None
     n_layers = 0
@@ -885,6 +886,7 @@ def _extract_transformer_spec(model: "nn.Module") -> Optional["TransformerSpec"]
     has_pre_ln = False
 
     for name, module in model.named_modules():
+        cls_name = type(module).__name__
         if isinstance(module, nn.MultiheadAttention):
             d_model = d_model or module.embed_dim
             n_heads = n_heads or module.num_heads
@@ -893,23 +895,60 @@ def _extract_transformer_spec(model: "nn.Module") -> Optional["TransformerSpec"]
             d_model = d_model or module.self_attn.embed_dim
             n_heads = n_heads or module.self_attn.num_heads
             d_ff = d_ff or module.linear1.out_features
-            # Check norm_first attribute for Pre-LN detection
             if hasattr(module, 'norm_first'):
                 has_pre_ln = module.norm_first
         elif isinstance(module, nn.TransformerEncoder):
             n_layers = max(n_layers, module.num_layers)
+        # Detect custom attention modules (CausalSelfAttention, etc.)
+        elif ('attention' in cls_name.lower() or 'selfattention' in cls_name.lower()):
+            if hasattr(module, 'd_model'):
+                d_model = d_model or module.d_model
+            if hasattr(module, 'n_heads'):
+                n_heads = n_heads or module.n_heads
+            if hasattr(module, 'embed_dim'):
+                d_model = d_model or module.embed_dim
+            if hasattr(module, 'num_heads'):
+                n_heads = n_heads or module.num_heads
+
+    # Detect transformer blocks to count layers
+    block_count = 0
+    for name, module in model.named_modules():
+        cls_name = type(module).__name__.lower()
+        if 'transformerblock' in cls_name or 'decoderblock' in cls_name or 'encoderblock' in cls_name:
+            block_count += 1
+    if block_count > 0:
+        n_layers = max(n_layers, block_count)
 
     if d_model is None:
         d_model = arch.widths[0] if arch.widths else 512
     if n_heads is None:
         n_heads = max(1, d_model // 64)
     if d_ff is None:
-        d_ff = 4 * d_model
+        # Try to detect FFN hidden dim from Sequential modules
+        for m in model.modules():
+            if isinstance(m, nn.Sequential):
+                children = list(m.children())
+                if len(children) >= 2 and isinstance(children[0], nn.Linear):
+                    if children[0].in_features == d_model:
+                        d_ff = children[0].out_features
+                        break
+        if d_ff is None:
+            d_ff = 4 * d_model
     if n_layers == 0:
         n_layers = max(1, sum(1 for m in model.modules()
-                              if isinstance(m, nn.MultiheadAttention)))
+                              if isinstance(m, nn.MultiheadAttention) or
+                              'attention' in type(m).__name__.lower()))
 
-    # Estimate sigma_w
+    # Detect Pre-LN from module structure
+    for m in model.modules():
+        cls_name = type(m).__name__.lower()
+        if 'transformerblock' in cls_name:
+            children_names = [type(c).__name__ for c in m.children()]
+            if len(children_names) >= 2 and children_names[0] == 'LayerNorm':
+                has_pre_ln = True
+            break
+
+    # Estimate sigma_w and input variance
     sigma_ws = []
     for m in model.modules():
         if isinstance(m, nn.Linear):
@@ -917,6 +956,14 @@ def _extract_transformer_spec(model: "nn.Module") -> Optional["TransformerSpec"]
             if sw is not None:
                 sigma_ws.append(sw)
     sigma_w = float(np.median(sigma_ws)) if sigma_ws else 1.0
+
+    # Estimate input variance from embedding layers
+    input_variance = 1.0
+    for m in model.modules():
+        if isinstance(m, nn.Embedding):
+            emb_var = float(m.weight.data.var().item())
+            input_variance = emb_var
+            break
 
     return TransformerSpec(
         n_layers=n_layers,
@@ -926,7 +973,9 @@ def _extract_transformer_spec(model: "nn.Module") -> Optional["TransformerSpec"]
         activation=activation if activation != "relu" else "gelu",
         sigma_w=sigma_w,
         pre_ln=has_pre_ln,
-        input_variance=1.0,
+        input_variance=input_variance,
+        seq_len=seq_len,
+        is_causal=is_causal,
     )
 
 
@@ -991,7 +1040,7 @@ def _analyze_transformer(model: "nn.Module", spec: "TransformerSpec") -> MeanFie
     from transformer_mean_field import TransformerMeanField
 
     tmf = TransformerMeanField()
-    report = tmf.analyze(spec)
+    report = tmf.analyze_with_finite_width(spec)
 
     return MeanFieldResult(
         phase=report.phase,

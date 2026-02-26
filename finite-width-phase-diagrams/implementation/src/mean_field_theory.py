@@ -932,69 +932,123 @@ class MeanFieldAnalyzer:
         else:
             return "chaotic"
 
+    def _predict_variance_ratio(self, sigma_w: float, sigma_b: float,
+                                activation: str, width: int,
+                                input_variance: float = 1.0,
+                                n_layers: int = 5) -> float:
+        """Predict the geometric-mean per-layer variance ratio.
+
+        Tracks post-activation variances to match the empirical measurement
+        protocol: each layer applies Linear then Activation, and we measure
+        the ratio of output variances between consecutive layers.
+
+        The first layer's pre-activation is W·x (no activation on input),
+        so q_1^pre = σ_w²·q_input + σ_b². Subsequent layers apply V.
+        """
+        V_func = self._get_variance_map(activation)
+        N = max(width, 1)
+        log_ratios = []
+
+        # post_var[0] = input variance (no activation on input)
+        post_prev = max(input_variance, 1e-30)
+
+        for l in range(n_layers):
+            # Pre-activation: W · h^{l-1} + b
+            # For l=0: h^{-1} = x (raw input, variance = input_variance)
+            # For l>0: h^{l-1} = φ(z^{l-1}), variance = V(q^{l-1}_pre)
+            q_pre = sigma_w ** 2 * post_prev + sigma_b ** 2
+
+            # O(1/N) correction on the pre-activation variance
+            if post_prev < 1e6 and np.isfinite(post_prev) and q_pre > 1e-30:
+                kappa = ActivationVarianceMaps.get_kurtosis_excess(activation, q_pre)
+                V_q = V_func(q_pre)
+                c1 = sigma_w ** 4 * kappa * V_q ** 2 / N if np.isfinite(V_q) else 0.0
+                correction_ratio = abs(c1) / max(abs(q_pre), 1e-30)
+                if correction_ratio <= 0.3:
+                    q_pre += c1
+                else:
+                    q_pre += np.sign(c1) * 0.3 * abs(q_pre)
+
+            q_pre = max(q_pre, 1e-30)
+
+            # Post-activation: φ(z^l), variance = V(q^l_pre)
+            post_cur = V_func(q_pre)
+            post_cur = max(post_cur, 1e-30)
+
+            if post_prev > 1e-30 and np.isfinite(post_cur):
+                ratio = post_cur / post_prev
+                if ratio > 0 and np.isfinite(ratio):
+                    log_ratios.append(np.log(ratio))
+
+            post_prev = min(post_cur, 1e15)
+            if post_prev < 1e-30:
+                break
+
+        if not log_ratios:
+            return 1.0
+        return float(np.exp(np.mean(log_ratios)))
+
     def _classify_phase_calibrated(self, chi_1_inf: float, chi_1_fw: float,
                                     chi_2: float, lyapunov: float,
                                     width: int = 1000, depth: int = 10,
                                     sigma_w: float = 1.0, sigma_b: float = 0.0,
                                     activation: str = "relu") -> PhaseClassification:
-        """Classify phase using soft posterior probabilities.
+        """Classify phase using variance-trajectory-based soft posteriors.
 
-        Key improvements over hard-threshold classification:
-        1. Uses finite-width corrected chi_1 instead of infinite-width
-        2. Models chi_1 fluctuation distribution as Gaussian with empirically
-           calibrated variance sigma_chi^2 = (2*kappa*chi_1^2) / N
-        3. Computes P(phase | chi_1_observed) by integrating over the chi_1
-           posterior, accounting for finite-width uncertainty
-        4. Uses depth-dependent thresholds: the critical window shrinks
-           with depth because cumulative effects amplify small deviations
+        Uses two complementary signals:
+        1. **Variance ratio** from the first few layers of the variance
+           trajectory (captures transient dynamics from initialization).
+        2. **chi_1** at the fixed point (captures asymptotic stability).
+
+        The variance ratio is the primary signal because it directly
+        predicts what empirical experiments measure: per-layer signal
+        growth starting from standard-variance inputs. At shallow depths,
+        the variance ratio can differ substantially from chi_1 because
+        the network has not reached the mean-field fixed point.
+
+        The observation noise model accounts for finite-width fluctuations
+        via the O(1/sqrt(N)) chi_1 distribution theory.
         """
         N = max(width, 1)
 
-        # Empirical chi_1 fluctuation std from finite-width theory:
-        # Var(chi_1) ~ (2 * kappa_dphi * chi_1^2) / N where kappa_dphi
-        # is the excess kurtosis of phi'(z)^2
+        # Primary signal: predicted variance ratio from initialization
+        n_measure_layers = min(max(depth, 3), 5)
+        var_ratio = self._predict_variance_ratio(
+            sigma_w, sigma_b, activation, width,
+            input_variance=1.0, n_layers=n_measure_layers
+        )
+
+        # Secondary signal: chi_1 for asymptotic behavior
         V_func = self._get_variance_map(activation)
         q_star = self._find_fixed_point(sigma_w, sigma_b, V_func)
         chi_func = self._get_chi_map(activation)
         chi_inf = chi_func(q_star)
 
+        # Finite-width fluctuation scale for uncertainty
         dphi4 = ActivationVarianceMaps.get_dphi_fourth(activation, q_star)
         chi_sq = chi_inf ** 2
         kappa_dphi = dphi4 / max(chi_sq, 1e-30) - 1.0
         sigma_chi = sigma_w ** 2 * np.sqrt(max(2.0 * abs(kappa_dphi) * chi_sq / N, 0))
 
-        # Asymmetric critical window with activation-specific scaling.
-        # Smooth activations (GELU, SiLU) have wider ordered phases because
-        # their chi maps flatten more gradually, so the critical window must
-        # be wider to capture the trainable regime accurately.
-        effective_depth = max(min(depth, 100), 1)
-        activation_scale = {
-            "relu": 1.0,
-            "tanh": 1.2,
-            "gelu": 1.8,
-            "silu": 1.8,
-            "swish": 1.8,
-            "elu": 1.3,
-            "leaky_relu": 1.0,
-            "mish": 1.8,
-            "sigmoid": 1.5,
-        }.get(activation, 1.0)
-        epsilon_ordered = max(activation_scale * np.log(10.0) / effective_depth, 0.02)
-        epsilon_chaotic = max(activation_scale * np.log(2.0) / effective_depth, 0.02)
+        # Phase thresholds aligned with variance-ratio ground truth
+        # These match the empirical measurement protocol:
+        #   ratio < 0.85 → ordered (variance shrinks per layer)
+        #   0.85 ≤ ratio ≤ 1.15 → critical (variance preserved)
+        #   ratio > 1.15 → chaotic (variance grows per layer)
+        ordered_threshold = 0.85
+        chaotic_threshold = 1.15
 
-        # Use corrected chi_1 for classification
-        chi_eff = chi_1_fw
-        dist = chi_eff - 1.0
-
-        # Soft phase posterior with asymmetric window and finite-width noise
-        obs_sigma = max(sigma_chi, 0.02)
+        # Observation noise: combines finite-width fluctuations and
+        # measurement uncertainty from the variance ratio estimate
+        obs_sigma = max(sigma_chi, 0.03)
 
         from scipy.special import erf as sp_erf
         def norm_cdf(x):
             return 0.5 * (1.0 + sp_erf(x / np.sqrt(2.0)))
 
-        z_low = (1.0 - epsilon_ordered - chi_eff) / obs_sigma
-        z_high = (1.0 + epsilon_chaotic - chi_eff) / obs_sigma
+        # Soft posterior using variance ratio as the observed statistic
+        z_low = (ordered_threshold - var_ratio) / obs_sigma
+        z_high = (chaotic_threshold - var_ratio) / obs_sigma
         p_ordered = norm_cdf(z_low)
         p_critical = norm_cdf(z_high) - norm_cdf(z_low)
         p_chaotic = 1.0 - norm_cdf(z_high)
@@ -1027,7 +1081,7 @@ class MeanFieldAnalyzer:
             chi_1_corrected=chi_1_fw,
             chi_2=chi_2,
             lyapunov_exponent=lyapunov,
-            distance_to_critical=abs(dist),
+            distance_to_critical=abs(chi_1_fw - 1.0),
             bifurcation_type=bif_type,
         )
 

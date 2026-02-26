@@ -271,6 +271,55 @@
       "claim": "Perturbative validity under moment-closure perturbation: 100% phase stability under \u00b150% kappa4, max boundary shift 0.44%.",
       "data_source": "experiments/results/kappa4_sensitivity/kappa4_sensitivity_results.json",
       "verification": "Proposition in paper backed by kappa4 sensitivity experiment data."
+    },
+    {
+      "id": "transformer-variance-error",
+      "claim": "Transformer mean-field variance propagation achieves 2.9% mean relative error across 12 MiniGPT configurations (4-12 layers, d_model 64-256).",
+      "data_source": "experiments/results/transformer_experiments.json",
+      "code": "experiments/run_transformer_experiments.py",
+      "verification": "12 configs, per-block variance ratios compared against empirical Monte Carlo."
+    },
+    {
+      "id": "transformer-phase-accuracy",
+      "claim": "Transformer phase classification achieves 98.9% accuracy (178/180 configs) with 100% critical-phase precision. Critical: 52/54 (96.3%), Chaotic: 126/126 (100%).",
+      "data_source": "experiments/results/transformer_experiments.json",
+      "code": "experiments/run_transformer_experiments.py",
+      "verification": "180 configurations, 6 architectures x 30 sigma_w values, variance-ratio ground truth."
+    },
+    {
+      "id": "transformer-phasekit-vs-lsuv",
+      "claim": "PhaseKit outperforms LSUV 4-0 on GPT-2-style transformer models (4L-12L), achieving lower mean final cross-entropy loss on all tested configurations.",
+      "data_source": "experiments/results/transformer_experiments.json",
+      "code": "experiments/run_transformer_experiments.py",
+      "verification": "4 configs, 50 Adam steps each, PhaseKit mean loss 6.242 vs LSUV 6.253."
+    },
+    {
+      "id": "graph-generalization-18-arch",
+      "claim": "Compositional MF engine achieves 83% phase agreement across 18 architectures spanning 6 families (MLP, CNN, ResNet, DenseNet, UNet, Transformer).",
+      "data_source": "experiments/results/graph_generalization/graph_generalization_results.json",
+      "code": "experiments/run_graph_generalization.py",
+      "verification": "18 architectures, phase classification compared against empirical variance-ratio ground truth from forward hooks."
+    },
+    {
+      "id": "compositional-mf-block-aware-chi",
+      "claim": "Block-aware chi computation correctly classifies Transformers as critical and ResNets as near-critical, fixing the prior bug where all normalized architectures were misclassified as ordered.",
+      "data_source": "experiments/results/graph_generalization/graph_generalization_results.json",
+      "code": "implementation/src/compositional_mf.py",
+      "verification": "compute_chi_total() resets chi product at normalization boundaries; residual-aware path accounts for skip connections maintaining chi >= 1."
+    },
+    {
+      "id": "z3-finite-width-8-properties",
+      "claim": "8 Z3-verified properties (P13-P20) covering finite-width correction sign, magnitude bound, perturbative validity, monotonicity, ReLU/LeakyReLU kappa_4 closed forms, truncation bound non-negativity, and ReLU indicator idempotence.",
+      "data_source": "experiments/results/z3_finite_width/z3_finite_width_results.json",
+      "code": "experiments/run_z3_finite_width.py",
+      "verification": "All 8 properties verified (unsat) by Z3 SMT solver using QF_NRA logic."
+    },
+    {
+      "id": "data-aware-phase-240-configs",
+      "claim": "Dataset-aware phase analysis tested on 240 configurations (3 activations x 2 depths x 2 widths x 5 sigma_w x 4 tasks) showing spectral alignment variation across tasks.",
+      "data_source": "experiments/results/data_aware/data_aware_results.json",
+      "code": "experiments/run_data_aware_experiment.py",
+      "verification": "240 configs, kernel-task spectral alignment (kappa) computed, trainability accuracy compared with and without data-aware correction."
     }
   ]
 }
