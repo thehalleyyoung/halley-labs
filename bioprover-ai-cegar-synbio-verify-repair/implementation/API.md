@@ -27,6 +27,8 @@ covering only implemented classes and functions.
     - [Ablation (`bioprover.evaluation.ablation`)](#ablation)
 15. [Visualization (`bioprover.visualization`)](#visualization)
 16. [CLI (`bioprover.cli`)](#cli)
+17. [Certificate Verifier (`bioprover.certificate_verifier`)](#certificate-verifier)
+18. [Error Propagation (`bioprover.soundness`)](#error-propagation)
 
 ---
 
@@ -227,16 +229,35 @@ class Species:
 ### `Reaction`
 
 ```python
+from bioprover.models.reactions import Reaction, StoichiometryEntry as SE
+
 class Reaction:
     def __init__(
         self,
         name: str,
-        reactants: Dict[str, int],
-        products: Dict[str, int],
+        reactants: List[StoichiometryEntry],  # NOT dicts
+        products: List[StoichiometryEntry],    # NOT dicts
         kinetic_law: KineticLaw,
         reversible: bool = False,
+        modifiers: List[str] = None,  # for Hill kinetics activator/repressor
     ) -> None: ...
+
+# Example:
+rxn = Reaction('production',
+    reactants=[],
+    products=[SE('gene_u', 1)],
+    kinetic_law=HillRepression(Vmax=10.0, K=2.0, n=2),
+    modifiers=['gene_v'])  # gene_v is the repressor
 ```
+
+**Important API notes:**
+- `reactants` and `products` take `List[StoichiometryEntry]`, NOT dictionaries.
+  Use `StoichiometryEntry("species_name", stoichiometry)` or the alias `SE`.
+- Species names MUST NOT be single-letter Bio-STL keywords: `G` (Globally),
+  `F` (Finally), `U` (Until). Use multi-character names like `gene_u`, `lacI`.
+- For Hill activation/repression with no consumed reactants, use
+  `modifiers=["activator_species"]` to specify which species acts as the
+  activator or repressor.
 
 ### Kinetic Law Classes
 
@@ -1549,3 +1570,93 @@ def load_model(path: str) -> BioModel: ...
 def load_spec(spec_arg: str) -> STLFormula: ...
 def main(argv: Optional[List[str]] = None) -> int: ...
 ```
+
+---
+
+## 17. Certificate Verifier — `bioprover.certificate_verifier`
+
+Standalone certificate verification module (~800 LoC). Does NOT import
+from `bioprover.solver`, Z3, dReal, or SymPy.
+
+### `CertificateVerifier`
+
+```python
+from bioprover.certificate_verifier import CertificateVerifier
+
+verifier = CertificateVerifier()
+report = verifier.verify(certificate_dict)
+print(report.passed, report.failed, report.warnings)
+print(report.accepted)  # True if failed == 0
+```
+
+### Verifier classes
+
+| Class | Purpose |
+|-------|---------|
+| `FlowpipeReplayVerifier` | Replays integration with independent Euler; checks enclosure containment |
+| `InvariantReplayVerifier` | Checks invariant satisfaction over interval boxes |
+| `ErrorBudgetVerifier` | Validates soundness level vs. error budget consistency |
+| `CompositionalVerifier` | Checks module interface compatibility |
+
+### `VInterval` / `VBox`
+
+Independent interval arithmetic (verifier-only, does not share code with solver):
+
+```python
+from bioprover.certificate_verifier.verifier import VInterval, VBox
+
+iv = VInterval(1.0, 2.0)
+print(iv.contains(1.5))   # True
+print(iv.width())         # 1.0
+
+box = VBox([VInterval(0, 1), VInterval(0, 1)])
+print(box.contains_point([0.5, 0.5]))  # True
+```
+
+### CLI
+
+```bash
+python -m bioprover.certificate_verifier.cli certificate.json
+```
+
+---
+
+## 18. Error Propagation — `bioprover.soundness`
+
+### `ErrorSource`
+
+```python
+from bioprover.soundness import ErrorSource
+
+src = ErrorSource(
+    name="discretization",
+    magnitude=0.01,
+    origin="ODE integration",
+    lipschitz_factor=2.0,  # dynamics amplification
+)
+print(src.effective_magnitude)  # 0.02
+```
+
+### `ErrorBudget` (extended)
+
+```python
+from bioprover.soundness import ErrorBudget
+
+budget = ErrorBudget(
+    delta=0.001,            # SMT perturbation
+    epsilon=0.0,            # CEGIS tolerance
+    truncation=0.05,        # moment closure
+    discretization=0.01,    # ODE integration
+)
+print(budget.combined)           # RSS bound
+print(budget.combined_additive)  # additive bound
+print(budget.is_sound)           # True if all finite
+```
+
+### Key functions
+
+| Function | Description |
+|----------|-------------|
+| `propagate_errors_with_lipschitz(sources)` | Lipschitz-amplified error composition |
+| `compute_moment_closure_bound(n, k, N, L_f)` | Theorem 4 truncation bound |
+| `compute_discretization_bound(h, p, L, T, C)` | Grönwall discretization bound |

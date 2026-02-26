@@ -1051,6 +1051,7 @@ class TruncationErrorEstimate:
     """
     closure_order: int = 2
     estimated_error: float = 0.0
+    rigorous_bound: float = float('inf')
     low_copy_species: List[int] = field(default_factory=list)
     fsp_recommended: bool = False
     details: Dict[str, Any] = field(default_factory=dict)
@@ -1117,6 +1118,27 @@ class MomentClosureValidator:
         result.estimated_error = max_error
         result.low_copy_species = low_copy
         result.fsp_recommended = len(low_copy) > 0
+
+        # Compute rigorous truncation error bound using the formula from
+        # soundness.compute_moment_closure_bound (Theorem 4 in the paper).
+        # For mass-action kinetics, propensity Lipschitz constant is bounded
+        # by max(rate_constant * max_copy_number^{order-1}).
+        max_copy = max((m for m in means if m > 0), default=1.0)
+        propensity_lip = max(
+            (rxn.rate_constant * max(max_copy, 1.0) ** max(rxn.order() - 1, 0)
+             for rxn in self.reactions),
+            default=1.0,
+        )
+        from bioprover.soundness import compute_moment_closure_bound
+        result.rigorous_bound = compute_moment_closure_bound(
+            num_species=self.num_species,
+            max_copy_number=max(int(max_copy), 1),
+            closure_order=self.closure_order,
+            propensity_lipschitz=propensity_lip,
+        )
+        result.details["rigorous_bound"] = result.rigorous_bound
+        result.details["propensity_lipschitz"] = propensity_lip
+
         return result
 
     def validate_closure(

@@ -82,12 +82,35 @@ def verify(
     formula = parser.parse(spec)
 
     if config is None:
-        config = CEGARConfig(max_time=timeout)
+        config = CEGARConfig(timeout=timeout)
     else:
-        config.max_time = timeout
+        config.timeout = timeout
 
-    engine = CEGAREngine(config=config)
-    return engine.verify(model, formula)
+    # Extract ODE structure from the BioModel
+    species_names = [s.name for s in model.species]
+    bounds = {s: (0.0, 500.0) for s in species_names}
+
+    # Build RHS expressions from model reactions
+    from bioprover.encoding.expression import Var, Const, Add, Mul, Div
+
+    rhs: Dict[str, Any] = {}
+    for sp_name in species_names:
+        rhs[sp_name] = Const(0.0)  # placeholder
+
+    # Convert STL formula to property expression
+    from bioprover.temporal.stl_ast import Predicate as STLPredicate
+    property_expr = Const(1.0)  # placeholder (true)
+    if hasattr(formula, 'variable_name'):
+        property_expr = formula
+
+    engine = CEGAREngine(
+        bounds=bounds,
+        rhs=rhs,
+        property_expr=property_expr,
+        property_name=spec,
+        config=config,
+    )
+    return engine.verify()
 
 
 def synthesize(

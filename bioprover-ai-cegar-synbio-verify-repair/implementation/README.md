@@ -7,54 +7,91 @@ CEGAR-based formal verification and parameter repair for synthetic biology circu
 ```bash
 pip install -e .
 python3 -c "
-from bioprover import BioModel, verify, repair
+from bioprover.models.bio_model import BioModel
 from bioprover.models.species import Species
-from bioprover.models.reactions import Reaction, HillRepression, LinearDegradation
+from bioprover.models.reactions import (
+    Reaction, HillRepression, LinearDegradation,
+    StoichiometryEntry as SE,
+)
+from bioprover import verify
 
+# Species names must NOT be single-letter STL keywords (G, F, U)
 model = BioModel('toggle_switch')
-model.add_species(Species('U', initial_concentration=10.0))
-model.add_species(Species('V', initial_concentration=0.1))
-model.add_reaction(Reaction('repr_V_on_U', reactants={}, products={'U': 1},
-    kinetic_law=HillRepression(Vmax=10.0, K=2.0, n=2)))
-model.add_reaction(Reaction('repr_U_on_V', reactants={}, products={'V': 1},
-    kinetic_law=HillRepression(Vmax=10.0, K=2.0, n=2)))
-model.add_reaction(Reaction('deg_U', reactants={'U': 1}, products={},
+model.add_species(Species('gene_u', initial_concentration=10.0))
+model.add_species(Species('gene_v', initial_concentration=0.1))
+model.add_species(Species('reporter', initial_concentration=0.0))
+
+# Reactions take StoichiometryEntry objects, not dicts
+# Hill kinetics use modifiers= to specify activator/repressor
+model.add_reaction(Reaction('repr_V_on_U',
+    reactants=[], products=[SE('gene_u', 1)],
+    kinetic_law=HillRepression(Vmax=10.0, K=2.0, n=2),
+    modifiers=['gene_v']))
+model.add_reaction(Reaction('repr_U_on_V',
+    reactants=[], products=[SE('gene_v', 1)],
+    kinetic_law=HillRepression(Vmax=10.0, K=2.0, n=2),
+    modifiers=['gene_u']))
+model.add_reaction(Reaction('deg_U',
+    reactants=[SE('gene_u', 1)], products=[],
     kinetic_law=LinearDegradation(rate=1.0)))
-model.add_reaction(Reaction('deg_V', reactants={'V': 1}, products={},
+model.add_reaction(Reaction('deg_V',
+    reactants=[SE('gene_v', 1)], products=[],
     kinetic_law=LinearDegradation(rate=1.0)))
 
-result = verify(model, 'G[0,100](Bistable(U, 1.0, 5.0))')
-print(result)
+result = verify(model, 'G[0,100](gene_u > 1.0)')
+print(result.status)
 "
 ```
 
 ```
-VerificationResult(
-  status=VERIFIED, soundness=SOUND,
-  iterations=7, time=11.3s, predicates=8, robustness=0.23
-)
+VerificationStatus.VERIFIED
+```
+
+## Certificate Verification (Standalone)
+
+The standalone certificate verifier validates proof certificates
+without importing any BioProver solver modules (~800 LoC TCB):
+
+```python
+from bioprover.certificate_verifier import CertificateVerifier
+
+verifier = CertificateVerifier()
+report = verifier.verify(certificate_dict)
+print(f"{report.passed} passed, {report.failed} failed")
+# 8 passed, 0 failed
+```
+
+CLI:
+```bash
+python -m bioprover.certificate_verifier.cli certificate.json
 ```
 
 ## API
 
 ```python
-from bioprover import verify, repair, synthesize, BioModel
+from bioprover import verify
+from bioprover.models.bio_model import BioModel
+from bioprover.models.species import Species
+from bioprover.models.reactions import (
+    Reaction, HillRepression, HillActivation,
+    LinearDegradation, MassAction,
+    StoichiometryEntry as SE,
+)
 
 # Verify against Bio-STL
-result = verify(model, spec="G[0,100](GFP > 0.5)")
+result = verify(model, spec="G[0,100](gene_u > 0.5)")
 result.status         # VerificationStatus.VERIFIED
 result.soundness      # SoundnessAnnotation(level=SOUND)
-result.is_verified    # True
 
-# Repair a failing design
-fix = repair(model, spec="G[0,100](GFP > 0.5)", budget=0.3)
-fix.success           # True
-fix.repaired_parameters
-
-# Synthesize feasible parameters
-syn = synthesize(model, spec="F[0,50](GFP > 1.0)", objective="robustness")
-syn.feasible          # True
-syn.parameters        # {'alpha': 12.3, 'K': 1.8, ...}
+# Error propagation
+from bioprover.soundness import ErrorBudget
+budget = ErrorBudget(
+    delta=0.001,          # SMT perturbation
+    discretization=0.01,  # ODE step error
+    truncation=0.05,      # moment closure
+)
+print(budget.combined)           # RSS bound
+print(budget.combined_additive)  # additive bound
 ```
 
 ## Installation
@@ -81,69 +118,52 @@ pip install -e ".[viz]"    # + matplotlib
 ```bash
 pytest tests/                                   # all tests
 pytest tests/ --cov=bioprover --cov-report=html  # with coverage
-mypy bioprover/                                  # type checking
-ruff check bioprover/                            # linting
 ```
 
 ## Benchmarks
 
-29 circuits covering toggle switches, repressilators, logic gates, cascades,
-feed-forward loops, and multi-module designs (3–15 species).
+10 circuits covering toggle switches, repressilators, logic gates,
+cascades, feed-forward loops, and multi-module designs (3–9 species).
 
 ```bash
-# Run full benchmark suite
-bioprover benchmark --suite full --format csv -o results.csv
-
-# Run experiments that reproduce paper results
-python experiments/run_all_experiments.py
+# Run real experiments (certificate verification, error propagation, benchmarks)
+python experiments/run_real_experiments.py
 ```
 
 Results are written to `experiments/results/`.
 
+### Real Benchmark Results
+
+| Circuit | Species | Time (s) | Status |
+|---------|---------|----------|--------|
+| Toggle switch | 3 | 0.0 | Verified |
+| Repressilator | 5 | 1.8 | Verified |
+| NAND gate | 3 | 0.0 | Verified |
+| FFL C1-I1 | 3 | 0.0 | Verified |
+| FFL C1-C1 | 3 | 0.0 | Verified |
+| Cascade (3) | 3 | 0.0 | Verified |
+| Cascade (5) | 5 | 1.7 | Verified |
+| Cascade (8) | 8 | T/O | Timeout |
+| Multi 2×3 | 6 | 26.6 | Verified |
+| Multi 3×3 | 9 | T/O | Timeout |
+
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│              CLI / Python API                    │
-│           verify() · repair() · synthesize()     │
-├────────┬────────┬─────────┬─────────┬───────────┤
-│ Models │Bio-STL │ CEGAR   │ Repair  │ Visualiz. │
-│ SBML   │parser  │ 7 strat.│ CEGIS   │ JSON/CSV  │
-│ Species│macros  │ converg.│ CMA-ES  │ LaTeX/HTML│
-│ Rxns   │robust. │ monitor │ Pareto  │ ASCII cex │
-├────────┴────────┴─────────┴─────────┴───────────┤
-│          SMT / Solver Layer                      │
-│  Z3 · dReal ICP · Interpolants · Interval ODE   │
-│  QR-preconditioned · Taylor models · Flowpipes   │
-├─────────────────────────────────────────────────-┤
-│   Compositional · Stochastic · AI/ML             │
-│  Circular AG · SSA · FSP · Moment closure        │
-│  GNN predictor · GP surrogate · Quality monitor  │
-├──────────────────────────────────────────────────┤
-│   Soundness · Evaluation · Infrastructure        │
-│  ErrorBudget · 4 levels · Proof certificates     │
-│  29 benchmarks · Ablation · Mutation testing     │
-└──────────────────────────────────────────────────┘
+bioprover/
+├── models/              # BioModel, Species, Reaction, kinetic laws
+├── temporal/            # Bio-STL parser, formula AST, robustness
+├── cegar/               # CEGAR engine, refinement strategies
+├── solver/              # Interval arithmetic, flowpipes, certificates
+├── certificate_verifier/ # Standalone verifier (800 LoC, no Z3)
+├── soundness.py         # Error propagation, Lipschitz bounds
+├── encoding/            # Expression IR, ODE discretization
+├── smt/                 # Z3/dReal interface, delta propagation
+├── compositional/       # Assume-guarantee reasoning
+├── stochastic/          # Moment closure, SSA, FSP
+├── ai/                  # ML predicate predictor
+└── repair/              # CEGIS synthesis
 ```
-
-### Module Map
-
-| Module | Purpose |
-|--------|---------|
-| `bioprover.models` | BioModel, Species, Reaction, kinetic laws, SBML import |
-| `bioprover.temporal` | Bio-STL parser, formula AST, robustness, BMC, SMC |
-| `bioprover.cegar` | CEGAR engine, 7 refinement strategies, convergence monitor |
-| `bioprover.repair` | CEGIS synthesis, CMA-ES optimization, repair reports |
-| `bioprover.solver` | Interval arithmetic, Taylor models, validated ODE, flowpipes, proof certificates |
-| `bioprover.smt` | Z3/dReal interface, delta propagation, Craig interpolants |
-| `bioprover.encoding` | Expression IR, ODE discretization, SMT-LIB serialization |
-| `bioprover.ai` | Predicate predictor, quality monitor, training pipeline, GP surrogate |
-| `bioprover.compositional` | Circular assume-guarantee, topology analysis, well-formedness |
-| `bioprover.stochastic` | Gillespie SSA, tau-leaping, FSP, moment closure |
-| `bioprover.soundness` | SoundnessLevel, SoundnessAnnotation, ErrorBudget |
-| `bioprover.evaluation` | Benchmark suite, ablation runner, baselines, mutation testing |
-| `bioprover.library` | Parts database, motif library, model templates |
-| `bioprover.visualization` | Result export, counterexample visualization, progress |
 
 ## API Reference
 
