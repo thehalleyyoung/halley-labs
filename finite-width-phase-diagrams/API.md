@@ -62,6 +62,33 @@ Returns dict with: `phase`, `chi_total`, `per_layer_chi`, `variance_trajectory`,
 - Residual-aware chi for skip connections (chi ≥ 1 is normal, not chaotic)
 - Empirical cross-validation against forward-hook variance ratios
 
+### `StochasticCrossoverAnalyzer` (stochastic_crossover.py)
+Analyzes phase boundary crossover width scaling and chi_1 fluctuation spectra.
+
+```python
+from stochastic_crossover import StochasticCrossoverAnalyzer
+
+analyzer = StochasticCrossoverAnalyzer(n_trials=100)
+result = analyzer.analyze_crossover("tanh", width=128, depth=10)
+print(f"Crossover width: {result.crossover_width:.4f}")
+
+scaling = analyzer.analyze_width_scaling("relu", widths=[32, 64, 128, 256, 512])
+print(f"Exponent: {scaling['scaling_exponent']:.3f}")  # Should be ~0.5
+```
+
+**`analyze_crossover(activation, width, depth) -> CrossoverResult`**
+- `activation`: One of "relu", "tanh", "gelu", "silu"
+- `width`: Layer width N
+- `depth`: Network depth D
+
+Returns `CrossoverResult` with: `crossover_width`, `chi1_std_empirical`, `chi1_std_analytical`, `n_trials`.
+
+**`analyze_width_scaling(activation, widths) -> dict`**
+- `activation`: Activation function name
+- `widths`: List of widths to fit scaling law
+
+Returns dict with: `scaling_exponent`, `scaling_prefactor`, `r_squared`, `per_width_results`.
+
 ### `DataAwarePhaseAnalyzer` (data_aware_phase.py)
 Dataset-aware phase correction using kernel-task spectral alignment.
 
@@ -127,6 +154,8 @@ result = tracer.trace(model, input_shape=(1, 3, 32, 32))
 | `run_transformer_experiments.py` | 180-config transformer validation |
 | `run_v4_experiments.py` | 358-config MLP validation |
 | `run_baseline_comparison_v3.py` | 6-method baseline comparison |
+| `run_improved_baseline.py` | 4-method improved baseline (32 configs) |
+| `run_stochastic_crossover.py` | Crossover width scaling (6 widths × 4 activations) |
 | `run_calibration_200.py` | 210-config independent calibration |
 | `run_z3_convergence.py` | Z3 SMT convergence verification (P1-P12) |
 | `run_kappa4_sensitivity.py` | Moment-closure sensitivity |

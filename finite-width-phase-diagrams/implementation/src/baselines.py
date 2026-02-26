@@ -101,63 +101,75 @@ def kaiming_init(dims: List[int], activation: str = "relu",
 
 def phasekit_init(dims: List[int], activation: str = "relu",
                   seed: int = 42) -> InitResult:
-    """PhaseKit edge-of-chaos initialization from mean-field theory.
+    """PhaseKit depth-aware initialization from mean-field theory.
 
-    For each activation, finds the gain σ_w that balances forward variance
-    preservation (σ_w² V(q) = q) with backward gradient stability (σ_w² χ(q) ≤ 1).
-    For ReLU, both conditions give σ_w = √2 (Kaiming). For non-ReLU activations,
-    PhaseKit uses the backward-stable gain with a depth-dependent safety margin.
+    Uses the variance-ratio prediction to find sigma_w that gives
+    stable signal propagation from initialization. This accounts for:
+    1. Transient dynamics (not just asymptotic fixed-point behavior)
+    2. Bounded activation saturation at high sigma_w
+    3. Depth-dependent optimal sigma_w
+
+    Strategy: find sigma_w that gives geometric-mean per-layer variance
+    ratio closest to 1.0 (perfect signal preservation) for the first L
+    layers starting from unit-variance inputs. This is a theory-based
+    analog of LSUV that requires no data.
+
+    For the output layer, uses Xavier scaling.
     """
     import sys, os
     sys.path.insert(0, os.path.dirname(__file__))
-    from mean_field_theory import ActivationVarianceMaps as AVM
+    from mean_field_theory import MeanFieldAnalyzer
+    from scipy.optimize import minimize_scalar
 
-    chi_fns = {
-        "relu": AVM.relu_chi, "tanh": AVM.tanh_chi,
-        "gelu": AVM.gelu_chi, "silu": AVM.silu_chi,
-        "swish": AVM.silu_chi, "leaky_relu": AVM.leaky_relu_chi,
-        "elu": AVM.elu_chi, "mish": AVM.mish_chi,
-    }
-    V_fns = {
-        "relu": AVM.relu_variance, "tanh": AVM.tanh_variance,
-        "gelu": AVM.gelu_variance, "silu": AVM.silu_variance,
-        "swish": AVM.silu_variance, "leaky_relu": AVM.leaky_relu_variance,
-        "elu": AVM.elu_variance, "mish": AVM.mish_variance,
-    }
-    chi_fn = chi_fns.get(activation, AVM.relu_chi)
-    V_fn = V_fns.get(activation, AVM.relu_variance)
-
+    mf = MeanFieldAnalyzer()
     n_hidden = len(dims) - 2
-    q_op = 1.0  # operating variance (normalized inputs)
+    depth = max(n_hidden, 1)
 
-    # Gain from forward variance preservation: σ_w = √(q / V(q))
-    V_q = V_fn(q_op)
-    gain_fwd = np.sqrt(q_op / max(V_q, 1e-10))
+    # Target: variance ratio = 1.0 (perfect signal preservation)
+    def variance_ratio_error(sw):
+        """Compute |log(variance_ratio) - 0| for candidate sigma_w."""
+        try:
+            vr = mf._predict_variance_ratio(
+                sw, 0.0, activation, dims[1] if len(dims) > 2 else 128,
+                input_variance=1.0, n_layers=min(depth, 10)
+            )
+            if vr <= 0 or not np.isfinite(vr) or vr > 1e6:
+                return 100.0
+            return abs(np.log(vr))
+        except Exception:
+            return 100.0
 
-    # Gain from backward gradient stability: σ_w = 1/√χ(q)
-    chi_q = chi_fn(q_op)
-    gain_bwd = 1.0 / np.sqrt(max(chi_q, 1e-10))
+    # Search for optimal sigma_w in [0.1, 5.0]
+    result = minimize_scalar(variance_ratio_error, bounds=(0.1, 5.0),
+                              method='bounded', options={'xatol': 1e-6})
+    gain = result.x
 
-    # Use the minimum (more conservative) to ensure stability
-    gain = min(gain_fwd, gain_bwd)
-
-    # Depth-dependent safety margin: deeper networks need more conservative gain
-    # O(1/√N) fluctuations accumulate over L layers
-    if n_hidden > 5:
-        width = dims[1] if len(dims) > 2 else 128
-        safety = 1.0 - 0.5 / np.sqrt(width)
-        gain *= safety
+    # Sanity check: if the optimal gain gives crazy results, fall back
+    vr_at_gain = mf._predict_variance_ratio(
+        gain, 0.0, activation, dims[1] if len(dims) > 2 else 128,
+        input_variance=1.0, n_layers=min(depth, 10)
+    )
+    if not np.isfinite(vr_at_gain) or vr_at_gain > 10 or vr_at_gain < 0.01:
+        # Fall back to edge-of-chaos with safety margin
+        sw_star, _ = mf.find_edge_of_chaos(activation, sigma_b=0.0)
+        gain = sw_star * 0.9
 
     rng = np.random.RandomState(seed)
     weights, biases, sigmas = [], [], []
     for i in range(len(dims) - 1):
-        std = gain / np.sqrt(dims[i])
-        W = rng.randn(dims[i], dims[i + 1]) * std
+        is_output = (i == len(dims) - 2)
+        if is_output:
+            std_out = np.sqrt(2.0 / (dims[i] + dims[i + 1]))
+            W = rng.randn(dims[i], dims[i + 1]) * std_out
+            sigmas.append(std_out * np.sqrt(dims[i]))
+        else:
+            std = gain / np.sqrt(dims[i])
+            W = rng.randn(dims[i], dims[i + 1]) * std
+            sigmas.append(gain)
         weights.append(W)
         biases.append(np.zeros(dims[i + 1]))
-        sigmas.append(gain)
     return InitResult("phasekit", weights, biases, sigmas,
-                      f"PhaseKit MF gain={gain:.4f} for {activation}")
+                      f"PhaseKit var-ratio gain={gain:.4f} for {activation}")
 
 
 def lsuv_init(dims: List[int], activation: str = "relu",

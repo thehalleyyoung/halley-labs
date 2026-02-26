@@ -1,6 +1,6 @@
 {
   "description": "Grounding map: every quantitative claim is traced to its data source.",
-  "paper_version": "v9 (B2 math rigor, 210-config calibration, 6-method baseline, kappa4 sensitivity, Z3 convergence)",
+  "paper_version": "v10 (stochastic crossover, improved baseline, depth-aware init)",
   "paper_file": "theory/tool_paper.tex",
   "claims": [
     {
@@ -320,6 +320,27 @@
       "data_source": "experiments/results/data_aware/data_aware_results.json",
       "code": "experiments/run_data_aware_experiment.py",
       "verification": "240 configs, kernel-task spectral alignment (kappa) computed, trainability accuracy compared with and without data-aware correction."
+    },
+    {
+      "id": "stochastic-crossover-scaling",
+      "claim": "Phase boundary crossover width scales as Delta(N) = A * N^{-0.5} for all activations. ReLU A=1.4142, tanh A=0.0272, GELU A=0.6146, SiLU A=0.3936.",
+      "data_source": "experiments/results/stochastic_crossover/crossover_results.json",
+      "code": "experiments/run_stochastic_crossover.py",
+      "verification": "Width scaling fit across N={32,64,128,256,512,1024}. Exponent = 0.500 for all activations."
+    },
+    {
+      "id": "improved-baseline-32configs",
+      "claim": "Improved 4-method baseline (32 configs): PhaseKit 25.0%, Xavier 31.2%, LSUV 25.0%, Kaiming 18.8%. PhaseKit uses depth-aware variance-ratio targeting.",
+      "data_source": "experiments/results/improved_baseline/baseline_results.json",
+      "code": "experiments/run_improved_baseline.py",
+      "verification": "32 configs: 4 depths x 2 widths x 4 activations, 2 seeds per method, 300 SGD steps."
+    },
+    {
+      "id": "stochastic-crossover-chi1-spectrum",
+      "claim": "Chi_1 fluctuation spectrum at criticality: tanh std_emp=0.121, gelu std_emp=0.134. ReLU has near-zero analytical chi_1 variance (special property).",
+      "data_source": "experiments/results/stochastic_crossover/crossover_results.json",
+      "code": "implementation/src/stochastic_crossover.py",
+      "verification": "200 Monte Carlo trials per activation at N=128, D=10."
     }
   ]
 }
