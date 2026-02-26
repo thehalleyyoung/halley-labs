@@ -3,31 +3,33 @@
 > **Status**: Research prototype. Not production software. Not formal verification.
 >
 > **Implemented**: Rust core types/traits/algorithms, 38 property-based tests,
-> Phase 0 mock LLM experiments, Phase B real LLM validation (gpt-4.1-nano),
-> multi-configuration experiments (3 configs × 15 prompts × 3 trials = 183 calls),
+> Phase 0 mock LLM experiments, scaled real LLM validation (gpt-4.1-nano),
+> multi-configuration experiments (4 configs × 50 prompts × 5 trials = 1000 single-turn calls),
+> multi-turn conversation experiments (8 scenarios × 3 trials × 4 configs = 552 calls),
 > semantic embedding classifier (text-embedding-3-small nearest-centroid),
-> Platt scaling calibration (ECE 0.475 → 0.004),
-> structural advantage demonstration (7/12 temporal patterns),
+> stability-constrained abstraction layer (margin-based + majority-vote),
+> structural advantage demonstration (21/48 temporal patterns),
 > statistical baselines (KL divergence, MMD, chi-squared, frequency),
 > PDFA baseline comparison (simplified ALERGIA with hyperparameter tuning),
 > CoalCEGAR convergence analysis,
 > classifier robustness analysis (Monte Carlo), Bayesian analysis,
 > cross-configuration generalization evaluation,
 > compositional specification checking,
-> approximate preservation bounds.
+> approximate preservation bounds,
+> functoriality certificate computation.
 >
 > **Not implemented**: Lean 4 formalization, frontier LLM validation,
 > live monitoring dashboard, full AALpy+PRISM baseline,
 > formally checkable proof certificates, liveness property verification,
-> functorial alphabet abstraction, cross-model transfer.
+> cross-model transfer.
 
 ## Running Experiments
 
 ```bash
 cd implementation
 
-# Full experiments with embedding classifier (requires OPENAI_API_KEY)
-source ~/.bashrc && python3 pathb_deep_experiments.py
+# Scaled experiments with 4 configs (requires OPENAI_API_KEY, ~1552 calls)
+source ~/.bashrc && python3 scaled_experiments.py
 
 # Analysis on cached data (no API calls needed if cache exists)
 python3 pathb_deep_experiments_v2.py
@@ -310,4 +312,69 @@ temporal = compute_temporal_pattern(["compliant", "hedge", "refusal", "refusal"]
 # Bisimulation distance between automata
 dist = bisimulation_distance(automaton_a, automaton_b)
 # Returns: float (distance in [0, 1])
+```
+
+### Stability-Constrained Abstraction (New)
+
+```python
+from caber.classifiers.stable_abstraction import (
+    StableAbstractionLayer,
+    StabilityReport,
+    compute_abstraction_gap,
+    compute_functoriality_certificate,
+)
+
+# Create stability layer wrapping an existing classifier
+from caber.classifiers.embedding import EmbeddingProvider, SemanticEmbeddingClassifier
+provider = EmbeddingProvider(cache_path="embedding_cache.json")
+base_clf = SemanticEmbeddingClassifier(provider=provider)
+base_clf.fit_supervised(texts, labels)
+
+stable = StableAbstractionLayer(
+    base_classifier=base_clf,
+    margin_threshold=0.10,   # reject classifications with margin < 0.10
+    vote_k=11,               # majority vote ensemble size for boundary cases
+)
+
+# Classify with stability guarantee
+report = stable.classify_stable("I cannot help with that request.")
+# Returns: StabilityReport(
+#   atom="refusal", confidence=0.94, margin=0.31,
+#   is_stable=True, method="margin_accept"
+# )
+
+# Classify boundary case (falls back to majority vote)
+report = stable.classify_stable("I'll try to help, but this is sensitive...")
+# Returns: StabilityReport(
+#   atom="cautious", confidence=0.52, margin=0.04,
+#   is_stable=True, method="majority_vote"
+# )
+
+# Compute abstraction gap for a dataset
+gap = compute_abstraction_gap(
+    classifier=base_clf,
+    texts=test_texts,
+    perturbation_std=0.03,  # Gaussian noise σ
+    n_perturbations=20,
+)
+# Returns: {
+#   "inconsistency_rate": 0.035,
+#   "n_tested": 200,
+#   "n_inconsistent": 7,
+#   "per_atom_rates": {"compliant": 0.0, "refusal": 0.08, "cautious": 0.05},
+# }
+
+# Compute functoriality certificate
+cert = compute_functoriality_certificate(
+    classifier=base_clf,
+    texts=test_texts,
+    margin_threshold=0.10,
+)
+# Returns: {
+#   "provably_stable_fraction": 0.85,
+#   "median_margin": 0.31,
+#   "min_margin": 0.007,
+#   "functoriality_radius": 0.004,
+#   "per_atom_stable": {"compliant": 1.0, "refusal": 0.80, "cautious": 0.80},
+# }
 ```
