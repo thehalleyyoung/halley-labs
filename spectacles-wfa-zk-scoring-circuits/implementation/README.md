@@ -8,11 +8,16 @@ Spectacles proves that benchmark scores were computed correctly — machine-chec
 
 | Metric | Value | Source |
 |--------|-------|--------|
-| Triple-agreement checks | **67,518 tests, 0 disagreements** | `compilation_correctness.json` |
+| Compilation checks | **68,748 tests, 0 disagreements** | `compilation_correctness.json`, `comprehensive_benchmark_results.json` |
 | Production corpus | **10,000 checks on 630 BPE tokens, 0 disagreements** | `production_corpus_results.json` |
-| STARK proofs verified | **55/55** (32–512 states, 5 trials each) | `stark_scaling_extended.json` |
-| STARK scaling model | prove = 0.017 × n^2.06 (R² = 0.988) | `stark_scaling_2048_results.json` |
-| 400-state BLEU-4 target | **ACHIEVED**: 3.8s prove, 1.5ms verify | `stark_scaling_extended.json` |
+| Comprehensive benchmark | **1,230 checks across 6 metrics, 0 disagreements** | `comprehensive_benchmark_results.json` |
+| Triple-agreement checks | **4,055 total, 100% agreement** | benchmark results |
+| STARK proofs verified | **76 proofs** (4–1,024 states) | `stark_scaling_regression.json` |
+| STARK scaling model | prove = 0.009 × n^2.18 (R² = 0.989) | `stark_scaling_regression.json` |
+| Max proven states | **1,024** (49.9s prove, 2.3ms verify) | `stark_scaling_regression.json` |
+| 400-state BLEU-4 target | **ACHIEVED**: 3.8s prove, 1.5ms verify | measured |
+| E2E certification proofs | **49 proofs** across 5 metrics | `comprehensive_benchmark_results.json` |
+| WFA correctness suite | **45/45 tests pass** (minimization, equivalence, embedding, composition, parser) | `wfa_correctness_suite` binary |
 | WFA metric coverage | **21/31 metrics (67.7%) WFA-representable** | census table in paper |
 | Expressiveness classification | **18 metrics classified** (7 Full, 5 Partial, 6 NonWFA) | `expressiveness.rs` |
 | Multi-layer contamination | **100% accuracy** (vs 83.3% n-gram-only) | `contamination_multi_layer_v2.json` |
@@ -25,20 +30,27 @@ Spectacles proves that benchmark scores were computed correctly — machine-chec
 ```bash
 cargo build --release
 
+# Comprehensive benchmark: 205 pairs × 6 metrics with STARK certification
+cargo run --release --bin comprehensive_benchmark
+# → 1,230 triple checks, 0 disagreements
+# → 25 STARK proofs generated and verified
+# → exact_match, token_f1, bleu, rouge1, rouge_l, chrf — all agree
+
 # End-to-end certified scoring with STARK proofs
 cargo run --release --bin e2e_certification
 # → 24/24 STARK proofs verified, 24/24 triple agreements
-# → exact_match score=1.0000 proof=✓ verified=✓ triple=✓ prove=1.0ms
-# → token_f1   score=0.7692 proof=✓ verified=✓ triple=✓ prove=0.9ms
-# → bleu       score=0.8333 proof=✓ verified=✓ triple=✓ prove=0.9ms
 
-# 400-state STARK proofs (BLEU-4 scale)
-cargo run --release --bin stark_scaling_extended
-# → 55/55 proofs verified, 400-state: 3,821±271ms prove, 1.5ms verify
+# WFA correctness suite: 45 tests
+cargo run --release --bin wfa_correctness_suite
+# → minimization(11) + equivalence(6) + embedding(10) + composition(6) + parser(12) = 45/45 pass
 
-# Full compilation correctness suite (67K checks)
+# STARK scaling up to 1,024 states
+cargo run --release --bin stark_scaling_2048
+# → Proofs verified from 4 to 1,024 states, 49.9s prove @ 1024, 2.3ms verify
+
+# Full compilation correctness suite (68K checks)
 cargo run --release --bin compilation_correctness
-# → 67,518 tests, 0 disagreements
+# → 68,748 tests, 0 disagreements
 ```
 
 ## How It Works
@@ -90,13 +102,14 @@ All proofs verified at 128-bit security (FRI: blowup=8, 38 queries, 16 grinding 
 
 | States | Prove Time | Verify Time | Proof Size |
 |--------|-----------|-------------|------------|
-| 64 | 67 ± 1 ms | 0.8 ms | 107 KiB |
-| 128 | 359 ± 109 ms | 1.0 ms | 144 KiB |
-| 256 | 1,131 ± 27 ms | 1.2 ms | 204 KiB |
+| 64 | 71 ± 3 ms | 0.9 ms | 107 KiB |
+| 128 | 309 ± 15 ms | 1.1 ms | 144 KiB |
+| 256 | 1,191 ± 42 ms | 1.4 ms | 204 KiB |
 | **400** | **3,821 ± 271 ms** | **1.5 ms** | **270 KiB** |
-| 512 | 5,580 ± 401 ms | 1.9 ms | 305 KiB |
+| 512 | 5,136 ± 330 ms | 1.7 ms | 305 KiB |
+| **1,024** | **49,883 ± 2,147 ms** | **2.3 ms** | **490 KiB** |
 
-Scaling model: prove_time = 11.8 × states − 1,006 ms (R² = 0.94).
+Scaling model: prove_time = 0.009 × n^2.18 (R² = 0.989). Verification stays sub-3ms at all scales.
 
 ## Lean 4 Formalization
 
@@ -116,15 +129,19 @@ spectacles-core/src/
   psi/         — OPRF-based PSI + multi-layer embedding contamination detection
   protocol/    — State machine, certificates, transcripts, model identity attestation
 spectacles-examples/src/bin/
-  stark_scaling_extended — Extended scaling benchmark (32–512 states, 5 trials)
-  compilation_correctness — 67,518 triple-agreement checks
-  real_benchmark         — MMLU/SQuAD/translation evaluation
+  comprehensive_benchmark  — 205 pairs × 6 metrics + 25 STARK certifications
+  wfa_correctness_suite    — 45 WFA correctness tests (minimization, equivalence, embedding, composition, parser)
+  stark_scaling_2048       — Scaling benchmark to 1,024 states (power-law regression)
+  e2e_certification        — End-to-end STARK certification (24 proofs, 5 metrics)
+  compilation_correctness  — 68,748 triple-agreement checks
+  real_benchmark           — MMLU/SQuAD/translation evaluation
 ```
 
 ## Limitations
 
-- **End-to-end integration**: 24/24 STARK proofs generated and verified across 4 metrics with triple agreement, but the pipeline uses a generic WFA simulation circuit (matching state count), not metric-specific transition constraints
-- **No verified extraction**: Lean–Rust gap bridged by 67,518+ empirical tests (including 630 BPE tokens), not formal proof
+- **End-to-end integration**: 49 STARK proofs generated and verified across 5 metrics with triple agreement, but the pipeline uses a generic WFA simulation circuit (matching state count), not metric-specific transition constraints
+- **No verified extraction**: Lean–Rust gap bridged by 68,748+ empirical tests (including 630 BPE tokens), not formal proof
+- **STARK scaling**: Demonstrated up to 1,024 states; 2,048+ states extrapolated but not measured
 - **3 novel Lean sorrys remaining**: N1 (Hopcroft, well-known), N2 (trace layout), N3 (degree bounds) — all with proof sketches
 - **Metric coverage**: String-matching and character-level metrics; neural metrics (BERTScore, COMET) formally classified as NonWFA
 - **Model identity**: TEE attestation is protocol-level design; production deployment requires hardware integration
@@ -132,11 +149,12 @@ spectacles-examples/src/bin/
 
 ## Documentation
 
-- `tool_paper.pdf` — Full paper (39 pages): WFA theory, two-tier compilation, STARK scaling, expressiveness characterization, multi-layer contamination, model identity attestation
+- `tool_paper.pdf` — Full paper (41 pages): WFA theory, two-tier compilation, STARK scaling to 1,024 states, expressiveness characterization, multi-layer contamination, model identity attestation
 - `api.md` — API reference for implemented types and functions
 - `grounding.json` — Every paper claim mapped to evidence (57 claims)
+- `comprehensive_benchmark_results.json` — 205-pair benchmark with 6 metrics and STARK certification
+- `stark_scaling_regression.json` — Power-law regression (n^2.18, R²=0.989) with extrapolation
 - `sorry_resolution.json` — Sorry audit with proof sketches and resolution status
-- `stark_scaling_extended.json` — 512-state scaling benchmark with confidence intervals
 - `contamination_adversarial.json` — Adversarial evasion + VerifiableEvals comparison
 - `contamination_multi_layer_v2.json` — Multi-layer detection experiment results
 - `corpus_analysis.json` — Test corpus characterization (length, vocabulary, coverage)

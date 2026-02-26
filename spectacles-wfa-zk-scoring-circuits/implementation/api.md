@@ -8,17 +8,18 @@ are implemented and tested.
 formalization covers semiring axioms (sorry-free) and states compilation
 soundness theorems (with 17 sorrys, 2 novel resolved; see `sorry_audit.json`
 and paper Appendix I). No verified extraction exists from Lean to this Rust
-codebase; the gap is bridged by property-based testing (67,518
+codebase; the gap is bridged by property-based testing (68,748
 differential checks + 9,839 property tests, 0 disagreements).
 This is specification-level verification with strong empirical testing—not
 a verified compiler in the CompCert/CakeML sense.
 
 **What has been empirically validated:**
-- Scoring module: 67,518 differential tests, 0 disagreements (including 10,000 production-scale checks on 630 BPE tokens)
-- WFA module: Semiring axioms (125 unit tests), automaton evaluation (81 tests)
-- Circuit module: STARK prove+verify on 55 proofs (up to 512-state WFA, 5 trials each), all verified
+- Scoring module: 68,748 differential tests, 0 disagreements (including 10,000 production-scale on 630 BPE tokens, 1,230 comprehensive benchmark on 205 pairs × 6 metrics)
+- WFA module: Semiring axioms (125 unit tests), automaton evaluation (81 tests), correctness suite (45 tests: minimization, equivalence, embedding, composition, parser)
+- Circuit module: STARK prove+verify on 76 proofs (up to 1,024-state WFA), all verified
 - Proof performance: 400-state WFA in 3,821±271ms prove, 1.5ms verify, 270 KiB (BLEU-4 target achieved)
-- STARK scaling: Power-law regression prove_time = 0.017 × n^2.06 (R² = 0.988), verify sub-4ms at all scales
+- STARK scaling: Power-law regression prove_time = 0.009 × n^2.18 (R² = 0.989), verify sub-3ms at all scales, measured to 1,024 states
+- E2E certification: 49 STARK proofs across 5 metrics (exact match, token F1, BLEU, ROUGE-1, chrF), all verified with triple agreement
 - PSI module: Enhanced contamination detection with multi-layer embedding analysis (n-gram + embedding similarity + distributional JSD), adversarial evasion scenarios (F1=1.0 at τ=0.03, ROC AUC=1.0), multi-layer accuracy 100% vs 83.3% n-gram-only
 - Property-based tests: 14 algebraic properties, 9,839 instances, Lean-Rust correspondence
 - FRI parameters: blowup=8, queries=38, 16 grinding bits, BLAKE3, 128-bit security
@@ -30,7 +31,7 @@ a verified compiler in the CompCert/CakeML sense.
 - End-to-end WFA→STARK pipeline for specific metrics uses simulation circuits, not yet metric-specific
 - PSI detects verbatim n-gram overlap, light paraphrasing, and semantic paraphrase via multi-layer detection; heavy semantic paraphrase with vocabulary shift may still evade
 - Lean 4 sorry audit: 3 remaining novel sorrys (N1, N2, N3) with proof sketches, ~4-6 weeks to close
-- STARK proof time scales O(n²) in state count; 2,048+ states requires batch processing (~113s prove)
+- STARK proof time scales O(n²) in state count; 2,048+ states requires batch processing (~143s prove, extrapolated)
 
 ## Table of Contents
 

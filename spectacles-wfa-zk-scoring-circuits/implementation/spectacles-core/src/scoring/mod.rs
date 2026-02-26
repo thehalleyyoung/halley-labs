@@ -15,6 +15,7 @@ pub mod rouge;
 pub mod regex_match;
 pub mod pass_at_k;
 pub mod differential;
+pub mod chrf;
 
 pub use tokenizer::{Tokenizer, WhitespaceTokenizer, WordPieceTokenizer, CharacterTokenizer, NGramTokenizer};
 pub use exact_match::{ExactMatchScorer, NormalizedExactMatchScorer};
@@ -24,6 +25,7 @@ pub use rouge::{RougeNScorer, RougeLScorer, RougeConfig};
 pub use regex_match::{RegexMatchScorer, RegexCompiler};
 pub use pass_at_k::{PassAtKScorer, PassAtKConfig};
 pub use differential::{DifferentialTester, DifferentialResult, AgreementReport, CorpusStats};
+pub use chrf::{ChrFScorer, ChrFConfig};
 
 use serde::{Serialize, Deserialize};
 

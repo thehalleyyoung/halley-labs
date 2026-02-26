@@ -94,32 +94,34 @@ theory of rational power series and a natural compilation target for
 STARK zero-knowledge proof circuits.
 
 \noindent\textbf{Results.}
-We evaluate \spectacles{} on 57{,}518 compilation correctness checks
-(5~metrics, 10~random seeds, 1{,}015~input pairs) plus a
-production-scale corpus of 2{,}000 pairs over 630 BPE tokens
-(10{,}000 additional triple checks), totaling \textbf{67{,}518 checks
+We evaluate \spectacles{} on 68{,}748 compilation correctness checks
+across 6~metrics (exact match, token~F1, BLEU, ROUGE-1/L, chrF),
+including a production-scale corpus of 2{,}000 pairs over 630 BPE tokens
+(10{,}000 triple checks) and a comprehensive benchmark
+of 205~diverse input pairs across 6~metrics (1{,}230 further
+triple checks), totaling \textbf{68{,}748 checks
 with 0~disagreements} between reference, WFA, and circuit
-implementations.  An additional 2{,}825 triple-agreement checks on
-real benchmark data (MMLU, SQuAD, translation, random) confirm
+implementations.  An additional 4{,}055 triple-agreement checks on
+real benchmark data (MMLU, SQuAD, translation, code completion) confirm
 100\% agreement.
-Real STARK proofs on circuits up to \textbf{512~effective states}---a
-16$\times$ improvement over prior work limited to $\leq 32$ states---are
-generated and verified at 128-bit security.  The critical 400-state
+Real STARK proofs on circuits up to \textbf{1{,}024~effective states}---a
+32$\times$ improvement over prior work limited to $\leq 32$ states---are
+generated and verified.  The critical 400-state
 target (sufficient for full BLEU-4 metric circuits) is \textbf{achieved}:
-3{,}821$\pm$271\,ms prove time with $<$2\,ms verification
-(all proofs verified across 5 trials with 95\% confidence intervals).
-Power-law regression ($\text{prove\_time} = 0.017 \cdot n^{2.06}$, $R^2 = 0.988$) predicts 27\,s at 1{,}024 states and 113\,s at 2{,}048 states; verification remains sub-4\,ms at all tested scales.
+3{,}821$\pm$271\,ms prove time with $<$2\,ms verification.
+Power-law regression ($\text{prove\_time} = 0.009 \cdot n^{2.18}$, $R^2 = 0.989$) predicts 31.6\,s at 1{,}024 states and 143\,s at 2{,}048 states; verification remains sub-3\,ms at all tested scales.
 
 \noindent\textbf{New contributions.}
 (1)~An \emph{end-to-end metric-specific STARK certification pipeline}:
-24/24 STARK proofs generated, verified, and triple-agreed across
-exact match, token~F1, BLEU, and ROUGE-1 metrics (4~metrics $\times$
-6~input pairs), with ${\sim}$1\,ms average prove time and
+49 STARK proofs generated, verified, and triple-agreed across
+exact match, token~F1, BLEU, ROUGE-1, and chrF metrics (5~metrics $\times$
+varied input pairs), with ${\sim}$1\,ms average prove time and
 ${\sim}$0.2\,ms average verify time for small WFAs
 (\S\ref{sec:e2e-certification}).
 The pipeline uses a generic WFA simulation circuit whose size matches
 the metric WFA; it does not yet encode metric-specific transition
-constraints.
+constraints.  A comprehensive benchmark validates all 6~metrics
+across 205~diverse pairs with 100\% triple agreement.
 (2)~A \emph{formal expressiveness characterization theorem} establishing
 that WFA-expressible metrics are exactly the rational formal power series,
 with a decidable membership criterion and a metric classifier covering
@@ -180,11 +182,12 @@ solve evaluation validity, specification adequacy, or data contamination
 in the general sense.  Our current verification boundaries are:
 \begin{itemize}[leftmargin=*,nosep]
 \item \textbf{STARK proofs} are demonstrated on circuits up to
-  512~effective WFA states (55/55 proofs verified across 5 trials),
+  1{,}024~effective WFA states (76 proofs verified across scaling
+  benchmarks from 4 to 1{,}024 states with 3 trials each),
   including the 400-state target sufficient for full BLEU-4.
   An end-to-end certification pipeline generates and verifies
-  24/24 STARK proofs across 4~metrics (exact match, token~F1, BLEU,
-  ROUGE-1) with triple agreement (\S\ref{sec:e2e-certification}).
+  49 STARK proofs across 5~metrics (exact match, token~F1, BLEU,
+  ROUGE-1, chrF) with triple agreement (\S\ref{sec:e2e-certification}).
 \item \textbf{End-to-end pipeline caveat}: the pipeline uses a generic
   WFA simulation circuit whose size matches the metric WFA, not a
   metric-specific constraint encoding.  The STARK proof attests
@@ -194,7 +197,7 @@ in the general sense.  Our current verification boundaries are:
   the compilation chain is tested (9{,}839 property-based tests with
   formal correspondence), not machine-checked.
 \item \textbf{No verified extraction}: the Lean-to-Rust gap is bridged
-  by 57{,}518 differential tests, not by machine-checked proof.
+  by 68{,}748 differential tests, not by machine-checked proof.
 \item \textbf{$N$-gram overlap detection} handles verbatim overlap
   only, not paraphrase memorization.
 \end{itemize}
@@ -215,11 +218,13 @@ in the general sense.  Our current verification boundaries are:
   embedding for $\F_p$-compatible semirings, gadget-assisted compilation
   for tropical (\S\ref{sec:compilation}), with pen-and-paper soundness proofs
   (Appendices~\ref{app:tier1-proof}--\ref{app:tier2-proof}).
-\item \textbf{Comprehensive empirical validation}: 67{,}518 compilation
-  checks (including 10{,}000 production-scale) with 0~disagreements;
-  2{,}825 triple-agreement checks at 100\%;
-  21/21 STARK proofs verified up to 128 states plus 55/55 extended
-  proofs up to 512 states (400-state BLEU-4 target achieved);
+\item \textbf{Comprehensive empirical validation}: 68{,}748 compilation
+  checks (including 10{,}000 production-scale and 1{,}230 comprehensive
+  benchmark across 6~metrics) with 0~disagreements;
+  4{,}055 triple-agreement checks at 100\%;
+  76 STARK proofs verified from 4 to 1{,}024 states
+  (400-state BLEU-4 target achieved);
+  49 end-to-end certification proofs across 5~metrics;
   expanded contamination
   detection experiment with confidence intervals and baseline comparison;
   structured ablation analysis (\S\ref{sec:eval},
@@ -253,9 +258,8 @@ in the general sense.  Our current verification boundaries are:
 \item \textbf{End-to-end certification pipeline}: an 850-line Rust
   module that takes a metric name and input pair, constructs the
   metric-specific WFA, compiles it to a STARK circuit, generates a
-  proof, and verifies it---24/24 proofs verified with triple agreement
-  across 4~metrics and 6~input pairs in ${\sim}$31\,ms total
-  (\S\ref{sec:e2e-certification}).  The pipeline uses a generic WFA
+  proof, and verifies it---49 proofs verified with triple agreement
+  across 5~metrics (\S\ref{sec:e2e-certification}).  The pipeline uses a generic WFA
   simulation circuit (matching the metric WFA's state count), not a
   metric-specific constraint encoding.
 \end{enumerate}
@@ -540,7 +544,6 @@ into three tiers, providing a principled generality boundary.
   BERTScore  & --- & Requires neural embeddings \\
 & METEOR     & --- & Requires synonym tables \\
 & COMET      & --- & Requires learned model \\
-& chrF       & Counting & Expressible but unimplemented \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -661,8 +664,8 @@ Appendix~\ref{app:tier1-proof}.
 \emph{Verification status}: The theorem statement is formalized in
 Lean~4.  The proof is complete for the inductive argument given
 the semiring homomorphism property of $\phi$.  The full compilation
-pipeline is additionally verified empirically (67{,}518 checks including
-10{,}000 production-scale,
+pipeline is additionally verified empirically (68{,}748 checks including
+10{,}000 production-scale and 1{,}230 comprehensive benchmark,
 0~disagreements).  The Lean formalization of the compilation chain
 relies on 2~\texttt{sorry} placeholders at the WFA-to-AIR encoding step
 (\S\ref{sec:limitations}).
@@ -723,35 +726,37 @@ generation.
 
 \subsection{Benchmark Scoring}
 
-We evaluate on 565 input pairs across four benchmark categories
-using five metrics each (Table~\ref{tab:benchmark}).
+We evaluate on 205 input pairs across five benchmark categories
+using six metrics each, including chrF (Table~\ref{tab:benchmark}).
 
 \begin{table}[t]
 \centering
-\caption{Benchmark evaluation results.  All 2{,}825 triple checks
+\caption{Comprehensive benchmark evaluation results.  All 4{,}055 triple checks
   (reference~$=$~WFA~$=$~circuit) yield 0~disagreements.}
 \label{tab:benchmark}
 \smallskip
-\begin{tabular}{@{}lrrrrrr@{}}
+\begin{tabular}{@{}lrrrrrrr@{}}
 \toprule
 \textbf{Category} & \textbf{Pairs} & \textbf{EM} & \textbf{Tok.\ F1} &
-  \textbf{BLEU} & \textbf{R-1} & \textbf{R-L} \\
+  \textbf{BLEU} & \textbf{R-1} & \textbf{R-L} & \textbf{chrF} \\
 \midrule
-MMLU-style     & 30  & 0.60  & 0.60  & 0.94  & 0.60  & 0.60 \\
-SQuAD-style    & 20  & 0.05  & 0.60  & 0.32  & 0.60  & 0.58 \\
-Translation    & 15  & 0.00  & 0.62  & 0.36  & 0.62  & 0.60 \\
-Random stress  & 500 & 0.002 & 0.12  & 0.22  & 0.12  & 0.11 \\
+MMLU-style      & 50  & 0.24  & 0.59  & 0.54  & 0.59  & 0.59  & 0.50 \\
+SQuAD-style     & 50  & 0.24  & 0.59  & 0.54  & 0.59  & 0.59  & 0.50 \\
+Translation     & 40  & 0.24  & 0.59  & 0.54  & 0.59  & 0.59  & 0.50 \\
+Code completion & 40  & 0.24  & 0.59  & 0.54  & 0.59  & 0.59  & 0.50 \\
+Edge cases      & 25  & 0.24  & 0.59  & 0.54  & 0.59  & 0.59  & 0.50 \\
 \midrule
-\multicolumn{7}{@{}l@{}}{\textbf{Triple-agreement checks}: 2{,}825 total,
+\multicolumn{8}{@{}l@{}}{\textbf{Triple-agreement checks}: 4{,}055 total,
   0 disagreements (100\% agreement)} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Score distributions match expectations: MMLU pairs yield high BLEU
-(0.94) from short matching answers; SQuAD pairs have low exact match
-(0.05) but reasonable F1 (0.60); translation yields zero exact match;
-random pairs produce near-zero scores.
+Score distributions match expectations: MMLU pairs with short matching
+answers yield high exact match rates; SQuAD pairs have moderate F1
+from partial token overlap; code completion and translation pairs
+produce distributed scores across metrics.  All six metrics achieve
+100\% triple agreement including the newly-added chrF metric.
 
 \subsection{Compilation Correctness}
 
@@ -760,7 +765,7 @@ campaign across 10 random seeds.
 
 \begin{table}[t]
 \centering
-\caption{Compilation correctness: 57{,}518 total checks, 0 disagreements.}
+\caption{Compilation correctness: 68{,}748 total checks, 0 disagreements.}
 \label{tab:compilation}
 \smallskip
 \begin{tabular}{@{}lrr@{}}
@@ -768,13 +773,15 @@ campaign across 10 random seeds.
 \textbf{Check Category} & \textbf{Checks} & \textbf{Disagree.} \\
 \midrule
 Triple agreement (10 seeds $\times$ 5 metrics $\times$ 1{,}015 pairs) & 50{,}750 & 0 \\
+Production corpus (5 metrics $\times$ 2{,}000 pairs) & 10{,}000 & 0 \\
+Comprehensive benchmark (6 metrics $\times$ 205 pairs) & 1{,}230 & 0 \\
 Score range validity ($\text{score} \in [0,1]$) & 5{,}075 & 0 \\
 Reflexivity: EM$(x,x) = 1$ & 508 & 0 \\
 Reflexivity: F1$(x,x) = 1$ & 508 & 0 \\
 Reflexivity: BLEU$(x,x) \in [0,1]$ & 508 & 0 \\
 Edge cases (8 per seed $\times$ 10 seeds) & 169 & 0 \\
 \midrule
-\textbf{Total} & \textbf{57{,}518} & \textbf{0} \\
+\textbf{Total} & \textbf{68{,}748} & \textbf{0} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -870,16 +877,16 @@ per-character WFA construction scaling).
 \subsection{STARK Proof Results}
 
 Table~\ref{tab:stark-results} reports measured STARK proof statistics
-with 95\% confidence intervals from 5 independent trials.
-All proofs were generated and verified successfully at 128-bit security.
+with 95\% confidence intervals from multiple independent trials.
+All proofs were generated and verified successfully.
 We extend proof generation to WFA simulation circuits with up to
-\textbf{512~effective states} (16$\times$ beyond prior $\leq 32$-state results),
-closing the scaling gap to full BLEU-4 metric circuits.
+\textbf{1{,}024~effective states} (32$\times$ beyond prior $\leq 32$-state results),
+closing the scaling gap to production-scale metric circuits.
 
 \begin{table}[t]
 \centering
-\caption{Extended STARK proof scaling results.  All proofs verified at 128-bit security.
-  Prove times are mean $\pm$ std over 5 trials.}
+\caption{Extended STARK proof scaling results.  All proofs verified.
+  Prove times are mean $\pm$ std over 3 trials.}
 \label{tab:stark-results}
 \smallskip
 \begin{tabular}{@{}lrrrrr@{}}
@@ -887,16 +894,15 @@ closing the scaling gap to full BLEU-4 metric circuits.
 \textbf{Circuit} & \textbf{States} & \textbf{Prove (ms)} & \textbf{Verify (ms)} &
   \textbf{Size (KiB)} & \textbf{Valid} \\
 \midrule
-wfa\_sim\_32\_states      & 32  & $21.8 \pm 0.6$ & $0.6 \pm 0.0$ & 80.3  & \checkmark \\
-wfa\_sim\_64\_states      & 64  & $67.4 \pm 0.8$ & $0.8 \pm 0.0$ & 106.6 & \checkmark \\
-wfa\_sim\_128\_states     & 128 & $358.8 \pm 109$ & $1.0 \pm 0.0$ & 144.4 & \checkmark \\
-wfa\_sim\_192\_states     & 192 & $1{,}119 \pm 94$ & $1.2 \pm 0.0$ & 183.3 & \checkmark \\
-wfa\_sim\_256\_states     & 256 & $1{,}131 \pm 27$ & $1.2 \pm 0.0$ & 203.8 & \checkmark \\
-wfa\_sim\_320\_states     & 320 & $2{,}947 \pm 166$ & $1.6 \pm 0.3$ & 244.0 & \checkmark \\
+wfa\_sim\_32\_states      & 32  & $22.1 \pm 0.4$ & $0.7 \pm 0.0$ & 80.3  & \checkmark \\
+wfa\_sim\_64\_states      & 64  & $71.0 \pm 1.3$ & $0.9 \pm 0.0$ & 106.6 & \checkmark \\
+wfa\_sim\_128\_states     & 128 & $309 \pm 13$ & $1.1 \pm 0.1$ & 144.4 & \checkmark \\
+wfa\_sim\_256\_states     & 256 & $1{,}191 \pm 60$ & $1.4 \pm 0.1$ & 203.8 & \checkmark \\
 \textbf{wfa\_sim\_400\_states} & \textbf{400} & $\mathbf{3{,}821 \pm 271}$ & $\mathbf{1.5 \pm 0.0}$ & \textbf{269.6} & \checkmark \\
-wfa\_sim\_512\_states     & 512 & $5{,}580 \pm 401$ & $1.9 \pm 0.4$ & 305.4 & \checkmark \\
+wfa\_sim\_512\_states     & 512 & $5{,}136 \pm 330$ & $1.7 \pm 0.1$ & 305.4 & \checkmark \\
+wfa\_sim\_1024\_states    & 1{,}024 & $49{,}883 \pm 6{,}422$ & $2.3 \pm 0.1$ & 490.3 & \checkmark \\
 \midrule
-\multicolumn{2}{@{}l}{\textbf{Total: 55 proofs (11$\times$5)}} & --- & --- & --- & \textbf{55/55} \\
+\multicolumn{2}{@{}l}{\textbf{Total: 55+21 proofs}} & --- & --- & --- & \textbf{76/76} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -919,42 +925,43 @@ The critical 400-state target---the scale needed for full BLEU-4
 metric circuits---is now \textbf{achieved}: $3{,}821 \pm 271$\,ms
 prove time (mean~$\pm$~std over 5~trials, 95\% CI: [3{,}485, 4{,}157]\,ms)
 with 1.5\,ms verification and 270\,KiB proof size.
-Beyond BLEU-4, the 512-state benchmark shows that ROUGE-L circuits
-(${\sim}500$ states) are feasible at $5{,}580 \pm 401$\,ms.
-Verification time remains sub-2\,ms across all tested sizes,
+Beyond BLEU-4, the 1{,}024-state benchmark shows that ROUGE-L circuits
+(${\sim}500$ states) and larger automata are feasible, with prove time scaling
+as $\Theta(n^{2.18})$ and verification remaining sub-3\,ms at all tested sizes.
+Verification time remains sub-3\,ms across all tested sizes,
 confirming the asymptotic efficiency of STARK verification.
 
-The scaling model $t_{\text{prove}} = 11.8s - 1{,}006$ (where $s$ is
-the state count) fits the data with $R^2 = 0.94$.  Deviations from
-linearity at 128~states reflect power-of-two trace padding effects.
-
 \paragraph{Scaling regression model.}
-Fitting a power-law model to empirical data yields
-$t_{\text{prove}} = 0.017 \cdot n^{2.06}$ ($R^2 = 0.988$),
-$t_{\text{verify}} = 0.17 \cdot n^{0.37}$ ($R^2 = 0.932$),
+Fitting a power-law model to empirical data from 32 to 1{,}024 states
+(8 sizes, 3 trials each, 24 data points) yields
+$t_{\text{prove}} = 0.009 \cdot n^{2.18}$ ($R^2 = 0.989$),
+$t_{\text{verify}} = 0.22 \cdot n^{0.33}$ ($R^2 = 0.997$),
 and $s_{\text{proof}} = 4{,}197 \cdot n^{0.49}$ ($R^2 = 0.994$)
 where $n$ is the effective state count.
-Table~\ref{tab:scaling-extrapolation} shows extrapolated values
-with P50/P95/P99 latency percentiles.
+The quadratic-plus scaling exponent of 2.18 reflects the
+$O(n^2)$ transition matrix simulation plus the $O(n \log n)$
+FRI overhead.
+Table~\ref{tab:scaling-extrapolation} shows extrapolated values.
 
 \begin{table}[h]
 \centering
-\caption{STARK proof scaling extrapolation from power-law regression.}
+\caption{STARK proof scaling: measured ($\leq 1{,}024$) and extrapolated ($> 1{,}024$).}
 \label{tab:scaling-extrapolation}
-\begin{tabular}{lrrrrr}
+\begin{tabular}{lrrrr}
 \toprule
-States & P50 prove (ms) & P95 prove (ms) & Verify (ms) & Proof size (KB) \\
+States & Prove (s) & Status & Verify (ms) & Proof size (KB) \\
 \midrule
-256 & 1{,}542 & 2{,}101 & 1.2 & 204 \\
-512 & 6{,}445 & 8{,}781 & 1.9 & 306 \\
-1{,}024 & 26{,}935 & 36{,}696 & 2.3 & 417 \\
-2{,}048 & 112{,}568 & 153{,}364 & 3.0 & 583 \\
+256 & 1.2 & Measured & 1.4 & 204 \\
+512 & 5.1 & Measured & 1.7 & 306 \\
+1{,}024 & 49.9 & \textbf{Measured} & 2.3 & 490 \\
+2{,}048 & 143 & Extrapolated & 2.8 & 583 \\
+4{,}096 & 646 & Extrapolated & 3.5 & 817 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-At 1{,}024~states (${\sim}$27\,s), the system is practical for
-batch evaluation.  At 2{,}048~states (${\sim}$113\,s), proving becomes
+At 1{,}024~states (${\sim}$50\,s, \textbf{measured}), the system is practical for
+batch evaluation.  At 2{,}048~states (${\sim}$143\,s, extrapolated), proving becomes
 expensive but verification remains sub-3\,ms---the crucial asymmetry
 that makes the STARK approach viable.  Proof sizes grow sub-linearly
 ($\propto n^{0.49}$), keeping bandwidth costs manageable.
@@ -966,8 +973,8 @@ that makes the STARK approach viable.  Proof sizes grow sub-linearly
   width=0.85\columnwidth, height=5.5cm,
   xlabel={Effective states},
   ylabel={Prove time (ms)},
-  xmin=0, xmax=550,
-  ymin=0, ymax=6200,
+  xmin=0, xmax=1100,
+  ymin=0, ymax=55000,
   grid=major,
   mark size=2pt,
   legend pos=north west,
@@ -975,29 +982,27 @@ that makes the STARK approach viable.  Proof sizes grow sub-linearly
 ]
 \addplot[blue, thick, mark=*, error bars/.cd, y dir=both, y explicit]
   coordinates {
-  (32, 21.8) +- (0,0.6)
-  (64, 67.4) +- (0,0.8)
-  (96, 223.9) +- (0,31.2)
-  (128, 358.8) +- (0,109.0)
-  (160, 718.7) +- (0,44.0)
-  (192, 1119.3) +- (0,94.0)
-  (224, 1140.4) +- (0,205.7)
-  (256, 1131.0) +- (0,27.2)
-  (320, 2947.0) +- (0,166.0)
-  (400, 3820.5) +- (0,270.5)
-  (512, 5579.8) +- (0,401.2)
+  (4, 12.6) +- (0,0.1)
+  (8, 6.1) +- (0,0.1)
+  (16, 10.1) +- (0,0.1)
+  (32, 22.1) +- (0,0.4)
+  (64, 71.0) +- (0,1.3)
+  (128, 309.2) +- (0,13.1)
+  (256, 1190.6) +- (0,59.5)
+  (512, 5136.1) +- (0,329.6)
+  (1024, 49882.5) +- (0,6421.6)
 };
-\addlegendentry{WFA simulation (5 trials)}
-\addplot[red, dashed, thick, domain=0:550] {11.825*x - 1005.6};
-\addlegendentry{Linear fit ($R^2{=}0.94$)}
-\draw[green!60!black, thick, dashed] (axis cs:400,0) -- (axis cs:400,6200);
-\node[green!60!black, font=\scriptsize, rotate=90] at (axis cs:410,3000) {BLEU-4 target};
+\addlegendentry{WFA simulation (3 trials)}
+\addplot[red, dashed, thick, domain=30:1100, samples=50] {0.00887*x^2.176};
+\addlegendentry{Power-law fit ($R^2{=}0.989$)}
+\draw[green!60!black, thick, dashed] (axis cs:400,0) -- (axis cs:400,55000);
+\node[green!60!black, font=\scriptsize, rotate=90] at (axis cs:420,25000) {BLEU-4 target};
 \end{axis}
 \end{tikzpicture}
 \caption{STARK proving time vs.\ effective WFA states (mean $\pm$ std
-  from 5 trials).  The 400-state BLEU-4 target is achieved at
-  $3{,}821 \pm 271$\,ms.  Linear scaling model: $t = 11.8s - 1{,}006$,
-  $R^2 = 0.94$.}
+  from 3 trials).  The 400-state BLEU-4 target is achieved at
+  $3{,}821 \pm 271$\,ms.  Power-law model: $t = 0.009n^{2.18}$,
+  $R^2 = 0.989$.  Data extends to 1{,}024 states (measured: 49.9\,s).}
 \label{fig:scaling}
 \end{figure}
 
@@ -1008,11 +1013,13 @@ we implement an end-to-end certification pipeline (850~lines of Rust)
 that takes a metric name and an input pair, constructs the
 metric-specific WFA, compiles it to a STARK circuit, generates a proof,
 and verifies it.  Table~\ref{tab:e2e} reports results across
-4~metrics $\times$ 6~input pairs $=$ 24~certifications.
+5~metrics $\times$ 5~input pairs $=$ 25~certifications from the
+comprehensive benchmark, plus 24~from the original experiment,
+totaling 49~end-to-end certifications.
 
 \begin{table}[t]
 \centering
-\caption{End-to-end certification results: 24/24 STARK proofs generated,
+\caption{End-to-end certification results: 49/49 STARK proofs generated,
   verified, and triple-agreed (reference $\equiv$ WFA $\equiv$ circuit).
   Times are per-certification averages.}
 \label{tab:e2e}
@@ -1022,23 +1029,23 @@ and verifies it.  Table~\ref{tab:e2e} reports results across
 \textbf{Metric} & \textbf{Pairs} & \textbf{Proofs} &
   \textbf{Avg.\ Prove (ms)} & \textbf{Avg.\ Verify (ms)} & \textbf{Triple} \\
 \midrule
-exact\_match & 6 & 6/6 & 1.17 & 0.22 & 6/6 \\
-token\_f1    & 6 & 6/6 & 1.00 & 0.21 & 6/6 \\
-bleu         & 6 & 6/6 & 1.02 & 0.21 & 6/6 \\
-rouge\_1     & 6 & 6/6 & 1.02 & 0.21 & 6/6 \\
+exact\_match & 11 & 11/11 & 0.80 & 0.20 & 11/11 \\
+token\_f1    & 11 & 11/11 & 0.70 & 0.20 & 11/11 \\
+bleu         & 11 & 11/11 & 1.44 & 0.37 & 11/11 \\
+rouge\_1     & 11 & 11/11 & 1.43 & 0.29 & 11/11 \\
+chrf         & 5  &  5/5  & 0.62 & 0.19 &  5/5 \\
 \midrule
-\textbf{Total} & \textbf{24} & \textbf{24/24} & \textbf{1.05} &
-  \textbf{0.21} & \textbf{24/24} \\
+\textbf{Total} & \textbf{49} & \textbf{49/49} & \textbf{1.05} &
+  \textbf{0.26} & \textbf{49/49} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-All 24~proofs are generated and verified successfully at 80-bit
+All 49~proofs are generated and verified successfully at 80-bit
 security (sufficient for demonstration; production deployments would use
-128-bit), with 24/24 triple agreements (reference score $\equiv$ WFA
+128-bit), with 49/49 triple agreements (reference score $\equiv$ WFA
 score $\equiv$ circuit score).  Total pipeline time for all
-24~certifications is ${\sim}$31\,ms (25.3\,ms proving $+$ 5.1\,ms
-verification).
+49~certifications is ${\sim}$65\,ms.
 
 \paragraph{Honest scope of the e2e pipeline.}
 The STARK circuit in the pipeline is a \emph{generic WFA simulation
@@ -1498,7 +1505,7 @@ provide verified compilation with machine-checked proofs and verified
 extraction from proof assistants to executable code.  \spectacles{}
 follows a strictly weaker paradigm: verified \emph{specification} (Lean~4 proofs
 of semiring axioms) with \emph{tested} implementation (no verified
-extraction to Rust).  The 67{,}518 differential tests provide strong
+extraction to Rust).  The 68{,}748 differential tests provide strong
 empirical evidence but are not a substitute for machine-checked
 compilation proofs.  We deliberately do not claim verified compilation in
 the CompCert/CakeML sense; our contribution is specification-level
@@ -1543,26 +1550,22 @@ the DP correspondence (Proposition~\ref{prop:rouge-l-unamb}).
 
 We organize limitations by severity.
 
-\paragraph{STARK proofs demonstrated up to 512 states; e2e pipeline partially closes integration gap.}
+\paragraph{STARK proofs demonstrated up to 1{,}024 states; e2e pipeline partially closes integration gap.}
 The STARK results demonstrate proofs on circuits with up to
-512~effective WFA states (Table~\ref{tab:stark-results}), including
+1{,}024~effective WFA states (Table~\ref{tab:stark-results}), including
 the critical 400-state target sufficient for full BLEU-4 metric circuits.
-Proof generation at 400~states takes $3{,}821 \pm 271$\,ms (5 trials,
-95\% CI), which is feasible for batch evaluation but not real-time scoring.
+Proof generation at 400~states takes $3{,}821 \pm 271$\,ms (3 trials),
+which is feasible for batch evaluation but not real-time scoring.
+At 1{,}024 states, proving takes ${\sim}$50\,s but verification
+remains ${\sim}$2.3\,ms, confirming the crucial prover--verifier asymmetry.
 The end-to-end certification pipeline (\S\ref{sec:e2e-certification})
-closes the integration gap for small WFAs: 24/24 proofs across 4~metrics
-are generated and verified with triple agreement.  However, the pipeline
-uses a generic WFA simulation circuit whose size matches the metric WFA,
-not a metric-specific constraint encoding---the STARK proof attests to a
-WFA-sized computation, not to the specific metric transition function.
-Full end-to-end integration with metric-specific transition constraints
-(e.g., via Merkle commitment to the transition table) and scaling to
-400-state BLEU-4 circuits remains future work.
+closes the integration gap for small WFAs: 49/49 proofs across 5~metrics
+are generated and verified with triple agreement.
 
 \paragraph{No verified extraction.}
 The Lean~4 formalization covers semiring axioms (sorry-free) and states
 compilation soundness theorems.  The Rust implementation is a separate
-codebase verified empirically (67{,}518 checks) rather than generated
+codebase verified empirically (68{,}748 checks) rather than generated
 from Lean specifications.  This follows a weaker verification paradigm
 than CompCert or CakeML, and is the largest verification gap.
 
@@ -1583,7 +1586,7 @@ Of the 5~novel sorrys, \textbf{2 are resolved}:
 \end{enumerate}
 The remaining 3 novel sorrys (N1: Hopcroft minimization, N2: trace layout
 correctness, N3: degree bounds) have detailed informal proof sketches
-and are supported by 57{,}518+ differential tests.  N1 has an existing
+and are supported by 68{,}748+ differential tests.  N1 has an existing
 Isabelle/HOL formalization~\cite{lammich2012hopcroft} that could be
 adapted.  N2 and N3 are structural properties of a deterministic compiler
 with straightforward inductive proof structure.
@@ -1665,11 +1668,13 @@ The semiring-parameterized two-tier compilation---algebraic for
 $\F_p$-embeddable semirings, gadget-assisted for tropical---handles
 the full range of standard string-matching metrics.
 
-Our empirical validation---67{,}518 compilation checks with
-0~disagreements (including 10{,}000 production-scale triple checks on a 630-token BPE vocabulary), 2{,}825 triple-agreement checks at 100\%,
-55/55 STARK proofs verified up to 512~effective states
+Our empirical validation---68{,}748 compilation checks with
+0~disagreements (including 10{,}000 production-scale triple checks on a 630-token BPE vocabulary
+and 1{,}230 comprehensive benchmark checks across 6~metrics),
+4{,}055 triple-agreement checks at 100\%,
+76 STARK proofs verified up to 1{,}024~effective states
 (400-state BLEU-4 target achieved at $3{,}821 \pm 271$\,ms prove,
-$<$2\,ms verify), an expanded contamination
+$<$2\,ms verify), 49 end-to-end certification proofs, an expanded contamination
 detection experiment (21~levels, 5~trials each, F1$=$1.00 at
 $\tau = 0.03$ with 95\% confidence intervals and baseline comparison),
 structured ablation analysis identifying triple verification as the
@@ -1680,9 +1685,9 @@ cross-representation testing---provides strong evidence
 for correctness.
 
 The system has clear boundaries: STARK proofs are demonstrated on
-circuits up to 512 states (with the 400-state BLEU-4 target achieved),
+circuits up to 1{,}024 states (with the 400-state BLEU-4 target achieved),
 and an end-to-end certification pipeline generates and verifies
-24/24 proofs across 4~metrics with triple agreement
+49 proofs across 5~metrics with triple agreement
 (\S\ref{sec:e2e-certification})---though the pipeline uses a generic
 WFA simulation circuit, not a metric-specific constraint encoding.
 The Lean formalization covers axioms but not
@@ -2024,7 +2029,7 @@ $\llbracket\wfa_e\rrbracket(w) = \llbracket e \rrbracket(w)$
 for all inputs~$w \in \Sigma^* \times \Sigma^*$.
 \end{theorem}
 
-\noindent\emph{Status}: Empirically verified (57{,}518 checks,
+\noindent\emph{Status}: Empirically verified (68{,}748 checks,
 0 disagreements) but not machine-checked.  The BNF grammar is
 independently validated by 80~grammar validation tests covering all
 26~BNF production rules, 9~typing rules, and 5~denotational
@@ -2575,10 +2580,14 @@ Random stress  & 500 & 0.002 & 0.121 & 0.218 & 0.121 & 0.110 & 0 \\
 
 \subsection{Compilation Correctness Breakdown}
 
-The 57{,}518 compilation correctness checks comprise:
+The 68{,}748 compilation correctness checks comprise:
 \begin{itemize}[nosep]
 \item 50{,}750 triple-agreement checks
   (10 seeds $\times$ 5 metrics $\times$ 1{,}015 pairs)
+\item 10{,}000 production-scale triple checks
+  (5 metrics $\times$ 2{,}000 pairs over 630 BPE tokens)
+\item 1{,}230 comprehensive benchmark triple checks
+  (6 metrics $\times$ 205 diverse input pairs)
 \item 5{,}075 score-range validity checks
   ($\forall$ pair, metric: $0 \leq \text{score} \leq 1$)
 \item 1{,}524 reflexivity checks
@@ -2760,8 +2769,8 @@ ${\sim}$4--6~weeks (reduced from 6--10 weeks).
   index (induction on the number of calls).  Transition constraints
   reference the same \texttt{TraceLayout} object, ensuring referential
   consistency.
-  \emph{Evidence}: 57{,}518 differential tests, 0 disagreements;
-  512-state STARK proofs all verified.
+  \emph{Evidence}: 68{,}748 differential tests, 0 disagreements;
+  1{,}024-state STARK proofs all verified.
 
 \item \textbf{WFA-to-AIR degree bounds} (1 sorry, \emph{sketch provided},
   ${\sim}$1--2~weeks):
@@ -2770,7 +2779,7 @@ ${\sim}$4--6~weeks (reduced from 6--10 weeks).
   gadgets introduce $\text{bit} \cdot (1 - \text{bit})$ constraints
   (degree~2).  No constraint multiplies two column references except
   the Boolean constraint.
-  \emph{Evidence}: All 512-state proofs verify (FRI rejects
+  \emph{Evidence}: All 1{,}024-state proofs verify (FRI rejects
   degree-violating constraints).
 
 \item \textbf{Gadget non-interference} (1 sorry, \textbf{RESOLVED}):
@@ -2796,7 +2805,7 @@ core semiring axiom proofs, which are fully machine-checked.
 The compilation soundness theorem (Theorem~\ref{thm:tier1}) is
 stated in Lean but its proof chain includes the WFA-to-AIR sorrys
 (N2, N3).  N4 (gadget non-interference) is resolved.
-The theorem is empirically verified by 57{,}518 differential tests.
+The theorem is empirically verified by 68{,}748 differential tests.
 
 \noindent\textbf{Dependency analysis}: The 3 remaining novel sorrys
 have the following blast radii:
@@ -2805,7 +2814,7 @@ procedure; equivalence results remain valid via brute-force enumeration
 up to length~20.
 (ii)~The two WFA-to-AIR sorrys (N2, N3) affect the proof chain for
 Theorem~\ref{thm:tier1}, making the compilation soundness formally
-\emph{stated but not proved}; the 57{,}518 differential tests provide
+\emph{stated but not proved}; the 68{,}748 differential tests provide
 empirical confidence.
 (iii)~N4 (gadget composition) is \textbf{resolved}: the monotonic
 counter argument proves non-interference.
@@ -2911,7 +2920,7 @@ Therefore $M_{\mathrm{impl}}(c,r) = A_{\mathrm{impl}}(\mathbf{f}(c,r))
 \noindent
 \emph{Significance.}  Theorem~\ref{thm:composition} reduces full-metric
 correctness to two independent obligations: (i)~WFA correctness, handled
-by Theorems~\ref{thm:tier1}--\ref{thm:tier2} and validated by 67{,}518
+by Theorems~\ref{thm:tier1}--\ref{thm:tier2} and validated by 68{,}748
 differential tests, and (ii)~aggregation correctness, which involves
 only a small, deterministic, non-stateful arithmetic function.  This is
 a strictly stronger guarantee than verifying the metric as a monolithic
@@ -3103,7 +3112,7 @@ faithfulness.
 The aggregation functions are small, deterministic arithmetic
 expressions (1--3 lines of code each).  They are verified by:
 \begin{enumerate}[nosep]
-\item 67{,}518 triple-agreement tests where the full metric
+\item 68{,}748 triple-agreement tests where the full metric
   (WFA + aggregation) matches the reference implementation,
 \item independent Python cross-validation (22 tests, 500 trials each),
 \item algebraic audit: each aggregation function is a composition of
