@@ -122,7 +122,7 @@
 ; ── UNSAT Proof Certificate ──
 ; Status: UNSAT — forbidden outcome UNREACHABLE under PTX-CTA
 ; Unsat core size: 5 assertions (out of 37)
-; Core assertions: track_22, track_26, track_34, track_24, track_forbidden
+; Core assertions: track_24, track_34, track_forbidden, track_22, track_26
 (get-unsat-core)
 
 (exit)

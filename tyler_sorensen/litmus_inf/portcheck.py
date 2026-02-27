@@ -1677,6 +1677,733 @@ PATTERNS = {
         addrs=['x', 'y'],
         forbidden={'r0': 1, 'r1': 0},
         desc='MP+addr+fence: MP with fences replacing addr dependency'),
+
+    # ══════════════════════════════════════════════════════════════════
+    # Extended pattern library: RMW, lock-free, release-acquire,
+    # N-thread, multi-copy atomicity, dependency chains
+    # ══════════════════════════════════════════════════════════════════
+
+    # ── RMW (Read-Modify-Write) patterns ──
+
+    'rmw_cas_mp': _mk(
+        # CAS-based message passing: T0 stores data, does CAS on flag
+        # T1 does CAS on flag, reads data
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'load', 'y', reg='r2'),  # CAS read
+        MemOp(0, 'store', 'y', 1),         # CAS write (atomic)
+        MemOp(1, 'load', 'y', reg='r0'),   # CAS read
+        MemOp(1, 'store', 'y', 2),         # CAS write
+        MemOp(1, 'load', 'x', reg='r1'),
+        forbidden={'r0': 1, 'r1': 0},
+        desc='RMW CAS-based message passing'),
+
+    'rmw_cas_mp_fence': _mk(
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'fence', '', scope=None),
+        MemOp(0, 'load', 'y', reg='r2'),
+        MemOp(0, 'store', 'y', 1),
+        MemOp(1, 'load', 'y', reg='r0'),
+        MemOp(1, 'store', 'y', 2),
+        MemOp(1, 'fence', '', scope=None),
+        MemOp(1, 'load', 'x', reg='r1'),
+        forbidden={'r0': 1, 'r1': 0},
+        desc='RMW CAS-based MP with fences'),
+
+    'rmw_fetch_add': _mk(
+        # Fetch-and-add pattern: two threads increment same counter
+        MemOp(0, 'load', 'x', reg='r0'),
+        MemOp(0, 'store', 'x', 1),  # atomic increment
+        MemOp(0, 'store', 'y', 1),
+        MemOp(1, 'load', 'x', reg='r1'),
+        MemOp(1, 'store', 'x', 2),
+        MemOp(1, 'load', 'y', reg='r2'),
+        forbidden={'r1': 1, 'r2': 0},
+        desc='RMW fetch-and-add with flag communication'),
+
+    'rmw_exchange': _mk(
+        # Exchange-based synchronization
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'load', 'y', reg='r0'),
+        MemOp(0, 'store', 'y', 1),  # exchange
+        MemOp(1, 'store', 'y', 2),
+        MemOp(1, 'load', 'y', reg='r1'),
+        MemOp(1, 'load', 'x', reg='r2'),
+        forbidden={'r0': 0, 'r2': 0},
+        desc='RMW exchange-based synchronization'),
+
+    'rmw_cmpxchg_loop': _mk(
+        # CAS loop: retry pattern with load-check-store
+        MemOp(0, 'load', 'x', reg='r0'),
+        MemOp(0, 'store', 'x', 1),  # CAS success
+        MemOp(0, 'store', 'y', 1),  # publish
+        MemOp(1, 'load', 'y', reg='r1'),
+        MemOp(1, 'load', 'x', reg='r2'),
+        forbidden={'r1': 1, 'r2': 0},
+        desc='CAS loop with publish (MP via atomic)'),
+
+    # ── Lock-free data structure patterns ──
+
+    'lockfree_spsc_queue': _mk(
+        # Single-producer single-consumer queue: write data, update tail
+        MemOp(0, 'store', 'x', 1),   # write buffer[tail]
+        MemOp(0, 'store', 'y', 1),   # tail++
+        MemOp(1, 'load', 'y', reg='r0'),  # read tail
+        MemOp(1, 'load', 'x', reg='r1'),  # read buffer[tail-1]
+        forbidden={'r0': 1, 'r1': 0},
+        desc='Lock-free SPSC queue: MP pattern'),
+
+    'lockfree_mpsc_publish': _mk(
+        # Multi-producer publish: two producers write, one consumer reads
+        MemOp(0, 'store', 'x', 1),   # producer 0 data
+        MemOp(0, 'store', 'z', 1),   # producer 0 flag
+        MemOp(1, 'store', 'y', 1),   # producer 1 data
+        MemOp(1, 'store', 'z', 2),   # producer 1 flag
+        MemOp(2, 'load', 'z', reg='r0'),  # consumer reads flag
+        MemOp(2, 'load', 'x', reg='r1'),  # consumer reads data
+        MemOp(2, 'load', 'y', reg='r2'),
+        forbidden={'r0': 2, 'r1': 0},
+        desc='Lock-free MPSC: multi-producer publish'),
+
+    'lockfree_stack_push': _mk(
+        # Lock-free stack push: write node, CAS head
+        MemOp(0, 'store', 'x', 1),  # node.data = val
+        MemOp(0, 'load', 'y', reg='r0'),  # old_head = head
+        MemOp(0, 'store', 'y', 1),  # CAS(head, old_head, node)
+        MemOp(1, 'load', 'y', reg='r1'),  # read head
+        MemOp(1, 'load', 'x', reg='r2'),  # read node.data
+        forbidden={'r1': 1, 'r2': 0},
+        desc='Lock-free stack push: write-then-CAS'),
+
+    'lockfree_stack_pop': _mk(
+        # Lock-free stack pop: read head, read data, CAS head
+        MemOp(0, 'load', 'y', reg='r0'),  # old_head = head
+        MemOp(0, 'load', 'x', reg='r1'),  # data = old_head->data
+        MemOp(0, 'store', 'y', 1),  # CAS(head, old_head, old_head->next)
+        MemOp(1, 'store', 'x', 2),  # another thread writes data
+        MemOp(1, 'store', 'y', 2),  # another thread pushes
+        forbidden={'r0': 0, 'r1': 2},
+        desc='Lock-free stack pop: read-then-CAS'),
+
+    # ── Release-acquire patterns ──
+
+    'rel_acq_mp': _mk(
+        # Release-acquire MP: release store, acquire load
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'store', 'y', 1),  # release store
+        MemOp(1, 'load', 'y', reg='r0'),  # acquire load
+        MemOp(1, 'load', 'x', reg='r1'),
+        forbidden={'r0': 1, 'r1': 0},
+        desc='Release-acquire MP (same as MP base pattern)'),
+
+    'rel_acq_sb': _mk(
+        # Release-acquire SB: both threads use rel-acq
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'load', 'y', reg='r0'),
+        MemOp(1, 'store', 'y', 1),
+        MemOp(1, 'load', 'x', reg='r1'),
+        forbidden={'r0': 0, 'r1': 0},
+        desc='Release-acquire SB (SB with rel-acq semantics)'),
+
+    'rel_acq_chain': _mk(
+        # Release-acquire chain: T0 → T1 → T2
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'store', 'y', 1),  # release
+        MemOp(1, 'load', 'y', reg='r0'),  # acquire
+        MemOp(1, 'store', 'z', 1),  # release
+        MemOp(2, 'load', 'z', reg='r1'),  # acquire
+        MemOp(2, 'load', 'x', reg='r2'),
+        forbidden={'r0': 1, 'r1': 1, 'r2': 0},
+        desc='Release-acquire chain (3 threads, transitive)'),
+
+    'rel_acq_chain_fence': _mk(
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'fence', '', scope=None),
+        MemOp(0, 'store', 'y', 1),
+        MemOp(1, 'load', 'y', reg='r0'),
+        MemOp(1, 'fence', '', scope=None),
+        MemOp(1, 'store', 'z', 1),
+        MemOp(2, 'load', 'z', reg='r1'),
+        MemOp(2, 'fence', '', scope=None),
+        MemOp(2, 'load', 'x', reg='r2'),
+        forbidden={'r0': 1, 'r1': 1, 'r2': 0},
+        desc='Release-acquire chain with fences'),
+
+    'seq_cst_total_order': _mk(
+        # SC total order test: 4 threads all with seq_cst
+        MemOp(0, 'store', 'x', 1),
+        MemOp(1, 'store', 'y', 1),
+        MemOp(2, 'load', 'x', reg='r0'), MemOp(2, 'load', 'y', reg='r1'),
+        MemOp(3, 'load', 'y', reg='r2'), MemOp(3, 'load', 'x', reg='r3'),
+        forbidden={'r0': 1, 'r1': 0, 'r2': 1, 'r3': 0},
+        desc='SC total order test (IRIW variant, seq_cst)'),
+
+    # ── N-thread generalizations ──
+
+    'mp_4thread': _mk(
+        # 4-thread MP: writer, two relays, reader
+        MemOp(0, 'store', 'x', 1),
+        MemOp(1, 'store', 'y', 1),
+        MemOp(2, 'load', 'y', reg='r0'), MemOp(2, 'store', 'z', 1),
+        MemOp(3, 'load', 'z', reg='r1'), MemOp(3, 'load', 'x', reg='r2'),
+        forbidden={'r0': 1, 'r1': 1, 'r2': 0},
+        desc='4-thread MP relay chain'),
+
+    'mp_4thread_fence': _mk(
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'fence', '', scope=None),
+        MemOp(1, 'store', 'y', 1),
+        MemOp(2, 'load', 'y', reg='r0'),
+        MemOp(2, 'fence', '', scope=None),
+        MemOp(2, 'store', 'z', 1),
+        MemOp(3, 'load', 'z', reg='r1'),
+        MemOp(3, 'fence', '', scope=None),
+        MemOp(3, 'load', 'x', reg='r2'),
+        forbidden={'r0': 1, 'r1': 1, 'r2': 0},
+        desc='4-thread MP relay chain with fences'),
+
+    'sb_4thread': _mk(
+        # 4-thread SB ring: each thread stores and loads different addresses
+        MemOp(0, 'store', 'x', 1), MemOp(0, 'load', 'y', reg='r0'),
+        MemOp(1, 'store', 'y', 1), MemOp(1, 'load', 'z', reg='r1'),
+        MemOp(2, 'store', 'z', 1), MemOp(2, 'load', 'w', reg='r2'),
+        MemOp(3, 'store', 'w', 1), MemOp(3, 'load', 'x', reg='r3'),
+        forbidden={'r0': 0, 'r1': 0, 'r2': 0, 'r3': 0},
+        desc='4-thread SB ring (same as 3sb)'),
+
+    'lb_3thread': _mk(
+        # 3-thread load buffering ring
+        MemOp(0, 'load', 'x', reg='r0'), MemOp(0, 'store', 'y', 1),
+        MemOp(1, 'load', 'y', reg='r1'), MemOp(1, 'store', 'z', 1),
+        MemOp(2, 'load', 'z', reg='r2'), MemOp(2, 'store', 'x', 1),
+        forbidden={'r0': 1, 'r1': 1, 'r2': 1},
+        desc='3-thread LB ring'),
+
+    'lb_3thread_fence': _mk(
+        MemOp(0, 'load', 'x', reg='r0'),
+        MemOp(0, 'fence', '', scope=None),
+        MemOp(0, 'store', 'y', 1),
+        MemOp(1, 'load', 'y', reg='r1'),
+        MemOp(1, 'fence', '', scope=None),
+        MemOp(1, 'store', 'z', 1),
+        MemOp(2, 'load', 'z', reg='r2'),
+        MemOp(2, 'fence', '', scope=None),
+        MemOp(2, 'store', 'x', 1),
+        forbidden={'r0': 1, 'r1': 1, 'r2': 1},
+        desc='3-thread LB ring with fences'),
+
+    'iriw_5thread': _mk(
+        # 5-thread IRIW: 2 writers, 3 readers
+        MemOp(0, 'store', 'x', 1),
+        MemOp(1, 'store', 'y', 1),
+        MemOp(2, 'load', 'x', reg='r0'), MemOp(2, 'load', 'y', reg='r1'),
+        MemOp(3, 'load', 'y', reg='r2'), MemOp(3, 'load', 'x', reg='r3'),
+        MemOp(4, 'load', 'x', reg='r4'), MemOp(4, 'load', 'y', reg='r5'),
+        forbidden={'r0': 1, 'r1': 0, 'r2': 1, 'r3': 0},
+        desc='5-thread IRIW: 2 writers, 3 observers'),
+
+    # ── Multi-copy atomicity tests ──
+
+    'mca_ww_rr': _mk(
+        # MCA write-write read-read: tests if writes are seen in same order
+        MemOp(0, 'store', 'x', 1), MemOp(0, 'store', 'x', 2),
+        MemOp(1, 'load', 'x', reg='r0'), MemOp(1, 'load', 'x', reg='r1'),
+        addrs=['x'],
+        forbidden={'r0': 2, 'r1': 1},
+        desc='MCA WW-RR: write order coherence (same as CoRR)'),
+
+    'mca_cross_addr': _mk(
+        # MCA across addresses: tests if stores to different addresses are atomic
+        MemOp(0, 'store', 'x', 1), MemOp(0, 'store', 'y', 1),
+        MemOp(1, 'load', 'y', reg='r0'), MemOp(1, 'load', 'x', reg='r1'),
+        MemOp(2, 'load', 'x', reg='r2'), MemOp(2, 'load', 'y', reg='r3'),
+        forbidden={'r0': 1, 'r1': 0, 'r2': 1, 'r3': 0},
+        desc='MCA cross-address: multi-copy atomicity across locations'),
+
+    'mca_store_atom': _mk(
+        # Store atomicity: all threads see stores in same order
+        MemOp(0, 'store', 'x', 1),
+        MemOp(1, 'store', 'x', 2),
+        MemOp(2, 'load', 'x', reg='r0'), MemOp(2, 'load', 'x', reg='r1'),
+        MemOp(3, 'load', 'x', reg='r2'), MemOp(3, 'load', 'x', reg='r3'),
+        addrs=['x'],
+        forbidden={'r0': 1, 'r1': 2, 'r2': 2, 'r3': 1},
+        desc='Store atomicity: all observers see same write order'),
+
+    # ── Dependency chain patterns ──
+
+    'dep_data_addr': _mk(
+        # Data dependency then address dependency
+        MemOp(0, 'store', 'x', 1), MemOp(0, 'store', 'y', 1),
+        MemOp(1, 'load', 'y', reg='r0', dep_on='data'),
+        MemOp(1, 'load', 'x', reg='r1', dep_on='addr'),
+        forbidden={'r0': 1, 'r1': 0},
+        desc='Data→addr dependency chain on consumer'),
+
+    'dep_ctrl_data': _mk(
+        # Control dependency then data dependency
+        MemOp(0, 'store', 'x', 1),
+        MemOp(1, 'load', 'x', reg='r0', dep_on='ctrl'),
+        MemOp(1, 'store', 'y', 1, dep_on='data'),
+        MemOp(2, 'load', 'y', reg='r1'),
+        MemOp(2, 'load', 'x', reg='r2'),
+        forbidden={'r0': 1, 'r1': 1, 'r2': 0},
+        desc='Ctrl→data dependency chain'),
+
+    'dep_addr_data': _mk(
+        # Address dependency then data dependency
+        MemOp(0, 'store', 'x', 1),
+        MemOp(1, 'load', 'x', reg='r0', dep_on='addr'),
+        MemOp(1, 'store', 'y', 1, dep_on='data'),
+        MemOp(2, 'load', 'y', reg='r1'),
+        MemOp(2, 'load', 'x', reg='r2'),
+        forbidden={'r0': 1, 'r1': 1, 'r2': 0},
+        desc='Addr→data dependency chain'),
+
+    'dep_ctrl_store': _mk(
+        # Control dependency to store (ARM preserves ctrl→store)
+        MemOp(0, 'store', 'x', 1), MemOp(0, 'store', 'y', 1),
+        MemOp(1, 'load', 'y', reg='r0'),
+        MemOp(1, 'store', 'x', 2, dep_on='ctrl'),
+        forbidden={'r0': 1},
+        desc='Control dependency to store'),
+
+    'dep_ctrl_load': _mk(
+        # Control dependency to load (NOT preserved by ARM for ordering)
+        MemOp(0, 'store', 'x', 1), MemOp(0, 'store', 'y', 1),
+        MemOp(1, 'load', 'y', reg='r0'),
+        MemOp(1, 'load', 'x', reg='r1', dep_on='ctrl'),
+        forbidden={'r0': 1, 'r1': 0},
+        desc='Control dependency to load (weak on ARM)'),
+
+    # ── Fence optimization variants ──
+
+    'mp_partial_fence_ww': _mk(
+        # MP with only write-write fence on producer
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'fence', '', scope=None, fence_pred='w', fence_succ='w'),
+        MemOp(0, 'store', 'y', 1),
+        MemOp(1, 'load', 'y', reg='r0'),
+        MemOp(1, 'load', 'x', reg='r1'),
+        addrs=['x', 'y'],
+        forbidden={'r0': 1, 'r1': 0},
+        desc='MP with W→W partial fence on producer only'),
+
+    'mp_partial_fence_rr': _mk(
+        # MP with only read-read fence on consumer
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'store', 'y', 1),
+        MemOp(1, 'load', 'y', reg='r0'),
+        MemOp(1, 'fence', '', scope=None, fence_pred='r', fence_succ='r'),
+        MemOp(1, 'load', 'x', reg='r1'),
+        addrs=['x', 'y'],
+        forbidden={'r0': 1, 'r1': 0},
+        desc='MP with R→R partial fence on consumer only'),
+
+    'mp_minimal_fence_pair': _mk(
+        # MP with minimal fence pair: W→W on producer + R→R on consumer
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'fence', '', scope=None, fence_pred='w', fence_succ='w'),
+        MemOp(0, 'store', 'y', 1),
+        MemOp(1, 'load', 'y', reg='r0'),
+        MemOp(1, 'fence', '', scope=None, fence_pred='r', fence_succ='r'),
+        MemOp(1, 'load', 'x', reg='r1'),
+        addrs=['x', 'y'],
+        forbidden={'r0': 1, 'r1': 0},
+        desc='MP with minimal W→W + R→R fence pair'),
+
+    'sb_partial_fence_wr': _mk(
+        # SB with only store-load fence on one thread
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'fence', '', scope=None, fence_pred='w', fence_succ='r'),
+        MemOp(0, 'load', 'y', reg='r0'),
+        MemOp(1, 'store', 'y', 1),
+        MemOp(1, 'load', 'x', reg='r1'),
+        addrs=['x', 'y'],
+        forbidden={'r0': 0, 'r1': 0},
+        desc='SB with W→R partial fence on T0 only'),
+
+    # ── Seqlock pattern ──
+
+    'seqlock_read': _mk(
+        # Seqlock read-side: load seq, load data, load seq again
+        MemOp(0, 'store', 'x', 1),   # data write
+        MemOp(0, 'store', 'y', 2),   # seq++ (even)
+        MemOp(1, 'load', 'y', reg='r0'),  # seq1
+        MemOp(1, 'load', 'x', reg='r1'),  # data
+        MemOp(1, 'load', 'y', reg='r2'),  # seq2
+        forbidden={'r0': 2, 'r1': 0},
+        desc='Seqlock read-side: seq-data-seq ordering'),
+
+    'seqlock_write': _mk(
+        MemOp(0, 'store', 'y', 1),  # seq++ (odd, lock)
+        MemOp(0, 'store', 'x', 1),  # data write
+        MemOp(0, 'store', 'y', 2),  # seq++ (even, unlock)
+        MemOp(1, 'load', 'y', reg='r0'),  # seq
+        MemOp(1, 'load', 'x', reg='r1'),  # data
+        forbidden={'r0': 2, 'r1': 0},
+        desc='Seqlock write-side: lock-data-unlock ordering'),
+
+    # ── Ticket lock pattern ──
+
+    'ticket_lock': _mk(
+        # Ticket lock: fetch-add on ticket, spin on now_serving
+        MemOp(0, 'load', 'y', reg='r0'),  # fetch ticket
+        MemOp(0, 'store', 'y', 1),  # increment ticket
+        MemOp(0, 'load', 'z', reg='r1'),  # wait for now_serving
+        MemOp(0, 'store', 'x', 1),  # critical section
+        MemOp(1, 'load', 'x', reg='r2'),
+        MemOp(1, 'store', 'z', 1),  # now_serving++
+        forbidden={'r2': 1, 'r1': 0},
+        desc='Ticket lock: acquire-CS-release pattern'),
+
+    # ── Double-checked locking ──
+
+    'dcl_init': _mk(
+        # Double-checked locking initialization
+        MemOp(0, 'load', 'y', reg='r0'),   # flag check
+        MemOp(0, 'store', 'x', 1),         # init data
+        MemOp(0, 'store', 'y', 1),         # set flag
+        MemOp(1, 'load', 'y', reg='r1'),   # flag check
+        MemOp(1, 'load', 'x', reg='r2'),   # use data
+        forbidden={'r1': 1, 'r2': 0},
+        desc='Double-checked locking: init + flag'),
+
+    'dcl_init_fence': _mk(
+        MemOp(0, 'load', 'y', reg='r0'),
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'fence', '', scope=None),
+        MemOp(0, 'store', 'y', 1),
+        MemOp(1, 'load', 'y', reg='r1'),
+        MemOp(1, 'fence', '', scope=None),
+        MemOp(1, 'load', 'x', reg='r2'),
+        forbidden={'r1': 1, 'r2': 0},
+        desc='Double-checked locking with fences'),
+
+    # ── RCU (Read-Copy-Update) patterns ──
+
+    'rcu_publish': _mk(
+        # RCU publish: write new data, then update pointer
+        MemOp(0, 'store', 'x', 1),  # new data
+        MemOp(0, 'store', 'y', 1),  # rcu_assign_pointer
+        MemOp(1, 'load', 'y', reg='r0'),  # rcu_dereference
+        MemOp(1, 'load', 'x', reg='r1'),  # read data via pointer
+        forbidden={'r0': 1, 'r1': 0},
+        desc='RCU publish: write data, update pointer'),
+
+    'rcu_publish_fence': _mk(
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'fence', '', scope=None),
+        MemOp(0, 'store', 'y', 1),
+        MemOp(1, 'load', 'y', reg='r0'),
+        MemOp(1, 'fence', '', scope=None),
+        MemOp(1, 'load', 'x', reg='r1'),
+        forbidden={'r0': 1, 'r1': 0},
+        desc='RCU publish with smp_wmb/smp_rmb fences'),
+
+    # ── Spinlock patterns ──
+
+    'spinlock_acq_rel': _mk(
+        # Spinlock acquire-release
+        MemOp(0, 'load', 'y', reg='r0'),  # try_lock: load lock
+        MemOp(0, 'store', 'y', 1),  # lock acquired
+        MemOp(0, 'store', 'x', 1),  # critical section write
+        MemOp(0, 'store', 'y', 0),  # unlock
+        MemOp(1, 'load', 'y', reg='r1'),  # try_lock
+        MemOp(1, 'store', 'y', 1),
+        MemOp(1, 'load', 'x', reg='r2'),
+        addrs=['x', 'y'],
+        forbidden={'r1': 0, 'r2': 0},
+        desc='Spinlock acquire-release with critical section'),
+
+    # ── Hazard pointer pattern ──
+
+    'hazard_ptr': _mk(
+        # Hazard pointer: publish pointer, check hazard list
+        MemOp(0, 'store', 'x', 1),  # publish hazard pointer
+        MemOp(0, 'load', 'y', reg='r0'),  # read shared object
+        MemOp(1, 'store', 'y', 1),  # retire object
+        MemOp(1, 'load', 'x', reg='r1'),  # scan hazard pointers
+        forbidden={'r0': 0, 'r1': 0},
+        desc='Hazard pointer: publish HP, check before reclaim'),
+
+    'hazard_ptr_fence': _mk(
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'fence', '', scope=None),
+        MemOp(0, 'load', 'y', reg='r0'),
+        MemOp(1, 'store', 'y', 1),
+        MemOp(1, 'fence', '', scope=None),
+        MemOp(1, 'load', 'x', reg='r1'),
+        forbidden={'r0': 0, 'r1': 0},
+        desc='Hazard pointer with fences'),
+
+    # ── Asymmetric fence patterns (ARM/RISC-V specific) ──
+
+    'asym_ww_rw': _mk(
+        # W→W on producer, R→W on consumer (unusual combination)
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'fence', '', scope=None, fence_pred='w', fence_succ='w'),
+        MemOp(0, 'store', 'y', 1),
+        MemOp(1, 'load', 'y', reg='r0'),
+        MemOp(1, 'fence', '', scope=None, fence_pred='r', fence_succ='w'),
+        MemOp(1, 'store', 'x', 2),
+        addrs=['x', 'y'],
+        forbidden={'r0': 1},
+        desc='Asymmetric W→W / R→W fence combination'),
+
+    'asym_rw_wr': _mk(
+        # R→W on T0 (lb-like), W→R on T1
+        MemOp(0, 'load', 'x', reg='r0'),
+        MemOp(0, 'fence', '', scope=None, fence_pred='r', fence_succ='w'),
+        MemOp(0, 'store', 'y', 1),
+        MemOp(1, 'store', 'x', 1),
+        MemOp(1, 'fence', '', scope=None, fence_pred='w', fence_succ='r'),
+        MemOp(1, 'load', 'y', reg='r1'),
+        addrs=['x', 'y'],
+        forbidden={'r0': 1, 'r1': 1},
+        desc='Asymmetric R→W / W→R fence combination'),
+
+    # ── GPU extended patterns ──
+
+    'gpu_mp_3wg': _mk(
+        # 3-workgroup MP chain: WG0 → WG1 → WG2
+        MemOp(0, 'store', 'x', 1, workgroup=0),
+        MemOp(0, 'fence', '', scope='device', workgroup=0),
+        MemOp(0, 'store', 'y', 1, workgroup=0),
+        MemOp(1, 'load', 'y', reg='r0', workgroup=1),
+        MemOp(1, 'fence', '', scope='device', workgroup=1),
+        MemOp(1, 'store', 'z', 1, workgroup=1),
+        MemOp(2, 'load', 'z', reg='r1', workgroup=2),
+        MemOp(2, 'fence', '', scope='device', workgroup=2),
+        MemOp(2, 'load', 'x', reg='r2', workgroup=2),
+        forbidden={'r0': 1, 'r1': 1, 'r2': 0},
+        desc='GPU 3-workgroup MP relay chain (device fences)'),
+
+    'gpu_dcl_dev': _mk(
+        # GPU double-checked locking with device fence
+        MemOp(0, 'store', 'x', 1, workgroup=0),
+        MemOp(0, 'fence', '', scope='device', workgroup=0),
+        MemOp(0, 'store', 'y', 1, workgroup=0),
+        MemOp(1, 'load', 'y', reg='r0', workgroup=1),
+        MemOp(1, 'fence', '', scope='device', workgroup=1),
+        MemOp(1, 'load', 'x', reg='r1', workgroup=1),
+        addrs=['x', 'y'],
+        forbidden={'r0': 1, 'r1': 0},
+        desc='GPU double-checked locking with device fences'),
+
+    'gpu_seqlock_wg': _mk(
+        # GPU seqlock within workgroup
+        MemOp(0, 'store', 'y', 1, workgroup=0),
+        MemOp(0, 'fence', '', scope='workgroup', workgroup=0),
+        MemOp(0, 'store', 'x', 1, workgroup=0),
+        MemOp(0, 'fence', '', scope='workgroup', workgroup=0),
+        MemOp(0, 'store', 'y', 2, workgroup=0),
+        MemOp(1, 'load', 'y', reg='r0', workgroup=0),
+        MemOp(1, 'fence', '', scope='workgroup', workgroup=0),
+        MemOp(1, 'load', 'x', reg='r1', workgroup=0),
+        addrs=['x', 'y'],
+        forbidden={'r0': 2, 'r1': 0},
+        desc='GPU seqlock within workgroup'),
+
+    'gpu_rmw_dev': _mk(
+        # GPU RMW across workgroups with device fence
+        MemOp(0, 'store', 'x', 1, workgroup=0),
+        MemOp(0, 'load', 'y', reg='r0', workgroup=0),
+        MemOp(0, 'store', 'y', 1, workgroup=0),
+        MemOp(1, 'load', 'y', reg='r1', workgroup=1),
+        MemOp(1, 'fence', '', scope='device', workgroup=1),
+        MemOp(1, 'load', 'x', reg='r2', workgroup=1),
+        forbidden={'r1': 1, 'r2': 0},
+        desc='GPU RMW across workgroups'),
+
+    'gpu_lb_xwg': _mk(
+        # GPU load buffering across workgroups (should be unsafe)
+        MemOp(0, 'load', 'x', reg='r0', workgroup=0),
+        MemOp(0, 'store', 'y', 1, workgroup=0),
+        MemOp(1, 'load', 'y', reg='r1', workgroup=1),
+        MemOp(1, 'store', 'x', 1, workgroup=1),
+        forbidden={'r0': 1, 'r1': 1},
+        desc='GPU LB across workgroups (no fence)'),
+
+    'gpu_lb_xwg_dev': _mk(
+        # GPU load buffering across workgroups with device fences
+        MemOp(0, 'load', 'x', reg='r0', workgroup=0),
+        MemOp(0, 'fence', '', scope='device', workgroup=0),
+        MemOp(0, 'store', 'y', 1, workgroup=0),
+        MemOp(1, 'load', 'y', reg='r1', workgroup=1),
+        MemOp(1, 'fence', '', scope='device', workgroup=1),
+        MemOp(1, 'store', 'x', 1, workgroup=1),
+        forbidden={'r0': 1, 'r1': 1},
+        desc='GPU LB across workgroups with device fences'),
+
+    # ── Mixed-size / partial-overlap patterns ──
+
+    'mp_diff_addr': _mk(
+        # MP with 3 different addresses
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'store', 'y', 1),
+        MemOp(0, 'store', 'z', 1),
+        MemOp(1, 'load', 'z', reg='r0'),
+        MemOp(1, 'load', 'y', reg='r1'),
+        MemOp(1, 'load', 'x', reg='r2'),
+        forbidden={'r0': 1, 'r1': 0},
+        desc='MP with 3 addresses: sequential stores vs reads'),
+
+    # ── Store-forwarding patterns ──
+
+    'store_fwd': _mk(
+        # Store forwarding: thread reads its own recent store
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'load', 'x', reg='r0'),
+        MemOp(1, 'store', 'x', 2),
+        MemOp(1, 'load', 'x', reg='r1'),
+        addrs=['x'],
+        forbidden={'r0': 2, 'r1': 1},
+        desc='Store forwarding: each thread reads own write'),
+
+    'store_fwd_cross': _mk(
+        # Cross-thread store forwarding test
+        MemOp(0, 'store', 'x', 1), MemOp(0, 'store', 'y', 1),
+        MemOp(0, 'load', 'x', reg='r0'),
+        MemOp(1, 'load', 'y', reg='r1'), MemOp(1, 'load', 'x', reg='r2'),
+        forbidden={'r0': 1, 'r1': 1, 'r2': 0},
+        desc='Cross-thread store forwarding interaction'),
+
+    # ── Barrier strength comparison patterns ──
+
+    'full_vs_light_barrier': _mk(
+        # Compare full barrier vs lightweight barrier
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'fence', '', scope=None),  # full barrier
+        MemOp(0, 'store', 'y', 1),
+        MemOp(1, 'load', 'y', reg='r0'),
+        MemOp(1, 'fence', '', scope=None, fence_pred='r', fence_succ='r'),
+        MemOp(1, 'load', 'x', reg='r1'),
+        addrs=['x', 'y'],
+        forbidden={'r0': 1, 'r1': 0},
+        desc='Full barrier on producer, light barrier on consumer'),
+
+    # ── Work-stealing patterns ──
+
+    'work_steal': _mk(
+        # Work-stealing deque: push (bottom) and steal (top)
+        MemOp(0, 'store', 'x', 1),  # buffer[b] = task
+        MemOp(0, 'store', 'y', 1),  # bottom++
+        MemOp(1, 'load', 'y', reg='r0'),  # read bottom
+        MemOp(1, 'load', 'z', reg='r1'),  # read top
+        MemOp(1, 'load', 'x', reg='r2'),  # steal: read buffer[t]
+        forbidden={'r0': 1, 'r2': 0},
+        desc='Work-stealing deque: push-steal interaction'),
+
+    # ── Epoch-based reclamation ──
+
+    'epoch_reclaim': _mk(
+        # Epoch-based reclamation: enter epoch, read, exit epoch
+        MemOp(0, 'store', 'y', 1),  # enter epoch
+        MemOp(0, 'load', 'x', reg='r0'),  # read shared data
+        MemOp(0, 'store', 'y', 2),  # exit epoch
+        MemOp(1, 'store', 'x', 2),  # reclaim (write new data)
+        MemOp(1, 'load', 'y', reg='r1'),  # check epoch
+        forbidden={'r0': 2, 'r1': 1},
+        desc='Epoch-based reclamation: epoch enter/exit'),
+
+    # ── Additional coherence-related patterns ──
+
+    'co_mixed': _mk(
+        # Mixed coherence: write from one thread, two reads from another,
+        # third thread writes
+        MemOp(0, 'store', 'x', 1),
+        MemOp(1, 'load', 'x', reg='r0'),
+        MemOp(1, 'load', 'x', reg='r1'),
+        MemOp(2, 'store', 'x', 2),
+        addrs=['x'],
+        forbidden={'r0': 2, 'r1': 1},
+        desc='Mixed coherence: write-read-read with concurrent write'),
+
+    'co_three_writers': _mk(
+        # Three writers to same address
+        MemOp(0, 'store', 'x', 1),
+        MemOp(1, 'store', 'x', 2),
+        MemOp(2, 'store', 'x', 3),
+        MemOp(3, 'load', 'x', reg='r0'),
+        addrs=['x'],
+        forbidden={'r0': 1},
+        desc='Three-writer coherence test'),
+
+    # ── Publication idiom variants ──
+
+    'publish_array': _mk(
+        # Publish: write array elements, then flag
+        MemOp(0, 'store', 'x', 1),  # array[0]
+        MemOp(0, 'store', 'y', 1),  # array[1]
+        MemOp(0, 'store', 'z', 1),  # flag
+        MemOp(1, 'load', 'z', reg='r0'),  # read flag
+        MemOp(1, 'load', 'x', reg='r1'),  # read array[0]
+        MemOp(1, 'load', 'y', reg='r2'),  # read array[1]
+        forbidden={'r0': 1, 'r1': 0},
+        desc='Array publication: write data array, then flag'),
+
+    'publish_array_fence': _mk(
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'store', 'y', 1),
+        MemOp(0, 'fence', '', scope=None),
+        MemOp(0, 'store', 'z', 1),
+        MemOp(1, 'load', 'z', reg='r0'),
+        MemOp(1, 'fence', '', scope=None),
+        MemOp(1, 'load', 'x', reg='r1'),
+        MemOp(1, 'load', 'y', reg='r2'),
+        forbidden={'r0': 1, 'r1': 0},
+        desc='Array publication with fences'),
+
+    # ── Additional real-world idiom patterns ──
+
+    'write_release_read_acquire': _mk(
+        # C11 release/acquire pair (structurally same as MP)
+        MemOp(0, 'store', 'x', 1),
+        MemOp(0, 'store', 'y', 1),  # release
+        MemOp(1, 'load', 'y', reg='r0'),  # acquire
+        MemOp(1, 'load', 'x', reg='r1'),
+        forbidden={'r0': 1, 'r1': 0},
+        desc='C11 write-release / read-acquire idiom'),
+
+    'treiber_push': _mk(
+        # Treiber stack push: write node, CAS head (lock-free)
+        MemOp(0, 'store', 'x', 1),        # node->val = v
+        MemOp(0, 'load', 'y', reg='r0'),   # old = head
+        MemOp(0, 'store', 'y', 1),         # CAS(head, old, node)
+        MemOp(1, 'load', 'y', reg='r1'),   # head
+        MemOp(1, 'load', 'x', reg='r2'),   # head->val
+        forbidden={'r1': 1, 'r2': 0},
+        desc='Treiber stack push: write node then CAS head'),
+
+    'ms_queue_enq': _mk(
+        # Michael-Scott queue enqueue: write node, CAS tail
+        MemOp(0, 'store', 'x', 1),        # node->data
+        MemOp(0, 'store', 'z', 1),        # node->next = NULL
+        MemOp(0, 'load', 'y', reg='r0'),  # tail
+        MemOp(0, 'store', 'y', 1),        # CAS(tail->next, NULL, node)
+        MemOp(1, 'load', 'y', reg='r1'),
+        MemOp(1, 'load', 'x', reg='r2'),
+        forbidden={'r1': 1, 'r2': 0},
+        desc='Michael-Scott queue enqueue pattern'),
+
+    'flag_sync_bidirectional': _mk(
+        # Bidirectional flag synchronization (both threads signal each other)
+        MemOp(0, 'store', 'x', 1),   # T0 done
+        MemOp(0, 'load', 'y', reg='r0'),  # wait for T1
+        MemOp(1, 'store', 'y', 1),   # T1 done
+        MemOp(1, 'load', 'x', reg='r1'),  # wait for T0
+        forbidden={'r0': 0, 'r1': 0},
+        desc='Bidirectional flag sync (SB variant)'),
+
+    'producer_consumer_ring': _mk(
+        # Ring buffer producer-consumer
+        MemOp(0, 'store', 'x', 1),    # write data to buffer[head]
+        MemOp(0, 'store', 'y', 1),    # head++
+        MemOp(1, 'load', 'y', reg='r0'),   # read head
+        MemOp(1, 'load', 'x', reg='r1'),   # read buffer[tail]
+        MemOp(1, 'store', 'z', 1),    # tail++
+        forbidden={'r0': 1, 'r1': 0},
+        desc='Ring buffer producer-consumer'),
 }
 
 # ── Architectures ────────────────────────────────────────────────────

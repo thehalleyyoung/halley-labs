@@ -111,7 +111,7 @@
 ; ── UNSAT Proof Certificate ──
 ; Status: UNSAT — forbidden outcome UNREACHABLE under PTX-GPU
 ; Unsat core size: 5 assertions (out of 29)
-; Core assertions: track_19, track_forbidden, track_27, track_18, track_26
+; Core assertions: track_18, track_26, track_forbidden, track_19, track_27
 (get-unsat-core)
 
 (exit)

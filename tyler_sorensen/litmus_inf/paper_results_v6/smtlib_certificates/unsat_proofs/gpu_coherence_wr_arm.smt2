@@ -102,7 +102,7 @@
 ; ── UNSAT Proof Certificate ──
 ; Status: UNSAT — forbidden outcome UNREACHABLE under ARM
 ; Unsat core size: 6 assertions (out of 26)
-; Core assertions: track_forbidden, track_20, track_23, track_13, track_2, track_11
+; Core assertions: track_forbidden, track_13, track_2, track_11, track_23, track_20
 (get-unsat-core)
 
 (exit)

@@ -123,7 +123,7 @@
 ; ── UNSAT Proof Certificate ──
 ; Status: UNSAT — forbidden outcome UNREACHABLE under TSO
 ; Unsat core size: 7 assertions (out of 39)
-; Core assertions: track_23, track_35, track_29, track_37, track_22, track_forbidden, track_25
+; Core assertions: track_forbidden, track_25, track_29, track_23, track_22, track_35, track_37
 (get-unsat-core)
 
 (exit)

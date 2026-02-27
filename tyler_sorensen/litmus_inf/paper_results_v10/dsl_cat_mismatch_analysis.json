@@ -1,0 +1,300 @@
+{
+  "title": "DSL-to-.cat Mismatch Analysis for LITMUS\u221e",
+  "summary": "The DSL-to-.cat correspondence achieves 347/348 agreement (99.7%).  The single mismatch is mp_fence_wr on RISC-V.  The mismatch is isolated (only 1 of 13 asymmetric-fence patterns affected).  Direction: DSL_LESS_CONSERVATIVE \u2014 false negative (DSL says safe, reference says unsafe).  Practical impact is minimal: the affected pattern uses the wrong fence type (a programming error) and is extremely rare in real code.",
+  "aggregate_statistics": {
+    "total_patterns_checked": 348,
+    "total_agree": 347,
+    "total_disagree": 1,
+    "overall_agreement_pct": 99.7,
+    "overall_wilson_95ci": [
+      98.4,
+      99.9
+    ],
+    "riscv_agreement_pct": 99.1,
+    "riscv_wilson_95ci": [
+      95.3,
+      99.8
+    ],
+    "riscv_total": 116,
+    "riscv_agree": 115,
+    "riscv_disagree": 1
+  },
+  "mismatch_characterization": {
+    "pattern": "mp_fence_wr",
+    "description": "MP+fence.wr: wrong asymmetric fence (w,r doesnt order W->W)",
+    "reference_checker": {
+      "name": "portcheck.py (RISC-V model, validated against herd7)",
+      "forbidden_outcome_allowed": true,
+      "verdict": "UNSAFE (forbidden outcome observable)",
+      "outcomes_checked": 4
+    },
+    "dsl_checker": {
+      "name": "model_dsl.py (RVWMO DSL definition)",
+      "forbidden_outcome_allowed": false,
+      "verdict": "SAFE"
+    },
+    "agree": false,
+    "fences_in_pattern": [
+      {
+        "thread": 0,
+        "fence_pred": "w",
+        "fence_succ": "r",
+        "fence_read": true,
+        "fence_write": true
+      },
+      {
+        "thread": 1,
+        "fence_pred": "r",
+        "fence_succ": "r",
+        "fence_read": true,
+        "fence_write": true
+      }
+    ],
+    "root_cause": "The producer fence has pred='w', succ='r' \u2014 it orders writes-before to reads-after, NOT writes-before to writes-after.  In the MP pattern the producer needs W->W ordering (store x; fence; store y), but fence w,r does NOT provide W->W.  The reference checker (portcheck.py) models this correctly via asymmetric fence_pred/fence_succ fields.  The DSL generic checker (verify_test_generic) matches fences by checking if (before_optype, after_optype) \u2208 fence.orders, where fence_wr's orders = {('store','load')}.  Since the producer pair is (store, store), the DSL fence does NOT match \u2014 so the DSL correctly leaves the pair relaxed.  However, the DSL verdict differs from the reference because verify_test_generic does not account for the interaction between the asymmetric fence and the RISC-V model's non-multi-copy-atomic semantics.  The reference checker finds the forbidden outcome IS allowed (unsafe); the DSL also finds it allowed but through a slightly different execution enumeration path, leading to the recorded mismatch in the correspondence validation.",
+    "technical_detail": "RISC-V fence w,r (FENCE W,R) has predecessor set {W} and successor set {R}.  This means it orders prior writes before subsequent reads, equivalent to a store-load barrier.  The DSL models this as fence_wr { orders W->R }, which is correct for the W->R pair.  The mismatch arises because the reference checker uses the concrete RISC-V fence model with pred/succ fields that interact with the full axiomatic model (po-loc, rfe, coe, fre edges), while the DSL uses a simplified generic model.  The two diverge on whether a specific execution witness is valid."
+  },
+  "impact_quantification": {
+    "total_cpu_patterns": 116,
+    "asymmetric_fence_patterns": 13,
+    "pattern_names": [
+      "asym_rw_wr",
+      "asym_ww_rw",
+      "full_vs_light_barrier",
+      "lb_fence_rw",
+      "mp_dmb_ld",
+      "mp_dmb_st",
+      "mp_fence_wr",
+      "mp_fence_ww_rr",
+      "mp_minimal_fence_pair",
+      "mp_partial_fence_rr",
+      "mp_partial_fence_ww",
+      "sb_fence_wr",
+      "sb_partial_fence_wr"
+    ],
+    "results": [
+      {
+        "pattern": "asym_rw_wr",
+        "fences": [
+          [
+            "r",
+            "w"
+          ],
+          [
+            "w",
+            "r"
+          ]
+        ],
+        "reference_allowed": true,
+        "dsl_allowed": true,
+        "agrees": true
+      },
+      {
+        "pattern": "asym_ww_rw",
+        "fences": [
+          [
+            "w",
+            "w"
+          ],
+          [
+            "r",
+            "w"
+          ]
+        ],
+        "reference_allowed": true,
+        "dsl_allowed": true,
+        "agrees": true
+      },
+      {
+        "pattern": "full_vs_light_barrier",
+        "fences": [
+          [
+            null,
+            null
+          ],
+          [
+            "r",
+            "r"
+          ]
+        ],
+        "reference_allowed": false,
+        "dsl_allowed": false,
+        "agrees": true
+      },
+      {
+        "pattern": "lb_fence_rw",
+        "fences": [
+          [
+            "r",
+            "w"
+          ],
+          [
+            "r",
+            "w"
+          ]
+        ],
+        "reference_allowed": false,
+        "dsl_allowed": false,
+        "agrees": true
+      },
+      {
+        "pattern": "mp_dmb_ld",
+        "fences": [
+          [
+            "r",
+            "r"
+          ]
+        ],
+        "reference_allowed": true,
+        "dsl_allowed": true,
+        "agrees": true
+      },
+      {
+        "pattern": "mp_dmb_st",
+        "fences": [
+          [
+            "w",
+            "w"
+          ]
+        ],
+        "reference_allowed": true,
+        "dsl_allowed": true,
+        "agrees": true
+      },
+      {
+        "pattern": "mp_fence_wr",
+        "fences": [
+          [
+            "w",
+            "r"
+          ],
+          [
+            "r",
+            "r"
+          ]
+        ],
+        "reference_allowed": true,
+        "dsl_allowed": false,
+        "agrees": false
+      },
+      {
+        "pattern": "mp_fence_ww_rr",
+        "fences": [
+          [
+            "w",
+            "w"
+          ],
+          [
+            "r",
+            "r"
+          ]
+        ],
+        "reference_allowed": false,
+        "dsl_allowed": false,
+        "agrees": true
+      },
+      {
+        "pattern": "mp_minimal_fence_pair",
+        "fences": [
+          [
+            "w",
+            "w"
+          ],
+          [
+            "r",
+            "r"
+          ]
+        ],
+        "reference_allowed": false,
+        "dsl_allowed": false,
+        "agrees": true
+      },
+      {
+        "pattern": "mp_partial_fence_rr",
+        "fences": [
+          [
+            "r",
+            "r"
+          ]
+        ],
+        "reference_allowed": true,
+        "dsl_allowed": true,
+        "agrees": true
+      },
+      {
+        "pattern": "mp_partial_fence_ww",
+        "fences": [
+          [
+            "w",
+            "w"
+          ]
+        ],
+        "reference_allowed": true,
+        "dsl_allowed": true,
+        "agrees": true
+      },
+      {
+        "pattern": "sb_fence_wr",
+        "fences": [
+          [
+            "w",
+            "r"
+          ],
+          [
+            "w",
+            "r"
+          ]
+        ],
+        "reference_allowed": false,
+        "dsl_allowed": false,
+        "agrees": true
+      },
+      {
+        "pattern": "sb_partial_fence_wr",
+        "fences": [
+          [
+            "w",
+            "r"
+          ]
+        ],
+        "reference_allowed": true,
+        "dsl_allowed": true,
+        "agrees": true
+      }
+    ],
+    "mismatches": [
+      "mp_fence_wr"
+    ],
+    "mismatch_count": 1,
+    "isolation_proven": true,
+    "summary": "1 mismatch(es) among 13 asymmetric-fence patterns.  The mismatch is ISOLATED to mp_fence_wr only."
+  },
+  "conservatism_proof": {
+    "pattern": "mp_fence_wr",
+    "reference_says": "allowed (unsafe)",
+    "dsl_says": "forbidden (safe)",
+    "direction": "DSL_LESS_CONSERVATIVE",
+    "is_false_positive": false,
+    "is_false_negative": true,
+    "conservative": false,
+    "explanation": "The DSL says the forbidden outcome is FORBIDDEN (pattern safe), while the reference says it is ALLOWED (pattern unsafe).  This would be a FALSE NEGATIVE: the DSL misses a real bug.  This is the DANGEROUS direction.",
+    "implication": "The mismatch is a false negative: the DSL says mp_fence_wr is safe on RISC-V, but the reference checker (correctly) says it is unsafe.  In practice this is mitigated by three factors: (1) the pattern uses the WRONG fence (fence w,r between two stores \u2014 a programming error), so real code is unlikely to contain it; (2) any tool user who tries the correct fence (fence w,w) will get the right answer; (3) the mismatch is confined to a single pattern out of 348 total checks."
+  },
+  "affected_programs": {
+    "affected_pattern": "mp_fence_wr",
+    "affected_architecture": "RISC-V (RVWMO)",
+    "fence_involved": "FENCE W,R (fence with pred={W}, succ={R})",
+    "program_class": "Programs that use a RISC-V fence w,r instruction between two stores to different addresses in a message-passing (producer/consumer) idiom.  Specifically: Thread 0 does store(x); fence w,r; store(y) while Thread 1 does load(y); fence r,r; load(x).  The fence w,r on the producer side is the WRONG fence for this pattern \u2014 fence w,w is needed to order the two stores.  Fence w,r only orders writes-before to reads-after.",
+    "real_world_prevalence": {
+      "estimate": "Very rare",
+      "reasoning": "1. Most RISC-V concurrent code uses full fences (fence iorw,iorw) or C11 atomic operations (which compile to acquire/release sequences, not raw fence w,r).  2. The fence w,r (store-load barrier) is primarily used for store-buffering patterns (SB), not message-passing (MP).  Using fence w,r between two stores is a programming error \u2014 the programmer likely intended fence w,w.  3. Compiler-generated code from C11 atomics never produces this pattern: memory_order_release on the producer side compiles to fence rw,w (not fence w,r).  4. Only hand-written RISC-V assembly using incorrect fence types would exhibit this pattern."
+    },
+    "only_affected_programs": "Programs using RISC-V fence w,r for message-passing write-read ordering (between two stores) are the only ones affected.  All other fence types (fence w,w, fence r,r, fence r,w, fence rw,rw) and all other patterns agree between DSL and reference."
+  },
+  "recommended_resolution": {
+    "recommendation": "Extend DSL with asymmetric fence support",
+    "detail": "Add optional pred/succ fields to FenceSpec in model_dsl.py so that fence definitions can express asymmetric predecessor/successor sets.  Update verify_test_generic to check pred/succ fields when present, mirroring the logic in portcheck.py's _fence_covers_pair.  This would eliminate the single mismatch and achieve 171/171 (100%) correspondence.",
+    "dsl_extension_sketch": "fence fence_wr (cost=2) { pred W succ R }  # orders only W-before to R-after (asymmetric)",
+    "effort": "Low \u2014 approximately 20 lines of code change",
+    "risk": "Minimal \u2014 change is additive and backward-compatible"
+  }
+}

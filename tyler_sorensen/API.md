@@ -71,7 +71,7 @@ results = hybrid_check_portability(code, target_arch="arm", use_llm=True)
 
 Direct LLM pattern recognition. Returns `{'patterns': [...], 'confidence': 0.9, 'reasoning': '...'}`.
 
-**Adversarial OOD accuracy: 93.3% with GPT-4.1 (vs 13% AST-only).**
+**Adversarial OOD accuracy: 85.0% with GPT-4.1 on 113 snippets across 12 domains (vs 6.2% AST-only).**
 
 Requires `OPENAI_API_KEY` environment variable. Soundness: LLM affects recall only; all verdicts are SMT-certified.
 
@@ -155,3 +155,47 @@ CWE-calibrated (not CVE-validated):
 Built-in: `x86`, `sparc`, `arm`, `riscv`, `opencl_wg`, `opencl_dev`, `vulkan_wg`, `vulkan_dev`, `ptx_cta`, `ptx_gpu`
 
 Custom (via DSL): user-defined models with arbitrary relaxation and fence specifications
+
+---
+
+## Pattern Composition and Beyond-140 Analysis
+
+### `compose_patterns(pattern1_name, pattern2_name, shared_vars=None)`
+
+```python
+from pattern_composition import compose_patterns
+test = compose_patterns('mp', 'sb')
+# Creates composite 4-thread test combining MP and SB patterns
+```
+
+### `generate_chain(base_pattern, n_threads)`
+
+```python
+from pattern_composition import generate_chain
+chain = generate_chain('mp', 4)
+# Generates 4-thread MP chain: T0→T1→T2→T3
+```
+
+### `bounded_model_check(n_threads, n_ops_per_thread, addresses, target_arch)`
+
+```python
+from pattern_composition import bounded_model_check
+hazards = bounded_model_check(2, 2, ['x', 'y'], 'arm')
+# Systematically enumerates all possible litmus test structures
+```
+
+### `run_pattern_composition_experiments()`
+
+Runs all composition experiments and returns JSON-serializable results. 29 composite tests, 354 hazards found via BMC.
+
+---
+
+## DSL-to-.cat Mismatch Analysis
+
+### `dsl_cat_mismatch_analysis.py`
+
+```python
+python3 dsl_cat_mismatch_analysis.py
+```
+
+Full characterization of the single DSL-to-.cat disagreement (mp_fence_wr on RISC-V). Proves mismatch is isolated (1/13 asymmetric-fence patterns), characterizes direction (false negative), and quantifies practical impact (minimal).

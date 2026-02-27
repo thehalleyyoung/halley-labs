@@ -131,7 +131,7 @@
 ; ── UNSAT Proof Certificate ──
 ; Status: UNSAT — forbidden outcome UNREACHABLE under RISC-V
 ; Unsat core size: 5 assertions (out of 42)
-; Core assertions: track_40, track_forbidden, track_29, track_27, track_39
+; Core assertions: track_27, track_39, track_40, track_29, track_forbidden
 (get-unsat-core)
 
 (exit)

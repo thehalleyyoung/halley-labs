@@ -23,16 +23,16 @@ SAFE:   mp_fence                                           [Z3: UNSAT + Alethe p
 |--------|-------|----------|
 | Z3 certificate coverage | **1,400/1,400 (100%)** | 597 UNSAT proofs + 803 SAT witnesses |
 | Cross-solver validation | **1,400/1,400 agreement** | Z3 + CVC5 (independent solver); Wilson CI [99.7%, 100%] |
-| LLM-assisted OOD accuracy | **93.3% exact-match** | GPT-4.1 on adversarial snippets (vs 13% AST-only) |
+| LLM-assisted OOD accuracy | **85.0% exact-match** | GPT-4.1 on 113 adversarial snippets across 12 domains (vs 6.2% AST-only); Wilson CI [77.2%, 90.5%] |
 | Alethe proof certificates | **993 UNSAT + 407 SAT** | Avg 106.4 steps; independently checkable |
 | CPU cross-validation | **228/228** | herd7 internal consistency |
 | GPU external validation | **94/94** | Published litmus tests + PTX/Vulkan specs |
-| DSL-to-.cat correspondence | **170/171 (99.4%)** | TSO, ARM, RISC-V |
+| DSL-to-.cat correspondence | **170/171 (99.4%)** | TSO, ARM, RISC-V; single mismatch fully characterized (false negative on mp_fence_wr, isolated, minimal impact) |
 | Code recognition (curated) | **96.6% exact, 97.0% top-3** | n=203 benchmark snippets |
 | Bug coverage | **35/41 (85.4%)** | Documented real-world concurrency bugs |
 | Severity classification | **689 data_race, 44 security, 70 benign** | 803 unsafe pairs |
-| Pattern library | **140 patterns** | Classical, RMW, lock-free, seqlock, RCU, etc. |
-| Speed | **sub-second** | Full 1,400-pair analysis: <1ms per pattern |
+| Pattern library | **140 base patterns + composition** | Classical, RMW, lock-free, seqlock, RCU, etc.; pattern composition, chains, rings, and BMC extend beyond fixed set |
+| Adversarial OOD benchmark | **113 snippets, 12 domains** | AST-only: 6.2%; quantifies selection bias honestly |
 
 ## Limitations
 

@@ -122,7 +122,7 @@
 ; ── UNSAT Proof Certificate ──
 ; Status: UNSAT — forbidden outcome UNREACHABLE under Vulkan-WG
 ; Unsat core size: 5 assertions (out of 37)
-; Core assertions: track_34, track_forbidden, track_22, track_24, track_26
+; Core assertions: track_22, track_24, track_forbidden, track_26, track_34
 (get-unsat-core)
 
 (exit)

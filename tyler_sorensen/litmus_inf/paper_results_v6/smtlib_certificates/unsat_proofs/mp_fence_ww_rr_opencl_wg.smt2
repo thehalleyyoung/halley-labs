@@ -111,7 +111,7 @@
 ; ── UNSAT Proof Certificate ──
 ; Status: UNSAT — forbidden outcome UNREACHABLE under OpenCL-WG
 ; Unsat core size: 5 assertions (out of 29)
-; Core assertions: track_forbidden, track_18, track_19, track_21, track_27
+; Core assertions: track_27, track_19, track_21, track_forbidden, track_18
 (get-unsat-core)
 
 (exit)

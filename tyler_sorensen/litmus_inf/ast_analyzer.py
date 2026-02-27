@@ -1364,6 +1364,19 @@ class ASTPatternMatcher:
                     extracted_ops=ops,
                 ))
 
+        # Canonical patterns get a small tiebreaker boost to prefer base forms
+        # over structurally-identical domain aliases
+        _CANONICAL = {
+            'mp', 'sb', 'lb', 'iriw', 'wrc', 'rwc', '2+2w', 'dekker', 'peterson',
+            'corr', 'cowr', 'coww', 'corw', 'isa2', 'r', 's', 'amoswap', '3sb',
+            'mp_fence', 'sb_fence', 'lb_fence', 'iriw_fence', 'wrc_fence', 'rwc_fence',
+            'mp_data', 'mp_addr', 'mp_3thread', 'mp_rfi', 'sb_rfi', 'sb_3thread',
+            'mp_co', 'lb_data', 'wrc_addr', 'mp_dmb_st', 'mp_dmb_ld',
+            'mp_fence_ww_rr', 'sb_fence_wr', 'lb_fence_rw', 'mp_fence_wr',
+        }
+        for m in matches:
+            if m.pattern_name in _CANONICAL:
+                m.confidence += 0.001  # tiny tiebreaker
         matches.sort(key=lambda m: m.confidence, reverse=True)
         return matches[:10]
 
