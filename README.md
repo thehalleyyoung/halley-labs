@@ -23,7 +23,7 @@ A paper describing the approach used to generate this collection is forthcoming.
 | [nn-init-phases](./nn-init-phases) | Neural network initialization phase diagnostics |
 | [pram-compiler](./pram-compiler) | PRAM algorithm to cache-efficient C compiler |
 | [rag-fusion-compiler](./rag-fusion-compiler) | Cross-boundary operator fusion for RAG pipelines |
-| [refinement-types](./refinement-types) | Refinement type inference for Python |
+| [pytorch-code-checker](./pytorch-code-checker) | Refinement type inference for Python |
 | [sparse-cpu-inference](./sparse-cpu-inference) | Speculative sparse inference engine for CPU |
 | [spatial-hash-compiler](./spatial-hash-compiler) | Spatial query compiler via geometric perfect hashing |
 | [synbio-verifier](./synbio-verifier) | Formal verification for synthetic biology circuits |
