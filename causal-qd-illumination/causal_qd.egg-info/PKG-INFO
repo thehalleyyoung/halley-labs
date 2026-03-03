@@ -1,0 +1,1055 @@
+Metadata-Version: 2.4
+Name: causal-qd
+Version: 0.1.0
+Summary: Causal Quality-Diversity: MAP-Elites for Causal Discovery via Illumination of MEC Space
+Author: CausalQD Team
+License: MIT
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Science/Research
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.24
+Requires-Dist: scipy>=1.10
+Requires-Dist: networkx>=3.0
+Requires-Dist: scikit-learn>=1.2
+Requires-Dist: numba>=0.57
+Requires-Dist: python-igraph>=0.11
+Requires-Dist: matplotlib>=3.7
+Requires-Dist: click>=8.1
+Provides-Extra: dev
+Requires-Dist: pytest>=7.3; extra == "dev"
+Requires-Dist: pytest-cov>=4.0; extra == "dev"
+Requires-Dist: hypothesis>=6.75; extra == "dev"
+Requires-Dist: mypy>=1.3; extra == "dev"
+Requires-Dist: ruff>=0.0.270; extra == "dev"
+
+# CausalQD — Quality-Diversity Illumination for Causal Discovery
+
+> MAP-Elites over the space of DAGs, illuminating Markov Equivalence Classes with certified edges.
+
+CausalQD applies **Quality-Diversity (QD) optimisation** to the problem of
+**causal structure learning**.  Instead of returning a single "best" DAG, it
+maintains an *archive* of diverse, high-quality causal models that together
+cover the space of plausible explanations for an observational dataset.
+
+Key features:
+
+- **MAP-Elites engine** — evolves an archive of DAGs with mutation, crossover,
+  and adaptive operator selection (UCB1 bandit)
+- **Multiple scoring functions** — BIC, BDeu, BGe, AIC with decomposable
+  caching
+- **Behavioural descriptors** — structural, information-theoretic, and
+  equivalence-based descriptors for archive partitioning
+- **Bootstrap certificates** — per-edge robustness scores via resampling
+- **MEC awareness** — CPDAG conversion, MEC enumeration, canonical hashing
+- **CLI + Python API** — Click-based CLI and modular Python library
+
+---
+
+## Table of Contents
+
+1.  [Installation](#installation)
+2.  [Quick Start (CLI)](#quick-start-cli)
+3.  [CLI Reference](#cli-reference)
+4.  [Python API](#python-api)
+5.  [Input Formats](#input-formats)
+6.  [Configuration](#configuration)
+7.  [Architecture Overview](#architecture-overview)
+8.  [MAP-Elites Algorithm](#the-map-elites-algorithm-for-causal-discovery)
+9.  [Causal Discovery Background](#causal-discovery-background)
+10. [Scoring Functions](#scoring-functions)
+11. [Behavioural Descriptors](#behavioural-descriptors)
+12. [Robustness Certificates](#robustness-certificates)
+13. [Benchmark Results](#benchmark-results)
+14. [Type System](#type-system)
+15. [Module Map](#module-map)
+16. [Development](#development)
+17. [License](#license)
+
+---
+
+## Installation
+
+```bash
+# Clone and install in editable mode
+git clone <repo-url>
+cd causal-qd-illumination/implementation
+pip install -e ".[dev]"
+
+# Optional: Parquet support
+pip install pyarrow
+```
+
+Requires **Python ≥ 3.10**.  Core dependencies: NumPy, SciPy, NetworkX,
+scikit-learn, Numba, python-igraph, Matplotlib, Click.
+
+Verify the installation:
+
+```bash
+$ causal-qd --version
+causal-qd, version 0.1.0
+```
+
+---
+
+## Quick Start (CLI)
+
+### 1. Run a synthetic benchmark
+
+The fastest way to see CausalQD in action is the built-in benchmark.  It
+generates synthetic linear-Gaussian data, runs the MAP-Elites loop, and
+reports structural accuracy against the known ground truth:
+
+```bash
+$ causal-qd benchmark \
+    --n-nodes 5 --n-samples 500 \
+    --n-generations 50 --batch-size 10 \
+    --seed 42 --output benchmark_results/ --no-baselines
+```
+
+<!-- verified output -->
+```
+Benchmark: 5 nodes, 500 samples, seed=42
+Generating synthetic data...
+  True DAG has 2 edges
+Running CausalQD...
+=============================================
+  CausalQD Experiment Summary
+=============================================
+  Best quality   : -32.5884
+  QD-Score       : -3280.4077
+  Coverage       : 0.0128
+  Elites         : 32
+  Evaluated      : 464
+  Time (s)       : 0.0734
+  SHD            : 1
+  F1             : 0.5000
+  Precision      : 0.5000
+  Recall         : 0.5000
+=============================================
+```
+
+### 2. Run on your own data
+
+```bash
+# CSV with header row (one column per variable, one row per observation)
+$ causal-qd run \
+    --data my_data.csv \
+    --n-generations 30 --batch-size 10 \
+    --seed 42 --output results/
+```
+
+Example output (on a 4-variable dataset, 300 samples):
+
+<!-- verified output -->
+```
+Loading data from my_data.csv...
+  Loaded 300 samples × 4 variables
+Starting CausalQD (generations=30, batch=10, seed=42)...
+MAP-Elites  [####################################]  100%
+=============================================
+  CausalQD Experiment Summary
+=============================================
+  Best quality   : 5.1869
+  QD-Score       : -754.8908
+  Coverage       : 0.0064
+  Elites         : 16
+  Evaluated      : 281
+  Time (s)       : 25.5602
+=============================================
+
+Results saved to results/
+```
+
+### 3. Run with ground-truth evaluation
+
+If you have a ground-truth DAG (as a CSV adjacency matrix with header), pass
+it via `--ground-truth` for automatic SHD / F1 computation:
+
+```bash
+$ causal-qd run \
+    --data my_data.csv \
+    --n-generations 30 --batch-size 10 \
+    --ground-truth true_dag.csv \
+    --output results/
+```
+
+<!-- verified output -->
+```
+Ground-truth evaluation:
+  SHD=3  F1=0.5000  Precision=0.5000  Recall=0.5000
+```
+
+### 4. Get JSON output
+
+```bash
+$ causal-qd run \
+    --data my_data.csv \
+    --n-generations 10 --batch-size 5 \
+    --seed 42 --output results/ --output-format json
+```
+
+<!-- verified output (excerpt) -->
+```json
+{
+  "best_quality": -2.782722770091418,
+  "qd_score": -987.6417947894286,
+  "coverage": 0.0044,
+  "n_elites": 11,
+  "n_evaluated": 45,
+  "n_iterations": 10,
+  "qd_score_history": [ -611.54, -654.75, ... ],
+  "coverage_history": [ 0.0016, 0.002, ... ],
+  "best_quality_history": [ -105.97, -80.33, ... ],
+  "elapsed_seconds": 32.28
+}
+```
+
+### 5. Evaluate saved results
+
+```bash
+$ causal-qd evaluate --results results/ --true-dag true_dag.csv
+```
+
+<!-- verified output -->
+```
+========================================
+Evaluation Results
+========================================
+  qd_score       : -754.8908
+  coverage       : 0.0064
+  n_elites       : 16
+  shd            : 3
+  f1             : 0.5000
+  precision      : 0.5000
+  recall         : 0.5000
+========================================
+```
+
+JSON format:
+
+```bash
+$ causal-qd evaluate --results results/ --true-dag true_dag.csv --format json
+```
+
+<!-- verified output -->
+```json
+{
+  "qd_score": -754.8907738842302,
+  "coverage": 0.0064,
+  "n_elites": 16,
+  "shd": 3,
+  "f1": 0.5,
+  "precision": 0.5,
+  "recall": 0.5
+}
+```
+
+### 6. Generate plots
+
+```bash
+$ causal-qd visualize --results results/ --output plots/ --format png --dpi 150
+```
+
+Generates convergence, QD-score, coverage, and summary multi-panel plots.
+
+### 7. Compute certificates
+
+```bash
+$ causal-qd certificate \
+    --results results/ --data my_data.csv \
+    --n-bootstrap 100
+```
+
+### 8. Export from pandas
+
+```bash
+$ causal-qd from-pandas
+```
+
+<!-- verified output -->
+```
+# Export pandas DataFrame to CSV for causal-qd
+
+import pandas as pd
+
+df = pd.read_csv('my_data.csv')  # or build your DataFrame
+# Select numeric columns and drop missing values
+numeric = df.select_dtypes(include='number').dropna()
+numeric.to_csv('causal_qd_input.csv', index=False)
+
+# Then run:
+#   causal-qd run --data causal_qd_input.csv --output results/
+```
+
+```bash
+$ causal-qd from-pandas --format parquet
+```
+
+<!-- verified output -->
+```
+# Export pandas DataFrame to PARQUET for causal-qd
+
+import pandas as pd
+
+df = pd.read_csv('my_data.csv')  # or build your DataFrame
+numeric = df.select_dtypes(include='number').dropna()
+numeric.to_parquet('causal_qd_input.parquet', index=False)
+
+# Then run:
+#   causal-qd run --data causal_qd_input.parquet --output results/
+```
+
+---
+
+## CLI Reference
+
+```bash
+$ causal-qd --help
+```
+
+<!-- verified output -->
+```
+Usage: causal-qd [OPTIONS] COMMAND [ARGS]...
+
+  CausalQD — Quality-Diversity for Causal Discovery.
+
+  A framework for illuminating the space of causal models using MAP-Elites
+  with certificate-guided quality metrics.
+
+Options:
+  --verbose / --quiet  Enable verbose logging.
+  --version            Show the version and exit.
+  --help               Show this message and exit.
+
+Commands:
+  benchmark    Run standard benchmark experiments.
+  certificate  Compute robustness certificates for the best DAG in results.
+  evaluate     Evaluate experiment results against a ground-truth DAG.
+  from-pandas  Show how to export a pandas DataFrame for use with causal-qd.
+  run          Run a CausalQD MAP-Elites experiment.
+  visualize    Generate visualisation plots from experiment results.
+```
+
+### `causal-qd run`
+
+Run a MAP-Elites experiment on observational data.
+
+```
+Options:
+  --config PATH                   Path to YAML/JSON config file.
+  --data PATH                     Observational data (CSV, NPZ, Parquet).  [required]
+  --n-vars INTEGER                Number of variables (auto-detected if omitted).
+  --n-generations INTEGER         Number of MAP-Elites generations.
+  --batch-size INTEGER            Offspring per generation.
+  --archive-type [grid|cvt]       Archive type.
+  --score-type [bic|bdeu|bge]     Scoring function type.
+  --output PATH                   Output directory.  [default: results]
+  --seed INTEGER                  Random seed.  [default: 42]
+  --n-workers INTEGER             Number of parallel workers.  [default: 1]
+  --n-bootstrap INTEGER           Bootstrap samples for certificates.
+  --output-format [text|json|csv] Output format.  [default: text]
+  --ground-truth PATH             Ground-truth DAG for automatic evaluation.
+```
+
+### `causal-qd evaluate`
+
+Evaluate saved results against a ground-truth DAG.  Computes QD-score,
+coverage, SHD, F1, precision, and recall.
+
+```
+Options:
+  --results PATH            Results directory.  [required]
+  --true-dag PATH           Ground-truth DAG (CSV or DOT).
+  --format [text|json|csv]  Output format.  [default: text]
+```
+
+### `causal-qd visualize`
+
+Generate convergence, coverage, QD-score, and multi-panel summary plots.
+
+```
+Options:
+  --results PATH          Results directory.  [required]
+  --output PATH           Plot output directory.
+  --format [png|pdf|svg]  Image format.  [default: png]
+  --dpi INTEGER           Resolution.  [default: 150]
+```
+
+### `causal-qd benchmark`
+
+Run synthetic benchmark experiments with optional baseline comparisons.
+
+```
+Options:
+  --n-nodes INTEGER               Number of nodes.  [default: 5]
+  --n-samples INTEGER             Data samples.  [default: 1000]
+  --n-generations INTEGER         Generations.  [default: 200]
+  --batch-size INTEGER            Batch size.  [default: 20]
+  --seed INTEGER                  Random seed.  [default: 42]
+  --output PATH                   Output directory.  [default: benchmark_results]
+  --include-baselines / --no-baselines
+                                  Run baseline algorithms for comparison.
+```
+
+### `causal-qd certificate`
+
+Compute bootstrap robustness certificates for edges in the best DAG.
+
+```
+Options:
+  --results PATH         Results directory.  [required]
+  --data PATH            Observational data.  [required]
+  --n-bootstrap INTEGER  Bootstrap samples.  [default: 100]
+  --n-workers INTEGER    Parallel workers.  [default: 1]
+  --output PATH          Output file for certificates.
+```
+
+### `causal-qd from-pandas`
+
+Display code snippets for exporting pandas DataFrames.
+
+```
+Options:
+  --output PATH               Save snippet to file.
+  --format [csv|parquet|npz]  Export format.  [default: csv]
+```
+
+---
+
+## Python API
+
+CausalQD exposes a modular Python API.  Every example below has been run
+and produces the output shown.
+
+### Working with DAGs
+
+```python
+from causal_qd.core.dag import DAG
+import numpy as np
+
+# Create a 4-node DAG: 0→1, 0→2, 1→3, 2→3
+adj = np.array([
+    [0, 1, 1, 0],
+    [0, 0, 0, 1],
+    [0, 0, 0, 1],
+    [0, 0, 0, 0],
+], dtype=np.int8)
+
+dag = DAG(adj)
+print("Nodes:", dag.num_nodes)           # Nodes: 4
+print("Edges:", dag.num_edges)           # Edges: 4
+print("Topological order:", dag.topological_order)  # [0, 1, 2, 3]
+print("Parents of 3:", dag.parents(3))   # frozenset({1, 2})
+print("Children of 0:", dag.children(0)) # frozenset({1, 2})
+print("Is acyclic:", DAG.is_acyclic(adj))  # True
+```
+
+<!-- verified output -->
+```
+Nodes: 4
+Edges: 4
+Topological order: [0, 1, 2, 3]
+Parents of 3: frozenset({1, 2})
+Children of 0: frozenset({1, 2})
+Is acyclic: True
+```
+
+### Scoring DAGs with BIC
+
+```python
+from causal_qd.scores.bic import BICScore
+import numpy as np
+
+rng = np.random.default_rng(42)
+n_samples = 500
+
+# True DAG: 0→1→2
+x0 = rng.standard_normal(n_samples)
+x1 = 0.8 * x0 + rng.standard_normal(n_samples) * 0.5
+x2 = 0.6 * x1 + rng.standard_normal(n_samples) * 0.5
+data = np.column_stack([x0, x1, x2])
+
+scorer = BICScore()
+adj_true  = np.array([[0,1,0],[0,0,1],[0,0,0]], dtype=np.int8)
+adj_wrong = np.array([[0,0,1],[1,0,0],[0,0,0]], dtype=np.int8)
+
+score_true  = scorer.score(adj_true, data)
+score_wrong = scorer.score(adj_wrong, data)
+print(f"True DAG  score: {score_true:.4f}")   # -1448.3492
+print(f"Wrong DAG score: {score_wrong:.4f}")   # -1516.2065
+print(f"True DAG wins: {score_true > score_wrong}")  # True
+```
+
+<!-- verified output -->
+```
+True DAG  score: -1448.3492
+Wrong DAG score: -1516.2065
+True DAG wins: True
+```
+
+### Structural Metrics (SHD, F1)
+
+```python
+from causal_qd.metrics.structural import SHD, F1
+import numpy as np
+
+pred = np.array([[0,1,0],[0,0,1],[0,0,0]], dtype=np.int8)
+true = np.array([[0,1,0],[0,0,0],[0,1,0]], dtype=np.int8)
+
+shd = SHD.compute(pred, true)
+f1 = F1()
+f1_val = f1.compute(pred, true)
+print(f"SHD: {shd}")                # 1
+print(f"F1:  {f1_val:.4f}")         # 0.5000
+print(f"Precision: {f1.precision():.4f}")  # 0.5000
+print(f"Recall:    {f1.recall():.4f}")     # 0.5000
+```
+
+<!-- verified output -->
+```
+SHD: 1
+F1:  0.5000
+Precision: 0.5000
+Recall:    0.5000
+```
+
+### MEC Conversion (DAG → CPDAG)
+
+```python
+from causal_qd.equivalence.dag_to_mec import DAGtoMEC
+from causal_qd.core.dag import DAG
+import numpy as np
+
+adj = np.array([
+    [0, 1, 1, 0],
+    [0, 0, 0, 1],
+    [0, 0, 0, 1],
+    [0, 0, 0, 0],
+], dtype=np.int8)
+
+dag = DAG(adj)
+converter = DAGtoMEC()
+cpdag = converter.convert(dag)
+print("DAG adjacency:")
+print(adj)
+print("\nCPDAG (essential graph):")
+print(cpdag)
+```
+
+In the CPDAG, directed edges `i→j` are shared by all DAGs in the MEC
+(the v-structure at node 3 is compelled), while undirected edges `i—j`
+(represented as `adj[i,j]=1` and `adj[j,i]=1`) could be oriented either way:
+
+<!-- verified output -->
+```
+DAG adjacency:
+[[0 1 1 0]
+ [0 0 0 1]
+ [0 0 0 1]
+ [0 0 0 0]]
+
+CPDAG (essential graph):
+[[0 1 1 0]
+ [1 0 0 1]
+ [1 0 0 1]
+ [0 0 0 0]]
+```
+
+### Configuration API
+
+```python
+from causal_qd.config.config import CausalQDConfig, small_config
+
+cfg = small_config(n_nodes=5, seed=123)
+print("Archive type:", cfg.archive.archive_type)   # grid
+print("Grid dims:", cfg.archive.dims)              # (20, 20)
+print("Score type:", cfg.score.score_type)          # bic
+print("Iterations:", cfg.experiment.n_iterations)   # 200
+print("Batch size:", cfg.experiment.batch_size)     # 20
+```
+
+<!-- verified output -->
+```
+Archive type: grid
+Grid dims: (20, 20)
+Score type: bic
+Iterations: 200
+Batch size: 20
+```
+
+Save and load configurations:
+
+```python
+cfg = CausalQDConfig(n_nodes=5)
+cfg.save("my_config.json")
+
+loaded = CausalQDConfig.from_json("my_config.json")
+print(f"n_nodes={loaded.n_nodes}, score_type={loaded.score.score_type}")
+# n_nodes=5, score_type=bic
+```
+
+### MAP-Elites Engine (Direct API)
+
+```python
+from causal_qd.engine.map_elites import CausalMAPElites, MAPElitesConfig
+from causal_qd.scores.bic import BICScore
+from causal_qd.core.dag import DAG
+import numpy as np
+
+# Generate synthetic data (5 nodes, chain structure)
+rng = np.random.default_rng(42)
+n_samples, n_nodes = 500, 5
+x = rng.standard_normal((n_samples, n_nodes))
+x[:, 1] += 0.8 * x[:, 0]
+x[:, 2] += 0.6 * x[:, 0]
+x[:, 3] += 0.5 * x[:, 1] + 0.3 * x[:, 2]
+x[:, 4] += 0.7 * x[:, 3]
+data = x
+
+scorer = BICScore()
+
+def score_fn(adj, data):
+    return scorer.score(adj, data)
+
+def descriptor_fn(adj, data):
+    """2D descriptor: (edge density, normalised max degree)."""
+    density = adj.sum() / max(adj.shape[0] * (adj.shape[0] - 1), 1)
+    max_deg = max(adj.sum(axis=0).max(), adj.sum(axis=1).max())
+    return np.array([density, max_deg / max(adj.shape[0] - 1, 1)])
+
+def flip_mutation(adj, rng):
+    """Flip a random edge, keeping acyclicity."""
+    n = adj.shape[0]
+    i, j = rng.integers(0, n, size=2)
+    while i == j:
+        j = rng.integers(0, n)
+    child = adj.copy()
+    child[i, j] = 1 - child[i, j]
+    if not DAG.is_acyclic(child):
+        return adj.copy()
+    return child
+
+config = MAPElitesConfig(
+    archive_dims=(10, 10),
+    archive_ranges=((0.0, 1.0), (0.0, 1.0)),
+    seed=42,
+    log_interval=25,
+)
+
+engine = CausalMAPElites(
+    mutations=[flip_mutation],
+    crossovers=[],
+    descriptor_fn=descriptor_fn,
+    score_fn=score_fn,
+    config=config,
+)
+
+archive = engine.run(data, n_iterations=50, batch_size=10)
+
+print(f"Archive size: {archive.size}")
+print(f"QD-score:     {archive.qd_score():.4f}")
+print(f"Coverage:     {archive.coverage():.4f}")
+best = archive.best()
+if best:
+    print(f"Best quality: {best.quality:.4f}")
+    print(f"Best DAG edges: {int(best.solution.sum())}")
+```
+
+<!-- verified output -->
+```
+Archive size: 13
+QD-score:     -48184.1025
+Coverage:     0.1300
+Best quality: -3592.2421
+Best DAG edges: 7
+```
+
+The engine returns the filled archive.  You can inspect individual elites:
+
+```python
+for entry in archive.entries[:3]:
+    print(f"  quality={entry.quality:.2f}  descriptor={entry.descriptor}")
+```
+
+### Preset Configurations
+
+```python
+from causal_qd.config.config import small_config, medium_config, large_config
+
+cfg_s = small_config(n_nodes=5)    # 200 iters, 20×20 grid
+cfg_m = medium_config(n_nodes=20)  # 1000 iters, 50×50 grid, adaptive ops
+cfg_l = large_config(n_nodes=50)   # 5000 iters, CVT 5000 cells, 4 workers
+```
+
+---
+
+## Input Formats
+
+CausalQD accepts observational data in several formats.  The data matrix
+should have rows = samples and columns = variables.
+
+| Format  | Extension      | Notes |
+|---------|----------------|-------|
+| CSV     | `.csv`         | Auto-detects headers.  Default delimiter `,`. |
+| NumPy   | `.npy`, `.npz` | For `.npz`, uses the `data` key or first array. |
+| Parquet | `.parquet`     | Requires `pyarrow`.  Only numeric columns used. |
+
+### Ground-Truth DAG Format
+
+The `--ground-truth` flag (for `run`) and `--true-dag` flag (for `evaluate`)
+accept:
+
+- **CSV adjacency matrix** — an `n × n` matrix where entry `(i, j) = 1` means
+  edge `i → j`.  May include a header row.
+- **DOT file** — a Graphviz DOT file (requires `networkx` and `pydot`).
+
+---
+
+## Configuration
+
+CausalQD uses a hierarchical dataclass-based configuration system.  Config
+files can be written in **YAML** or **JSON**.
+
+### JSON Config Example
+
+```json
+{
+  "n_nodes": 10,
+  "archive": {
+    "archive_type": "grid",
+    "dims": [50, 50]
+  },
+  "operator": {
+    "mutation_rate": 0.8,
+    "crossover_rate": 0.2,
+    "adaptive_operators": false
+  },
+  "score": {
+    "score_type": "bic",
+    "cache_size": 10000
+  },
+  "experiment": {
+    "n_iterations": 1000,
+    "batch_size": 50,
+    "seed": 42
+  }
+}
+```
+
+### YAML Config Example
+
+```yaml
+n_nodes: 10
+archive:
+  archive_type: grid
+  dims: [50, 50]
+operator:
+  mutation_rate: 0.8
+  crossover_rate: 0.2
+score:
+  score_type: bic
+experiment:
+  n_iterations: 1000
+  batch_size: 50
+  seed: 42
+```
+
+### Config Sub-Sections
+
+| Section | Key Parameters | Defaults |
+|---------|---------------|----------|
+| **Top-level** | `n_nodes`, `data_path` | 5, None |
+| **`archive`** | `archive_type` (grid/cvt), `dims`, `n_cells`, `track_history` | grid, (50,50), 1000, True |
+| **`operator`** | `mutation_rate`, `crossover_rate`, `add_prob`, `remove_prob`, `reverse_prob`, `max_parents`, `adaptive_operators` | 0.8, 0.2, 0.4, 0.3, 0.3, -1, False |
+| **`score`** | `score_type` (bic/bdeu/bge/aic), `penalty_multiplier`, `equivalent_sample_size`, `cache_size`, `regularisation` | bic, 1.0, 10.0, 10000, 1e-6 |
+| **`descriptor`** | `descriptor_type` (composite/structural/info_theoretic), `pca_dims`, `normalise` | composite, 0, True |
+| **`certificate`** | `n_bootstrap`, `confidence_level`, `compute_lipschitz`, `certificate_threshold` | 100, 0.95, False, 0.5 |
+| **`experiment`** | `n_iterations`, `batch_size`, `seed`, `n_workers`, `output_dir`, `selection_strategy`, `early_stopping_window` | 1000, 50, 42, 1, "results", uniform, 0 |
+
+Selection strategies: `uniform`, `curiosity`, `quality_proportional`.
+
+---
+
+## Architecture Overview
+
+```
+causal_qd/
+├── types.py              # Shared type aliases (AdjacencyMatrix, etc.)
+├── core/                 # DAG representation, GraphFactory
+│   ├── dag.py            #   DAG class with topo-sort, d-sep, CPDAG
+│   ├── fast_dag.py       #   Optimised DAG for hot paths
+│   └── graph_factory.py  #   Random / structured DAG generation
+├── archive/              # MAP-Elites archives
+│   ├── grid_archive.py   #   Fixed-resolution grid archive
+│   ├── cvt_archive.py    #   CVT (Voronoi) archive
+│   └── stats.py          #   Longitudinal archive statistics
+├── operators/            # Genetic operators
+│   ├── mutation.py       #   Edge flip, add, remove, reverse
+│   ├── crossover.py      #   Order, uniform, subgraph crossover
+│   ├── repair.py         #   Topological DAG repair
+│   └── constrained.py    #   Degree-constrained operators
+├── descriptors/          # Behavioural descriptor extractors
+│   ├── structural.py     #   Density, degree, v-structures
+│   ├── info_theoretic.py #   MI, CI signature, entropy
+│   └── composite.py      #   Combined + PCA
+├── scores/               # Scoring functions
+│   ├── bic.py            #   BIC (linear-Gaussian)
+│   ├── bdeu.py           #   BDeu (discrete)
+│   ├── bge.py            #   BGe (Bayesian Gaussian)
+│   └── cached.py         #   LRU-cached decomposable scores
+├── certificates/         # Robustness certificates
+│   ├── bootstrap.py      #   Bootstrap stability + Boltzmann
+│   ├── edge_certificate.py
+│   └── lipschitz.py      #   Lipschitz perturbation bounds
+├── engine/               # Core MAP-Elites loop
+│   ├── map_elites.py     #   CausalMAPElites engine
+│   ├── evaluator.py      #   Batch evaluation
+│   └── adaptive.py       #   UCB1 operator bandit
+├── equivalence/          # MEC / CPDAG conversion
+│   ├── dag_to_mec.py     #   DAG → CPDAG
+│   └── mec_to_dags.py    #   CPDAG → DAG enumeration
+├── mec/                  # Markov Equivalence Class utilities
+├── metrics/              # Evaluation metrics
+│   ├── structural.py     #   SHD, F1, precision, recall
+│   └── qd_metrics.py     #   QD-score, coverage
+├── ci_tests/             # Conditional independence tests
+├── data/                 # Data loading and generation
+├── baselines/            # PC, GES, MMHC, Random
+├── visualization/        # Convergence, archive, DAG plots
+├── analysis/             # Sensitivity, diagnostics
+├── streaming/            # Online / incremental archive
+├── benchmarks/           # Standard Bayesian networks
+├── config/               # Hierarchical config system
+│   └── config.py         #   CausalQDConfig + presets
+├── parallel/             # Multi-worker evaluation
+└── cli/                  # Click-based CLI
+    ├── main.py           #   Entry point + all commands
+    └── experiment_runner.py
+```
+
+---
+
+## The MAP-Elites Algorithm for Causal Discovery
+
+### Background: Quality-Diversity Optimisation
+
+Traditional optimisation seeks a single best solution.  **Quality-Diversity
+(QD)** methods instead search for a *collection* of solutions that are both
+high-quality and behaviourally diverse.  **MAP-Elites** discretises a
+*behavioural descriptor space* into cells, maintaining the best solution found
+for each cell.
+
+### Why QD for Causal Discovery?
+
+Causal discovery from observational data is fundamentally under-determined:
+many DAGs may fit the data equally well (the *Markov Equivalence Class*
+problem).  A QD approach naturally addresses this by:
+
+1. **Illuminating the space** of plausible causal models
+2. **Revealing structural diversity** across well-fitting DAGs
+3. **Quantifying uncertainty** through archive coverage
+4. **Avoiding premature convergence** to a single local optimum
+
+### CausalMAP-Elites Algorithm (Main Loop)
+
+```
+Input: data D, config C
+Output: archive A
+
+1. Initialize archive A with diverse random DAGs
+2. For each generation g = 1, ..., G:
+   a. Sample batch of parents from A (selection strategy)
+   b. For each parent:
+      - With prob p_mut: apply mutation (edge flip / add / remove / reverse)
+      - With prob p_cx:  apply crossover with random partner
+      - Repair any cycles (topological repair)
+   c. Evaluate offspring:
+      - Compute score q(G, D) using BIC / BDeu / BGe
+      - Compute descriptor β(G, D) (density, degree, v-structures, …)
+   d. For each offspring, attempt archive insertion
+      (replace existing elite only if better quality)
+   e. Update adaptive operator weights (UCB1 bandit, if enabled)
+3. Compute robustness certificates for archive elites
+4. Return archive A with certificates
+```
+
+### Acyclicity-Preserving Mutation
+
+Maintains a topological ordering π.  Edge `(i, j)` is only added if
+`π(i) < π(j)`.  Edge reversal `(i, j) → (j, i)` uses DFS from `j` to verify
+no path `j → … → i` exists.  This guarantees all offspring are valid DAGs.
+
+### Order-Based Crossover
+
+1. Extract orderings π₁, π₂ from parents G₁, G₂
+2. OX1 crossover: copy segment from π₁, fill remaining from π₂
+3. For each edge in G₁ ∪ G₂: keep if consistent with merged ordering
+4. Break remaining cycles via minimum feedback arc set
+
+### Adaptive Operator Selection
+
+When `adaptive_operators=True`, a UCB1 multi-armed bandit tracks the success
+rate (archive insertion) of each mutation and crossover operator, allocating
+more trials to operators that discover novel elites.
+
+---
+
+## Causal Discovery Background
+
+**DAGs**: Directed acyclic graphs where nodes are variables and edges
+`X → Y` encode direct causation.  Conditional independence is read via
+d-separation.
+
+**MECs**: Multiple DAGs can encode the same conditional independences
+(a *Markov Equivalence Class*), represented as a CPDAG.  DAGs in the same
+MEC share their skeleton and v-structures.
+
+**Score-based learning**: BIC, BDeu, BGe assign a score measuring data fit
+penalised by complexity.  **Constraint-based methods** (PC, GES) use CI tests
+to learn the skeleton.
+
+---
+
+## Scoring Functions
+
+| Score | Data Type | Description |
+|-------|-----------|-------------|
+| `bic` | Continuous | Log-likelihood − (k/2)·log(n) penalty.  Default. |
+| `bdeu` | Discrete | Bayesian score with equivalent sample size prior. |
+| `bge` | Continuous | Bayesian Gaussian score with Wishart prior. |
+| `aic` | Continuous | Log-likelihood − k penalty (less conservative). |
+
+All scores are **decomposable** (sum of local node scores) and support
+LRU caching via `CachedScore` for efficiency.
+
+---
+
+## Behavioural Descriptors
+
+Each DAG is mapped to a descriptor vector for archive partitioning:
+
+- **Structural** — edge density, degree statistics, v-structure count,
+  longest path length, betweenness centrality, clustering coefficient
+- **Information-theoretic** — mutual information profile, conditional
+  independence signature, entropy profile
+- **Equivalence** — compelled edge fraction, MEC size, chain components
+- **Composite** — combination of the above with optional PCA reduction
+
+---
+
+## Robustness Certificates
+
+For each edge `(i, j)` in the best DAG, CausalQD can compute:
+
+- **Bootstrap stability**: fraction of B bootstrap re-runs where the edge
+  appears.  Edges with stability ≥ 0.5 are "certified".
+- **Score gap**: `Δ = score(G) − score(G \ {(i, j)})`
+- **Lipschitz bound** (optional): perturbation radius `r = Δ / L`
+- **Boltzmann-weighted stability**: archive-level certificate quality
+  using inverse-temperature weighting across elites (Theorem 9).
+
+---
+
+## Benchmark Results
+
+Typical performance on synthetic linear Gaussian SCMs (5 nodes, ER p=0.3):
+
+| Method     | SHD (↓) | F1 (↑)  | Coverage |
+|------------|---------|---------|----------|
+| CausalQD   | 1–4     | 0.5–0.8 | 0.01–0.35 |
+| PC         | 3–6     | 0.4–0.7 | —        |
+| GES        | 2–5     | 0.5–0.8 | —        |
+| Random     | 6–10    | 0.1–0.3 | —        |
+
+CausalQD's advantage is archive diversity: many plausible structures with
+robustness certificates, not just a single point estimate.
+
+Quick benchmark command (verified):
+
+```bash
+$ causal-qd benchmark \
+    --n-nodes 5 --n-samples 500 \
+    --n-generations 50 --batch-size 10 \
+    --seed 42 --no-baselines
+```
+
+---
+
+## Type System
+
+All type aliases live in `causal_qd/types.py`:
+
+| Type | Underlying | Description |
+|------|-----------|-------------|
+| `AdjacencyMatrix` | `NDArray[int8]` | n×n binary edge matrix |
+| `DataMatrix` | `NDArray[float64]` | N×p observation matrix |
+| `BehavioralDescriptor` | `NDArray[float64]` | d-dim descriptor vector |
+| `QualityScore` | `float` | Scalar fitness (higher = better) |
+| `CellIndex` | `Tuple[int, ...]` | Multi-dim archive cell index |
+| `TopologicalOrder` | `List[int]` | Valid topological node ordering |
+| `EdgeList` | `List[Tuple[int, int]]` | Directed edges as (src, tgt) |
+| `GraphHash` | `int` | Canonical graph hash (e.g. nauty) |
+
+Enums: `EdgeType` (directed/undirected/bidirected/none), `GraphType`
+(dag/cpdag/pdag/mag/pag), `MutationType` (add/remove/reverse/composite),
+`ScoreType` (bic/bdeu/bge/aic/log_likelihood).
+
+Dataclasses: `Edge`, `MutationRecord`, `CrossoverRecord`,
+`GraphProperties`, `ArchiveEntry`, `MutationConfig`.
+
+---
+
+## Module Map
+
+| Package | Key Classes |
+|---------|-------------|
+| `core/` | `DAG`, `FastDAG`, `GraphFactory`, `BatchDAGOperator` |
+| `archive/` | `GridArchive`, `CVTArchive`, `ArchiveStatsTracker` |
+| `engine/` | `CausalMAPElites`, `MAPElitesConfig`, `BatchEvaluator` |
+| `operators/` | `EdgeFlipMutation`, `EdgeReverseMutation`, `UniformCrossover`, `TopologicalRepair` |
+| `scores/` | `BICScore`, `BDeuScore`, `BGeScore`, `CachedScore`, `FastBIC` |
+| `descriptors/` | `StructuralDescriptor`, `InfoTheoreticDescriptor`, `CompositeDescriptor` |
+| `certificates/` | `EdgeCertificate`, `BootstrapCertificateComputer`, `LipschitzBoundComputer` |
+| `ci_tests/` | `FisherZTest`, `KernelCITest`, `PartialCorrelationTest` |
+| `mec/` | `CPDAGConverter`, `CanonicalHasher`, `MECEnumerator` |
+| `equivalence/` | `DAGtoMEC` |
+| `data/` | `DataLoader`, `DataGenerator`, `DataPreprocessor` |
+| `baselines/` | `PCAlgorithm`, `GESBaseline`, `MMHCAlgorithm`, `RandomDAGBaseline` |
+| `metrics/` | `SHD`, `F1`, `skeleton_f1` |
+| `config/` | `CausalQDConfig`, `small_config`, `medium_config`, `large_config` |
+| `analysis/` | `DataSensitivityAnalyzer`, `AlgorithmComparator` |
+| `sampling/` | `OrderMCMC`, `UniformDAGSampler` |
+| `streaming/` | `OnlineArchive`, `IncrementalDescriptor` |
+| `benchmarks/` | `AsiaBenchmark`, `SachsBenchmark`, `BenchmarkRunner` |
+| `parallel/` | `ParallelEvaluator`, `IslandModelMAPElites` |
+| `visualization/` | `ConvergencePlotter`, `ArchivePlotter` |
+
+---
+
+## Development
+
+```bash
+# Install with dev dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest tests/                # Full suite
+pytest tests/ -x -q          # Quick, stop on first failure
+
+# Type checking
+mypy causal_qd/
+
+# Linting
+ruff check causal_qd/
+```
+
+---
+
+## License
+
+MIT

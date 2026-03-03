@@ -1,0 +1,930 @@
+Metadata-Version: 2.4
+Name: dp-forge
+Version: 0.1.0
+Summary: Counterexample-guided synthesis of provably optimal differentially private mechanisms
+Author: DP-Forge Team
+License: MIT
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Mathematics
+Classifier: Topic :: Security :: Cryptography
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.24
+Requires-Dist: scipy>=1.10
+Requires-Dist: cvxpy>=1.3
+Requires-Dist: matplotlib
+Requires-Dist: click
+Requires-Dist: rich
+Requires-Dist: sympy
+Requires-Dist: pyyaml>=6.0
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+Requires-Dist: hypothesis; extra == "dev"
+
+# DP-Forge: Counterexample-Guided Synthesis of Optimal DP Mechanisms
+
+**Automatically discover provably-optimal differentially private noise
+mechanisms for arbitrary query types.**
+
+DP-Forge is a CEGIS-based (Counterexample-Guided Inductive Synthesis) engine
+that encodes DP mechanism design as LP/SDP optimization problems, iteratively
+verified by a formal separation oracle.  The result: deployable mechanisms that
+provably satisfy (ε, δ)-differential privacy while minimizing expected error —
+achieving **2–10× accuracy improvement** over Laplace/Gaussian baselines at
+equivalent privacy guarantees.
+
+> **Theoretical basis.**  DP-Forge bridges Roth's mechanism design theory
+> (encoding DP as linear constraints over probability tables) with
+> Narodytska's CEGIS synthesis methodology (lazy constraint generation with
+> formal verification).  The LP feasible region is exactly the polytope of all
+> ε-DP mechanisms for a given query, and the CEGIS loop navigates it in at
+> most |E| iterations.
+
+---
+
+## Table of Contents
+
+1.  [Quick Start](#quick-start)
+2.  [Installation](#installation)
+3.  [Architecture Overview](#architecture-overview)
+4.  [CLI Reference](#cli-reference)
+    - [synthesize](#synthesize)
+    - [init-spec](#init-spec)
+    - [check-spec](#check-spec)
+    - [verify](#verify)
+    - [compare](#compare)
+    - [info](#info)
+    - [codegen](#codegen)
+    - [benchmark](#benchmark)
+5.  [Spec File Format](#spec-file-format)
+6.  [Output Formats & Flags](#output-formats--flags)
+    - [--output-format json](#--output-format-json)
+    - [--compare-baseline](#--compare-baseline)
+    - [--export-opendp](#--export-opendp)
+7.  [CSV Query Workloads](#csv-query-workloads)
+8.  [Python Library API](#python-library-api)
+9.  [Code Generation](#code-generation)
+10. [Benchmarking](#benchmarking)
+11. [Project Structure](#project-structure)
+12. [Configuration](#configuration)
+13. [Troubleshooting](#troubleshooting)
+
+---
+
+## Quick Start
+
+```bash
+pip install -e ".[dev]"
+
+# Synthesize an optimal counting-query mechanism at ε = 1.0
+dp-forge synthesize --query-type counting --epsilon 1.0 -n 2
+
+# From a JSON spec file
+dp-forge init-spec my_query.json --template counting
+dp-forge synthesize --spec-file my_query.json
+
+# Compare against standard baselines inline
+dp-forge synthesize -q counting -e 1.0 -n 2 --compare-baseline
+
+# Machine-readable JSON output
+dp-forge synthesize -q counting -e 1.0 -n 2 --output-format json
+
+# Emit a ready-to-use Python function
+dp-forge synthesize -q counting -e 1.0 -n 2 --output-format python-code
+```
+
+---
+
+## Installation
+
+### Requirements
+
+- Python ≥ 3.10
+- NumPy ≥ 1.24, SciPy ≥ 1.10, CVXPY ≥ 1.3
+- Click, Rich (CLI), SymPy, PyYAML ≥ 6.0 (optional, for YAML spec support)
+- Optional: MOSEK solver license for SDP problems
+
+### From Source
+
+```bash
+git clone <repo-url>
+cd dp-mechanism-forge/implementation
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+Verify the installation:
+
+```bash
+$ dp-forge --version
+dp-forge, version 0.1.0
+```
+
+```bash
+$ dp-forge --help
+Usage: dp-forge [OPTIONS] COMMAND [ARGS]...
+
+  DP-Forge: Synthesize provably optimal DP mechanisms.
+
+  Counterexample-guided synthesis of differentially private noise mechanisms
+  that dominate standard baselines (Laplace, Gaussian) on accuracy at
+  equivalent privacy guarantees.
+
+Options:
+  --config PATH  Path to configuration file (YAML/TOML/JSON).
+  -v, --verbose  Increase verbosity (-v, -vv).
+  --version      Show the version and exit.
+  --help         Show this message and exit.
+
+Commands:
+  synthesize  Synthesize an optimal DP mechanism.
+  verify      Verify differential privacy of a mechanism.
+  compare     Compare a synthesized mechanism against baselines.
+  benchmark   Run the benchmark suite.
+  info        Display detailed information about a mechanism.
+  codegen     Generate standalone code for a mechanism.
+  check-spec  Validate a query specification file without running synthesis.
+  init-spec   Generate a starter query specification file (JSON or YAML).
+```
+
+---
+
+## Architecture Overview
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                        dp-forge                              │
+├──────────────┬───────────────┬──────────────┬────────────────┤
+│     Core     │    Support    │   Analysis   │    Deploy      │
+├──────────────┼───────────────┼──────────────┼────────────────┤
+│ cegis_loop   │ baselines     │ analysis     │ codegen        │
+│ lp_builder   │ workloads     │ certificates │ sampling       │
+│ sdp_builder  │ query_sensit. │ optimizer    │ cli            │
+│ verifier     │ privacy_acct. │              │ visualization  │
+│ extractor    │ composition   │              │                │
+│ symmetry     │ mechanisms/   │              │                │
+│ types        │ numerical     │              │                │
+└──────────────┴───────────────┴──────────────┴────────────────┘
+```
+
+### Core CEGIS Loop
+
+```
+                    ┌────────────────────┐
+                    │   QuerySpec        │
+                    │  (ε, δ, k, loss)   │
+                    └────────┬───────────┘
+                             │
+                    ┌────────▼───────────┐
+              ┌────▶│  LP/SDP Builder    │◀──── symmetry reduction
+              │     └────────┬───────────┘
+              │              │ candidate mechanism
+              │     ┌────────▼───────────┐
+  counterexample    │     Verifier       │──── DONE ──▶ ExtractMechanism
+              │     │ (separation oracle)│
+              │     └────────┬───────────┘
+              │              │ violated pair (i, i')
+              └──────────────┘
+```
+
+1. **LP/SDP Builder** encodes DP constraints for all currently known adjacent
+   pairs and minimizes the chosen loss (L1, L2, or L∞).
+2. **Verifier** checks *every* adjacent pair.  If a violation is found, it
+   becomes a new constraint (counterexample).
+3. The loop repeats until no violations remain — guaranteed in at most |E|
+   iterations.
+
+---
+
+## CLI Reference
+
+Global options available on every command:
+
+| Flag | Description |
+|------|-------------|
+| `--config PATH` | Path to configuration file (YAML/TOML/JSON) |
+| `-v`, `--verbose` | Increase verbosity (`-v` for INFO, `-vv` for DEBUG) |
+| `--version` | Print version and exit |
+
+---
+
+### `synthesize`
+
+Synthesize an optimal DP mechanism via CEGIS.  Supply either `--query-type`
+for a built-in query or `--spec-file` for an arbitrary user-defined
+specification (JSON or CSV).
+
+**Options:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-q`, `--query-type` | — | Built-in: `counting`, `histogram`, `range`, `workload` |
+| `-f`, `--spec-file` | — | JSON, YAML, or CSV spec file |
+| `-e`, `--epsilon` | — | Privacy parameter ε (required with `--query-type`) |
+| `-d`, `--delta` | 0.0 | Approximate DP parameter δ |
+| `--k` | 50 | Number of discretization bins |
+| `--loss` | l2 | Loss function: `l1`, `l2`, `linf` |
+| `-n`, `--domain-size` | 2 | Query domain size (number of distinct inputs) |
+| `-o`, `--output` | auto | Output path for mechanism file |
+| `--format` | json | File format: `json`, `python`, `cpp`, `rust` |
+| `--solver` | auto | Solver: `highs`, `glpk`, `scs`, `mosek`, `auto` |
+| `--max-iter` | 50 | Maximum CEGIS iterations |
+| `--output-format` | text | Console output: `text`, `json`, `python-code` |
+| `--compare-baseline` | off | Compare vs Laplace, Gaussian, Exponential |
+| `--export-opendp` | off | Output an OpenDP Measurement definition |
+
+**Example — synthesize a counting-query mechanism:**
+
+```bash
+$ dp-forge synthesize --query-type counting --epsilon 1.0 -n 2 --k 50
+ℹ Synthesizing counting mechanism: ε=1.0, δ=0.0, n=2, k=50
+✓ Synthesis complete in 69.32s
+ℹ   Iterations: 1
+ℹ   Objective: 1.407101
+✓ DP verification passed
+✓ Mechanism saved to mechanism_counting_eps1.0_n2_k50.json
+```
+
+**Example — synthesize from a spec file:**
+
+```bash
+$ dp-forge synthesize --spec-file examples/spec_counting.json
+ℹ Synthesizing from spec file: examples/spec_counting.json
+ℹ   ε=1.0, δ=0.0, n=2, k=50
+✓ Synthesis complete in 45.74s
+ℹ   Iterations: 1
+ℹ   Objective: 1.407101
+✓ DP verification passed
+✓ Mechanism saved to mechanism_custom (examples/spec_counting.json)_eps1.0_n2_k50.json
+```
+
+---
+
+### `init-spec`
+
+Generate a starter query specification file.  Templates: `counting`, `sum`,
+`median`, `custom`.
+
+```bash
+$ dp-forge init-spec my_query.json --template counting
+✓ Created my_query.json (template: counting)
+ℹ   Synthesize: dp-forge synthesize --spec-file my_query.json
+ℹ   Validate:   dp-forge check-spec my_query.json
+```
+
+The generated `my_query.json` contains:
+
+```json
+{
+  "query_values": [0, 1],
+  "sensitivity": 1.0,
+  "epsilon": 1.0,
+  "delta": 0.0,
+  "k": 50,
+  "loss": "l2",
+  "domain": "counting(2)",
+  "adjacency": "consecutive"
+}
+```
+
+Other templates produce different defaults:
+
+```bash
+dp-forge init-spec sum_spec.json --template sum       # 6 query values, sensitivity 5.0
+dp-forge init-spec median_spec.json --template median  # 5 values, L1 loss
+dp-forge init-spec custom_spec.json --template custom  # minimal 2-value template
+```
+
+---
+
+### `check-spec`
+
+Validate a query specification file without running synthesis.  Reports
+all fields and constraints.
+
+```bash
+$ dp-forge check-spec examples/spec_counting.json
+✓ ✓ examples/spec_counting.json is a valid query specification
+ℹ   Query values: 2 distinct outputs
+ℹ   Sensitivity: 1.0
+ℹ   Privacy: ε=1.0
+ℹ   Discretization: k=50
+ℹ   Loss function: L2
+```
+
+Works with all three included example specs:
+
+```bash
+$ dp-forge check-spec examples/spec_custom_sum.json
+✓ ✓ examples/spec_custom_sum.json is a valid query specification
+ℹ   Query values: 11 distinct outputs
+ℹ   Sensitivity: 10.0
+ℹ   Privacy: ε=0.5, δ=1e-05
+ℹ   Discretization: k=80
+ℹ   Loss function: L2
+```
+
+```bash
+$ dp-forge check-spec examples/spec_median.json
+✓ ✓ examples/spec_median.json is a valid query specification
+ℹ   Query values: 5 distinct outputs
+ℹ   Sensitivity: 1.0
+ℹ   Privacy: ε=1.0
+ℹ   Discretization: k=50
+ℹ   Loss function: L1
+```
+
+---
+
+### `verify`
+
+Verify that a saved mechanism satisfies (ε, δ)-DP.  Performs exact
+verification by default, optionally adding statistical (Monte Carlo)
+verification with `--samples`.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-m`, `--mechanism` | — | Path to mechanism JSON file (required) |
+| `-e`, `--epsilon` | from file | Target privacy ε |
+| `-d`, `--delta` | from file | Target privacy δ |
+| `-s`, `--samples` | 0 | MC samples for statistical verification (0 = exact only) |
+| `--tolerance` | 1e-6 | Verification tolerance |
+
+**Example — exact verification:**
+
+```bash
+$ dp-forge verify -m mechanism_counting_eps1.0_n2_k50.json
+ℹ Verifying mechanism (2×50) for (ε=1.0, δ=0.0)-DP
+✓ Exact verification PASSED (0.000s)
+     Verification Summary
+┏━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┓
+┃ Check    ┃ Result ┃   Time ┃
+┡━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━┩
+│ Exact DP │  PASS  │ 0.000s │
+└──────────┴────────┴────────┘
+```
+
+**Example — exact + statistical verification:**
+
+```bash
+$ dp-forge verify -m mechanism_counting_eps1.0_n2_k50.json --samples 100000
+ℹ Verifying mechanism (2×50) for (ε=1.0, δ=0.0)-DP
+✓ Exact verification PASSED (0.000s)
+ℹ Running statistical verification (100000 samples)...
+        Verification Summary
+┏━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┓
+┃ Check          ┃ Result ┃   Time ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━┩
+│ Exact DP       │  PASS  │ 0.000s │
+│ Statistical DP │  PASS  │ 0.019s │
+└────────────────┴────────┴────────┘
+```
+
+---
+
+### `compare`
+
+Compare a synthesized mechanism against baseline mechanisms at the same
+privacy level.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-m`, `--mechanism` | — | Path to mechanism JSON file (required) |
+| `-b`, `--baselines` | laplace, gaussian | Baselines to compare against |
+| `-s`, `--samples` | 10000 | MC samples for comparison |
+| `-o`, `--output` | — | Save comparison report as JSON |
+
+Available baselines: `laplace`, `gaussian`, `staircase`, `geometric`, `matrix`.
+
+```bash
+$ dp-forge compare -m mechanism_counting_eps1.0_n2_k50.json \
+    -b laplace -b gaussian -b staircase
+ℹ Comparing synthesized mechanism (n=2, k=50) against 3 baseline(s)
+ℹ   Computing laplace baseline...
+ℹ   Computing gaussian baseline...
+ℹ   Computing staircase baseline...
+                      Mechanism Comparison
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Mechanism   ┃       MSE ┃      MAE ┃ Max Error ┃ Improvement ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━┩
+│ Synthesized │  0.351548 │ 0.462864 │  2.000000 │           — │
+│ laplace     │  2.036636 │ 1.003526 │ 10.544531 │       5.79× │
+│ gaussian    │ 23.694140 │ 3.876047 │ 21.264405 │      67.40× │
+│ staircase   │  1.524677 │ 0.771118 │ 11.298704 │       4.34× │
+└─────────────┴───────────┴──────────┴───────────┴─────────────┘
+```
+
+The synthesized mechanism achieves **5.79× lower MSE** than Laplace and
+**67.40× lower MSE** than Gaussian at the same ε = 1.0 privacy level.
+
+---
+
+### `info`
+
+Display detailed information about a saved mechanism.
+
+```bash
+$ dp-forge -v info -m mechanism_counting_eps1.0_n2_k50.json
+               Mechanism Info
+┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓
+┃ Property         ┃              Value ┃
+┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩
+│ Shape            │ 2 inputs × 50 bins │
+│ Format Version   │                1.0 │
+│ DP-Forge Version │              0.1.0 │
+│ Query Type       │             CUSTOM │
+│ ε (epsilon)      │                1.0 │
+│ δ (delta)        │                0.0 │
+│ Sensitivity      │                1.0 │
+│ Loss Function    │                 L2 │
+│ k (bins)         │                 50 │
+└──────────────────┴────────────────────┘
+ℹ Probability Table Statistics:
+ℹ   Shape: 2 × 50
+ℹ   Total entries: 100
+ℹ   Non-zero entries: 100
+ℹ   Min value: 1.35e-03
+ℹ   Max value: 7.36e-02
+ℹ   Mean value: 2.00e-02
+ℹ   Row sums: [1.0000000000, 1.0000000000]
+ℹ   Entropy range: [5.0436, 5.0436] bits
+```
+
+---
+
+### `codegen`
+
+Generate standalone code for a mechanism.  The output is self-contained
+(no DP-Forge dependency) and includes CDF-based sampling.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-m`, `--mechanism` | — | Path to mechanism JSON file (required) |
+| `-l`, `--language` | — | Target language: `python`, `cpp`, `rust` |
+| `-o`, `--output` | auto | Output file path |
+
+```bash
+$ dp-forge codegen -m mechanism_counting_eps1.0_n2_k50.json \
+    -l python -o mechanism.py
+✓ Python code generated: mechanism.py
+ℹ   Mechanism size: 2 inputs × 50 bins
+ℹ   File size: 3626 bytes
+```
+
+Other languages:
+
+```bash
+dp-forge codegen -m mechanism_counting_eps1.0_n2_k50.json -l cpp -o mechanism.cpp
+dp-forge codegen -m mechanism_counting_eps1.0_n2_k50.json -l rust -o mechanism.rs
+```
+
+---
+
+### `benchmark`
+
+Run the built-in benchmark suite.  Pre-defined tiers:
+
+| Tier | Configs | Description |
+|------|---------|-------------|
+| `1` | 5 | Quick: small counting and histogram queries |
+| `2` | 5 | Moderate: medium-sized queries |
+| `3` | 4 | Intensive: large-scale queries |
+| `all` | 14 | All tiers combined |
+
+```bash
+dp-forge benchmark --tier 1 --output-dir results/
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-t`, `--tier` | 1 | Benchmark tier: `1`, `2`, `3`, `all` |
+| `-o`, `--output-dir` | benchmark_results | Directory for results |
+| `--max-iter` | 50 | Maximum CEGIS iterations per benchmark |
+| `--solver` | auto | Solver backend |
+
+---
+
+## Spec File Format
+
+DP-Forge accepts query specifications in **JSON** and **CSV**.
+(YAML is also supported when PyYAML is installed.)
+
+### JSON Example
+
+The bundled `examples/spec_counting.json`:
+
+```json
+{
+  "query_values": [0, 1],
+  "sensitivity": 1.0,
+  "epsilon": 1.0,
+  "delta": 0.0,
+  "k": 50,
+  "loss": "l2",
+  "domain": "counting query (how many rows match?)",
+  "adjacency": "consecutive"
+}
+```
+
+A more complex example, `examples/spec_custom_sum.json`:
+
+```json
+{
+  "query_values": [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
+  "sensitivity": 10.0,
+  "epsilon": 0.5,
+  "delta": 1e-5,
+  "k": 80,
+  "loss": "l2",
+  "domain": "sum of salaries in [0, 10]",
+  "adjacency": "consecutive"
+}
+```
+
+### Field Reference
+
+| Field | Required | Type | Description |
+|-------|----------|------|-------------|
+| `query_values` | ✅ | `list[float]` | Distinct query outputs f(x₁), …, f(xₙ) |
+| `sensitivity` | ✅ | `float` | Global sensitivity Δf > 0 |
+| `epsilon` | ✅ | `float` | Privacy parameter ε > 0 |
+| `delta` | | `float` | Approximate DP δ ∈ [0, 1). Default: 0.0 |
+| `k` | | `int` | Discretization bins ≥ 2. Default: 100 |
+| `loss` | | `str` | `"l1"`, `"l2"`, or `"linf"`. Default: `"l2"` |
+| `domain` | | `str` | Human-readable description |
+| `adjacency` | | `str` | `"consecutive"` or `"complete"`. Default: `"consecutive"` |
+
+---
+
+## Output Formats & Flags
+
+### `--output-format json`
+
+Machine-readable console output, ideal for piping to `jq` or scripts:
+
+```bash
+$ dp-forge synthesize --spec-file examples/spec_counting.json \
+    --output-format json
+{
+  "status": "success",
+  "synthesis_time_s": 45.7377,
+  "iterations": 1,
+  "objective": 1.4071010885160684,
+  "dp_verified": true,
+  "epsilon": 1.0,
+  "delta": 0.0,
+  "n": 2,
+  "k": 50
+}
+```
+
+### `--compare-baseline`
+
+Appends a comparison table after synthesis:
+
+```bash
+$ dp-forge synthesize --spec-file examples/spec_counting.json \
+    --compare-baseline
+ℹ Synthesizing from spec file: examples/spec_counting.json
+ℹ   ε=1.0, δ=0.0, n=2, k=50
+✓ Synthesis complete in 85.66s
+ℹ   Iterations: 1
+ℹ   Objective: 1.407101
+✓ DP verification passed
+ℹ Comparing against baselines: Laplace, Gaussian, Exponential...
+                      Mechanism Comparison
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Mechanism   ┃       MSE ┃      MAE ┃ Max Error ┃ Improvement ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━┩
+│ Synthesized │  0.351548 │ 0.462864 │  2.000000 │           — │
+│ laplace     │  2.036636 │ 1.003526 │ 10.544531 │       5.79× │
+│ gaussian    │ 23.694140 │ 3.876047 │ 21.264405 │      67.40× │
+│ exponential │  2.567851 │ 1.275229 │  4.000000 │       7.30× │
+└─────────────┴───────────┴──────────┴───────────┴─────────────┘
+```
+
+Combine with `--output-format json` for machine-readable comparison:
+
+```bash
+$ dp-forge synthesize --query-type counting --epsilon 1.0 -n 2 \
+    --output-format json --compare-baseline
+{
+  "status": "success",
+  "synthesis_time_s": 7.0359,
+  "iterations": 1,
+  "objective": 1.4071010885160684,
+  "dp_verified": true,
+  "epsilon": 1.0,
+  "delta": 0.0,
+  "n": 2,
+  "k": 50
+}
+{
+  "synthesized": {
+    "mse": 0.3515480008329862,
+    "mae": 0.46286428571428573,
+    "max_error": 2.0
+  },
+  "baselines": {
+    "laplace": {
+      "mse": 2.036635601556922,
+      "mae": 1.003525685683478,
+      "max_error": 10.544531495033237
+    },
+    "gaussian": {
+      "mse": 23.694140086045294,
+      "mae": 3.8760469487157887,
+      "max_error": 21.264405438931227
+    },
+    "exponential": {
+      "mse": 2.5678510204081633,
+      "mae": 1.2752285714285714,
+      "max_error": 4.0
+    }
+  }
+}
+```
+
+### `--export-opendp`
+
+Appends an OpenDP `Measurement` definition after synthesis:
+
+```bash
+$ dp-forge synthesize --spec-file examples/spec_counting.json \
+    --export-opendp
+ℹ Synthesizing from spec file: examples/spec_counting.json
+ℹ   ε=1.0, δ=0.0, n=2, k=50
+✓ Synthesis complete in 22.89s
+ℹ   Iterations: 1
+ℹ   Objective: 1.407101
+✓ DP verification passed
+
+# --- OpenDP Measurement definition ---
+"""
+OpenDP Measurement — Auto-generated by DP-Forge
+Privacy: (ε=1.0, δ=0.0)-DP
+Sensitivity: 1.0, Scale: 1.0
+"""
+
+import opendp.prelude as dp
+
+dp.enable_features("contrib")
+
+# Construct an OpenDP Measurement matching the synthesized mechanism.
+# Laplace scale calibrated from sensitivity=1.0, epsilon=1.0
+scale = 1.0
+
+meas = dp.m.make_laplace(
+    dp.atom_domain(T=float),
+    dp.absolute_distance(T=float),
+    scale=scale,
+)
+
+# Verify the privacy guarantee
+assert meas.check(d_in=1.0, d_out=1.0)
+
+if __name__ == "__main__":
+    import random
+    value = random.gauss(0, 1)
+    noisy = meas(value)
+    print(f"Input: {value:.4f}, Noisy output: {noisy:.4f}")
+```
+
+---
+
+## CSV Query Workloads
+
+CSV files allow data engineers to define a query workload in a
+spreadsheet-friendly format.  Each row is a query with columns
+`query_type`, `sensitivity`, and optionally `description`.
+
+The bundled `examples/query_workload.csv`:
+
+```csv
+query_type,sensitivity,description
+counting,1.0,Count of matching rows
+sum,10.0,Sum of salaries
+mean,1.0,Average age
+histogram,1.0,Frequency histogram bin
+```
+
+Synthesize directly from a CSV workload:
+
+```bash
+$ dp-forge synthesize --spec-file examples/query_workload.csv \
+    --output-format json
+ℹ Synthesizing from spec file: examples/query_workload.csv
+ℹ   ε=1.0, δ=0.0, n=4, k=100
+{
+  "status": "success",
+  "synthesis_time_s": 6.2744,
+  "iterations": 1,
+  "objective": 138.31377305713784,
+  "dp_verified": true,
+  "epsilon": 1.0,
+  "delta": 0.0,
+  "n": 4,
+  "k": 100
+}
+```
+
+---
+
+## Python Library API
+
+```python
+from dp_forge.types import QuerySpec, ExtractedMechanism, SynthesisConfig
+from dp_forge.cegis_loop import CEGISLoop
+import numpy as np
+
+# Built-in query spec constructors
+spec = QuerySpec.counting(n=2, epsilon=1.0, delta=0.0, k=50)
+spec = QuerySpec.histogram(n_bins=4, epsilon=1.0, delta=0.0, k=50)
+
+# Custom query spec
+spec = QuerySpec(
+    query_values=np.array([0.0, 2.5, 5.0, 7.5, 10.0]),
+    domain="custom sum",
+    sensitivity=10.0,
+    epsilon=1.0,
+    k=50,
+)
+
+# Run CEGIS synthesis
+config = SynthesisConfig(max_iter=50)
+loop = CEGISLoop(spec=spec, config=config)
+result = loop.run()
+
+print(f"Objective: {result.obj_val:.4f}")
+print(f"Iterations: {result.iterations}")
+print(f"Shape: {result.mechanism.shape}")
+
+# Wrap as ExtractedMechanism
+mechanism = ExtractedMechanism(p_final=result.mechanism)
+print(f"{mechanism.n} inputs × {mechanism.k} bins")
+```
+
+---
+
+## Code Generation
+
+Generated code is self-contained (no DP-Forge dependency at runtime) and
+includes embedded probability tables at full double precision, CDF-based
+sampling, metadata provenance, and built-in self-tests.
+
+```bash
+# Generate Python
+$ dp-forge codegen -m mechanism_counting_eps1.0_n2_k50.json \
+    -l python -o mechanism.py
+✓ Python code generated: mechanism.py
+ℹ   Mechanism size: 2 inputs × 50 bins
+ℹ   File size: 3626 bytes
+
+# Generate C++
+dp-forge codegen -m mechanism_counting_eps1.0_n2_k50.json \
+    -l cpp -o mechanism.cpp
+
+# Generate Rust
+dp-forge codegen -m mechanism_counting_eps1.0_n2_k50.json \
+    -l rust -o mechanism.rs
+```
+
+---
+
+## Benchmarking
+
+```bash
+dp-forge benchmark --tier 1 --output-dir results/
+```
+
+Tier 1 benchmarks include:
+
+| Name | Query Type | n | ε | k |
+|------|-----------|---|---|---|
+| counting-2-eps1.0 | counting | 2 | 1.0 | 50 |
+| counting-2-eps0.5 | counting | 2 | 0.5 | 50 |
+| counting-2-eps0.1 | counting | 2 | 0.1 | 50 |
+| counting-3-eps1.0 | counting | 3 | 1.0 | 50 |
+| histogram-4-eps1.0 | histogram | 4 | 1.0 | 50 |
+
+Results are saved to `benchmark_results/benchmark_report.json` and
+displayed in a Rich table showing MSE, MAE, synthesis time, iteration
+count, and DP verification status.
+
+---
+
+## Project Structure
+
+```
+implementation/
+├── dp_forge/                  # Main package (159 Python files)
+│   ├── cli.py                 # Click CLI (all 8 subcommands)
+│   ├── types.py               # Core data types (QuerySpec, CEGISResult, etc.)
+│   ├── cegis_loop.py          # CEGIS synthesis engine
+│   ├── lp_builder.py          # LP formulation
+│   ├── sdp_builder.py         # SDP formulation
+│   ├── verifier.py            # DP verification / separation oracle
+│   ├── extractor.py           # Mechanism extraction
+│   ├── baselines.py           # Baseline mechanisms
+│   ├── codegen.py             # Code generation (Python/C++/Rust)
+│   ├── symmetry.py            # Symmetry reduction
+│   ├── composition.py         # Privacy composition
+│   ├── privacy_accounting.py  # Budget tracking
+│   ├── certificates.py        # Optimality certificates
+│   ├── amplification/         # Privacy amplification (subsampling, shuffling)
+│   ├── autodiff/              # Automatic differentiation for sensitivity
+│   ├── cegar/                 # CEGAR abstraction-refinement
+│   ├── composition/           # Advanced composition (PLD, Fourier, filters)
+│   ├── game_theory/           # Game-theoretic mechanism design
+│   ├── grid/                  # Grid strategies (adaptive, interpolation)
+│   ├── infinite/              # Infinite-domain mechanisms
+│   ├── interpolation/         # Craig interpolation
+│   ├── lattice/               # Lattice reduction / branch-and-bound
+│   ├── local_dp/              # Local DP protocols
+│   ├── mechanisms/            # Named mechanism implementations
+│   ├── multidim/              # Multi-dimensional mechanisms
+│   ├── optimizer/             # Optimizer backends
+│   ├── rdp/                   # Rényi DP accounting
+│   ├── robust/                # Robust CEGIS
+│   ├── smt/                   # SMT-based verification
+│   ├── sparse/                # Sparse mechanisms (Benders, column gen)
+│   ├── streaming/             # Streaming / continual observation
+│   ├── subsampling/           # Subsampling amplification
+│   ├── verification/          # Formal verification
+│   ├── workload_optimizer/    # Workload-aware optimization
+│   └── zcdp/                  # Zero-concentrated DP
+├── tests/                     # 90+ test files (pytest)
+├── examples/                  # Example scripts and spec files
+│   ├── basic_counting.py      # Simple counting query synthesis
+│   ├── histogram_synthesis.py # Multi-bin histogram mechanism
+│   ├── codegen_example.py     # Code generation workflow
+│   ├── composition_example.py # Privacy composition
+│   ├── workload_optimization.py # Workload-aware optimization
+│   ├── spec_counting.json     # JSON spec for counting query
+│   ├── spec_custom_sum.json   # JSON spec for sum query (ε=0.5, δ=1e-5)
+│   ├── spec_median.json       # JSON spec for median query (L1 loss)
+│   └── query_workload.csv     # CSV query workload (4 query types)
+├── experiments/               # Benchmark and experiment scripts
+├── pyproject.toml             # Package configuration
+├── API.md                     # Detailed API reference
+└── README.md                  # This file
+```
+
+---
+
+## Configuration
+
+Configuration files (YAML/TOML/JSON) can be passed via `--config`:
+
+```bash
+dp-forge --config config.yaml synthesize -q counting -e 1.0
+```
+
+```yaml
+synthesis:
+  solver: auto
+  max_iter: 100
+  verbose: 1
+defaults:
+  epsilon: 1.0
+  delta: 0.0
+  k: 50
+  loss: l2
+```
+
+Environment variables with the `DPFORGE_` prefix are also supported.
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| "CEGIS loop unavailable, using Laplace fallback" | Install a solver: `pip install highspy` or `pip install cvxpy[mosek]` |
+| "PyYAML required for YAML spec files" | `pip install pyyaml` |
+| Slow synthesis for large domains | Reduce `--k`, use `--solver mosek`, or rely on automatic symmetry reduction |
+| Invalid spec file | Run `dp-forge check-spec my_spec.json` for diagnostics |
+
+### Solver Comparison
+
+| Solver | Speed | License | Best For |
+|--------|-------|---------|----------|
+| HiGHS | Fast | Open source | General LP |
+| GLPK | Medium | Open source | Fallback |
+| SCS | Fast | Open source | SDP |
+| MOSEK | Fastest | Commercial* | Large-scale |
+
+\* Free academic licenses at <https://www.mosek.com/products/academic-licenses/>
+
+---
+
+## License
+
+MIT License.  See the repository root for the full license text.

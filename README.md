@@ -10,27 +10,27 @@ A paper describing the approach used to generate this collection is forthcoming.
 
 | Repository | Description |
 |---|---|
-| [a-spatial-query-compiler-that-marries-siegel-style](./a-spatial-query-compiler-that-marries-siegel-style) | Spatial query compiler |
-| [bioprover-ai-cegar-synbio-verify-repair](./bioprover-ai-cegar-synbio-verify-repair) | AI-driven CEGAR for synthetic biology verification and repair |
-| [causal-shielded-adaptive-trading](./causal-shielded-adaptive-trading) | Causal shielding for adaptive trading systems |
-| [certified-bio-phase-cartographer](./certified-bio-phase-cartographer) | Certified phase diagram cartography for biological systems |
-| [coalg-cert-tlaplus-compress](./coalg-cert-tlaplus-compress) | Coalgebraic certification and TLA+ compression |
-| [coalgebraic-llm-behavioral-certifier](./coalgebraic-llm-behavioral-certifier) | Coalgebraic certification of LLM behavioral properties |
-| [cpu-selfhealing-ml-pipeline-runtime](./cpu-selfhealing-ml-pipeline-runtime) | Self-healing ML pipeline runtime for CPU execution |
-| [cross-language-equivalence-verifier](./cross-language-equivalence-verifier) | Cross-language program equivalence verification |
-| [csl-model-checking-on-tensor-train-cme](./csl-model-checking-on-tensor-train-cme) | CSL model checking via tensor-train chemical master equations |
-| [diversity-decoding-arena](./diversity-decoding-arena) | Arena for diversity-aware decoding strategies |
-| [finite-width-phase-diagrams](./finite-width-phase-diagrams) | Finite-width neural network phase diagrams |
-| [litmus-inf](./litmus-inf) | Litmus testing for inference systems |
-| [marl-interaction-race-verifier](./marl-interaction-race-verifier) | Race condition verifier for multi-agent RL interactions |
-| [pram-hash-sim-compiler](./pram-hash-sim-compiler) | PRAM hash simulation compiler |
-| [qelens-wasserstein-certificates](./qelens-wasserstein-certificates) | Wasserstein distance certificates for quantum lens systems |
-| [refinement-type-inference-dynamic-lang](./refinement-type-inference-dynamic-lang) | Refinement type inference for dynamic languages |
-| [retriever-fusion-cross-boundary-jit](./retriever-fusion-cross-boundary-jit) | Cross-boundary JIT compilation with retrieval fusion |
-| [spectacles-wfa-zk-scoring-circuits](./spectacles-wfa-zk-scoring-circuits) | Zero-knowledge scoring circuits using weighted finite automata |
-| [speculative-sparse-cpu-inference](./speculative-sparse-cpu-inference) | Speculative sparse inference on CPU |
-| [verified-causal-systemic-risk-engine](./verified-causal-systemic-risk-engine) | Verified causal engine for systemic risk analysis |
-| [verified-manipulation-evidence-engine](./verified-manipulation-evidence-engine) | Verified evidence engine for manipulation detection |
+| [bio-phase-atlas](./bio-phase-atlas) | Certified phase atlases for biological ODEs |
+| [causal-risk-bounds](./causal-risk-bounds) | Verified causal bounds on systemic financial risk |
+| [causal-trading-shields](./causal-trading-shields) | Causal discovery with safety shields for adaptive trading |
+| [cross-lang-verifier](./cross-lang-verifier) | Catches UB divergences in C→Rust translations |
+| [diversity-decoding](./diversity-decoding) | LLM output diversity with formal optimality certificates |
+| [dp-verify-repair](./dp-verify-repair) | Differential privacy verification and repair |
+| [litmus-inf](./litmus-inf) | Axiomatic memory model litmus test verification |
+| [market-manipulation-prover](./market-manipulation-prover) | Z3-certified market manipulation detection |
+| [marl-race-detect](./marl-race-detect) | Scheduling-dependent bug detection in multi-agent RL |
+| [ml-pipeline-selfheal](./ml-pipeline-selfheal) | Self-healing runtime for ML pipelines |
+| [nn-init-phases](./nn-init-phases) | Neural network initialization phase diagnostics |
+| [pram-compiler](./pram-compiler) | PRAM algorithm to cache-efficient C compiler |
+| [rag-fusion-compiler](./rag-fusion-compiler) | Cross-boundary operator fusion for RAG pipelines |
+| [refinement-types](./refinement-types) | Refinement type inference for Python |
+| [sparse-cpu-inference](./sparse-cpu-inference) | Speculative sparse inference engine for CPU |
+| [spatial-hash-compiler](./spatial-hash-compiler) | Spatial query compiler via geometric perfect hashing |
+| [synbio-verifier](./synbio-verifier) | Formal verification for synthetic biology circuits |
+| [tensor-train-modelcheck](./tensor-train-modelcheck) | CSL model checking on tensor-train compressed states |
+| [tlaplus-coalgebra-compress](./tlaplus-coalgebra-compress) | Coalgebraic compression for TLA+ model checking |
+| [wasserstein-bounds](./wasserstein-bounds) | Distribution drift monitoring with Wasserstein certificates |
+| [zk-nlp-scoring](./zk-nlp-scoring) | Zero-knowledge proofs for NLP benchmark scores |
 
 ## License
 
