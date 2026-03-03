@@ -11,10 +11,13 @@ A paper describing the approach used to generate this collection is forthcoming.
 | Repository | Description |
 |---|---|
 | [bio-phase-atlas](./bio-phase-atlas) | Certified phase atlases for biological ODEs |
+| [causal-plasticity-atlas](./causal-plasticity-atlas) | Multi-context causal mechanism plasticity mapping |
+| [causal-qd-illumination](./causal-qd-illumination) | Quality-diversity illumination for causal discovery |
 | [causal-risk-bounds](./causal-risk-bounds) | Verified causal bounds on systemic financial risk |
 | [causal-trading-shields](./causal-trading-shields) | Causal discovery with safety shields for adaptive trading |
 | [cross-lang-verifier](./cross-lang-verifier) | Catches UB divergences in C→Rust translations |
 | [diversity-decoding](./diversity-decoding) | LLM output diversity with formal optimality certificates |
+| [dp-mechanism-forge](./dp-mechanism-forge) | Counterexample-guided synthesis of optimal DP mechanisms |
 | [dp-verify-repair](./dp-verify-repair) | Differential privacy verification and repair |
 | [litmus-inf](./litmus-inf) | Axiomatic memory model litmus test verification |
 | [market-manipulation-prover](./market-manipulation-prover) | Z3-certified market manipulation detection |
