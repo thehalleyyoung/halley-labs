@@ -14,7 +14,13 @@ import sys
 import time
 from pathlib import Path
 
-RESULTS_DIR = Path(__file__).parent / "results"
+# Ensure experiment modules and usability_oracle are importable
+_here = Path(__file__).resolve().parent
+_root = _here.parent
+sys.path.insert(0, str(_here))
+sys.path.insert(0, str(_root / "implementation"))
+
+RESULTS_DIR = _here / "results"
 
 
 def main():

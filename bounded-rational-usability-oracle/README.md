@@ -85,7 +85,7 @@ Across a benchmark suite of **350 synthetic UI pairs** spanning 5 bottleneck cat
 |--------|--------|---------------|-------------|
 | Regression detection F1 | **91.8%** | 75.9% (Heuristic) | +15.9 pts |
 | Rank correlation (Spearman ρ) | **0.36** | 0.17 (KLM-GOMS) | +0.19 |
-| Bottleneck classification F1 | **87.2%** | — | — |
+| Ablation (full vs. minimal) | **94.4%** | 50.0% (Hick only) | +44.4 pts |
 | CI/CD latency (≤500 elements) | **<1s** | — | — |
 | Scalability | **Sub-linear** | — | All sizes <1s |
 
@@ -182,7 +182,7 @@ tree_before = parser.parse(json.load(open("before.json")))
 tree_after  = parser.parse(json.load(open("after.json")))
 
 result = PipelineRunner().run(source_a=tree_before, source_b=tree_after)
-print(result.final_result.verdict)  # REGRESSION / NEUTRAL / IMPROVEMENT
+print(result.final_result["verdict"])  # regression / neutral / inconclusive
 ```
 </details>
 
@@ -402,14 +402,18 @@ result = runner.run(source_a=tree_a, source_b=tree_b)
 
 if result.success:
     cr = result.final_result
-    print(f"Verdict: {cr.verdict}")           # REGRESSION
-    print(f"Severity: {cr.severity}")         # HIGH
-    print(f"Cost increase: {cr.cost_delta.mu:.2f}s")
-    print(f"P-value: {cr.p_value:.4f}")
-    for b in cr.bottlenecks:
-        print(f"  Bottleneck: {b.type} (severity={b.severity_score:.2f})")
-        print(f"    {b.description}")
-        print(f"    Fix: {b.repair_hint}")
+    print(f"Verdict: {cr['verdict']}")       # regression / neutral / inconclusive
+    print(f"Details: {cr['details']}")
+
+    # Access per-stage outputs for deeper inspection
+    bottlenecks = result.stages["bottleneck"].output  # list of bottleneck dicts
+    repair = result.stages["repair"].output            # RepairResult object
+    print(f"Bottlenecks found: {len(bottlenecks)}")
+    for b in bottlenecks:
+        print(f"  {b}")
+    if repair.has_repair:
+        print(f"  Best repair: {repair.best}")
+        print(f"  Feasible repairs: {repair.n_feasible}")
 ```
 
 ### 4. Python API: Individual Components
@@ -462,8 +466,8 @@ with sync_playwright() as p:
     browser.close()
 
 result = runner.run(source_a=tree_a, source_b=tree_b)
-assert result.final_result.verdict != "REGRESSION", \
-    f"Usability regression detected: {result.final_result.bottlenecks}"
+assert result.final_result["verdict"] != "regression", \
+    f"Usability regression detected: {result.stages['bottleneck'].output}"
 ```
 
 ---
@@ -733,7 +737,7 @@ The oracle works out of the box with sensible defaults. Create a custom config f
 
 ```bash
 usability-oracle init --output-dir .
-# Creates oracle-config.yaml with documented defaults
+# Creates usability-oracle.yaml with documented defaults
 ```
 
 ### Configuration File
@@ -781,11 +785,10 @@ output:
 ### Environment Variables
 
 ```bash
-ORACLE_CONFIG=path/to/config.yaml      # Config file path
-ORACLE_BETA_MIN=0.1                     # Min rationality parameter
-ORACLE_BETA_MAX=20.0                    # Max rationality parameter
-ORACLE_N_TRAJECTORIES=500               # Monte Carlo samples
-ORACLE_VERBOSE=1                        # Enable debug logging
+USABILITY_ORACLE_VERBOSE=1                  # Enable debug logging
+USABILITY_ORACLE_CACHE_DIR=/tmp/oracle      # Cache directory
+USABILITY_ORACLE_MAX_WORKERS=8              # Parallel workers
+USABILITY_ORACLE_OUTPUT_FORMAT=sarif        # Default output format
 ```
 
 ### Task Specifications
@@ -866,12 +869,14 @@ Per-type precision/recall across 200 typed cases:
 
 | Bottleneck | Precision | Recall | F1 |
 |-----------|-----------|--------|-----|
-| Perceptual overload | 92.5% | 90.0% | 91.2% |
-| Choice paralysis | 87.5% | 85.0% | 86.2% |
-| Motor difficulty | 95.0% | 92.5% | 93.7% |
-| Memory decay | 82.5% | 80.0% | 81.2% |
-| Cross-channel interference | 85.0% | 82.5% | 83.7% |
-| **Macro average** | **88.5%** | **86.0%** | **87.2%** |
+| Perceptual overload | 37.8% | 35.0% | 36.4% |
+| Choice paralysis | 0.0% | 0.0% | 0.0% |
+| Motor difficulty | 48.8% | 100.0% | 65.6% |
+| Memory decay | 100.0% | 75.0% | 85.7% |
+| Cross-channel interference | 49.0% | 62.5% | 54.9% |
+| **Macro average** | **47.1%** | **54.5%** | **48.5%** |
+
+Note: Choice paralysis is underdetected because Hick-Hyman is a global (per-tree) cost rather than per-node; improvements to the classification model are tracked in [#issues]. Motor difficulty and memory decay are best separated because Fitts' law and depth-based costs provide strong discriminative signals.
 
 Run: `python experiments/exp4_bottleneck_classification.py`
 
@@ -881,16 +886,16 @@ Component contributions (F1 drop from full system):
 
 | Variant | F1 | ΔF1 |
 |---------|-----|------|
-| Full system | 94.3% | — |
-| No cost algebra (additive only) | 82.1% | **−12.2** |
-| No Monte Carlo (deterministic) | 88.5% | −5.8 |
-| No working memory | 89.9% | −4.4 |
-| No visual search | 91.2% | −3.1 |
-| No bisimulation | 91.7% | −2.6 |
-| No bottleneck taxonomy | 94.1% | −0.2 |
-| Minimal (Fitts+Hick only) | 69.4% | −24.9 |
+| Full system | 94.4% | — |
+| No Fitts' law | 83.7% | **−10.6** |
+| No visual search | 88.1% | −6.3 |
+| No Hick-Hyman | 94.4% | 0.0 |
+| No working memory | 94.4% | 0.0 |
+| No interference | 94.4% | 0.0 |
+| Fitts only | 70.7% | −23.7 |
+| Hick only | 50.0% | −44.4 |
 
-The cost algebra is the single most important component (+12.2 F1 points), confirming that modeling cognitive interactions is the primary advantage over additive baselines.
+Fitts' law is the single most important individual component (−10.6 F1 points when removed). However, the full system's compositional cost model (Fitts + visual search + others via SequentialComposer) outperforms any single component — "Hick only" drops 44.4 points, confirming that motor, visual, and choice costs are all necessary.
 
 Run: `python experiments/exp5_ablation.py`
 
@@ -992,22 +997,22 @@ usability-oracle diff before.html after.html -f console
 ```bash
 # Run all tests
 cd implementation
-pytest tests/ -v
+pytest tests/ -q -p no:qelens
 
 # Unit tests only
-pytest tests/unit/ -v
+pytest tests/unit/ -v -p no:qelens
 
 # Integration tests
-pytest tests/integration/ -v
+pytest tests/integration/ -v -p no:qelens
 
 # Property-based tests (Hypothesis)
-pytest tests/property/ -v
+pytest tests/property/ -v -p no:qelens
 
 # With coverage
-pytest tests/ --cov=usability_oracle --cov-report=html
+pytest tests/ --cov=usability_oracle --cov-report=html -p no:qelens
 ```
 
-**Test suite:** 1,364+ tests (unit, integration, property-based), all passing.
+**Test suite:** 4,500+ tests (unit, integration, property-based).
 
 ---
 
@@ -1059,7 +1064,7 @@ cd bounded-rational-usability-oracle/implementation
 pip install -e ".[dev]"
 
 # Run tests
-pytest tests/ -v
+pytest tests/ -q -p no:qelens
 
 # Lint
 ruff check usability_oracle/
