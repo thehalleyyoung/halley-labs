@@ -4,7 +4,7 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](implementation/LICENSE)
-[![Tests: 1364+](https://img.shields.io/badge/tests-1364%2B%20passed-brightgreen.svg)](#testing)
+[![Tests: 4513+](https://img.shields.io/badge/tests-4513%2B%20passed-brightgreen.svg)](#testing)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
 ---
@@ -654,7 +654,7 @@ Cognitive operations interact nonlinearly. Prior memory load amplifies subsequen
 - **Parallel** ($\otimes$): $\mu_{1\times 2} = \max(\mu_1, \mu_2) + \alpha \cdot \lambda_1 \lambda_2 \cdot \min(\mu_1, \mu_2)$ — interference between concurrent operations
 - **Context** ($\Delta$): modulates costs by fatigue, practice, and stress
 
-The ablation study (\Cref{sec:experiments}) shows the cost algebra contributes +12.2 F1 points over additive baselines — the single largest component contribution.
+The ablation study shows Fitts' law contributes the largest single-component improvement (+10.6 F1 points when removed), followed by visual search (+6.3 F1 points), confirming that motor and perceptual cost modeling are essential.
 
 ### 4. Bottleneck Taxonomy
 
@@ -725,7 +725,7 @@ usability_oracle/
 └── wcag/                # WCAG guideline integration
 ```
 
-**24 packages. 275 files. 78,523 non-empty lines.** All typed (`mypy --strict`), linted (`ruff`), and tested.
+**39 packages. 373 files. 135,239 non-empty lines.** All typed (`mypy --strict`), linted (`ruff`), and tested.
 
 ---
 

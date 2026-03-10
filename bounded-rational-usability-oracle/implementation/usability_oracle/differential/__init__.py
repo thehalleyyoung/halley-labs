@@ -1,0 +1,153 @@
+"""usability_oracle.differential — Differential privacy for usability data."""
+
+from usability_oracle.differential.types import (
+    CompositionResult,
+    CompositionTheorem,
+    MechanismType,
+    NoiseConfig,
+    PrivacyBudget,
+    PrivacyGuarantee,
+    PrivacyMechanismSpec,
+)
+from usability_oracle.differential.protocols import (
+    PrivacyAccountant,
+    PrivacyMechanism,
+    PrivateAggregator,
+)
+from usability_oracle.differential.mechanisms import (
+    exponential_mechanism,
+    gaussian_mechanism,
+    gaussian_scale,
+    geometric_mechanism,
+    laplace_mechanism,
+    laplace_scale,
+    randomized_response,
+    report_noisy_max,
+    sparse_vector_technique,
+    above_threshold,
+    sensitivity_count,
+    sensitivity_mean,
+    sensitivity_sum,
+)
+from usability_oracle.differential.accountant import (
+    BudgetAccountant,
+    BudgetEntry,
+    rdp_to_approx_dp,
+    zcdp_to_approx_dp,
+    optimal_budget_split,
+    optimal_gaussian_sigma,
+)
+from usability_oracle.differential.aggregation import (
+    private_count,
+    private_sum,
+    private_mean,
+    private_median,
+    private_histogram,
+    private_quantile,
+    private_frequency_oracle,
+    private_usability_aggregate,
+    UsabilityMetrics,
+)
+from usability_oracle.differential.composition import (
+    basic_composition,
+    advanced_composition,
+    parallel_composition,
+    verify_post_processing,
+    heterogeneous_composition,
+    AdaptiveComposer,
+)
+from usability_oracle.differential.local_dp import (
+    rr_survey_binary,
+    rr_estimate_proportion,
+    RAPPORConfig,
+    rappor_encode,
+    rappor_aggregate,
+    ldp_frequency_estimate,
+    ldp_heavy_hitters,
+    LDPEventConfig,
+    ldp_encode_event,
+    ldp_aggregate_events,
+)
+from usability_oracle.differential.calibration import (
+    RiskLevel,
+    recommend_epsilon,
+    recommend_delta,
+    calibrate_budget,
+    laplace_tradeoff_curve,
+    gaussian_tradeoff_curve,
+    min_sample_size_laplace,
+    empirical_privacy_audit,
+)
+
+__all__ = [
+    # types
+    "CompositionResult",
+    "CompositionTheorem",
+    "MechanismType",
+    "NoiseConfig",
+    "PrivacyBudget",
+    "PrivacyGuarantee",
+    "PrivacyMechanismSpec",
+    # protocols
+    "PrivacyAccountant",
+    "PrivacyMechanism",
+    "PrivateAggregator",
+    # mechanisms
+    "exponential_mechanism",
+    "gaussian_mechanism",
+    "gaussian_scale",
+    "geometric_mechanism",
+    "laplace_mechanism",
+    "laplace_scale",
+    "randomized_response",
+    "report_noisy_max",
+    "sparse_vector_technique",
+    "above_threshold",
+    "sensitivity_count",
+    "sensitivity_mean",
+    "sensitivity_sum",
+    # accountant
+    "BudgetAccountant",
+    "BudgetEntry",
+    "rdp_to_approx_dp",
+    "zcdp_to_approx_dp",
+    "optimal_budget_split",
+    "optimal_gaussian_sigma",
+    # aggregation
+    "private_count",
+    "private_sum",
+    "private_mean",
+    "private_median",
+    "private_histogram",
+    "private_quantile",
+    "private_frequency_oracle",
+    "private_usability_aggregate",
+    "UsabilityMetrics",
+    # composition
+    "basic_composition",
+    "advanced_composition",
+    "parallel_composition",
+    "verify_post_processing",
+    "heterogeneous_composition",
+    "AdaptiveComposer",
+    # local_dp
+    "rr_survey_binary",
+    "rr_estimate_proportion",
+    "RAPPORConfig",
+    "rappor_encode",
+    "rappor_aggregate",
+    "ldp_frequency_estimate",
+    "ldp_heavy_hitters",
+    "LDPEventConfig",
+    "ldp_encode_event",
+    "ldp_aggregate_events",
+    # calibration
+    "RiskLevel",
+    "recommend_epsilon",
+    "recommend_delta",
+    "calibrate_budget",
+    "laplace_tradeoff_curve",
+    "gaussian_tradeoff_curve",
+    "min_sample_size_laplace",
+    "empirical_privacy_audit",
+]
