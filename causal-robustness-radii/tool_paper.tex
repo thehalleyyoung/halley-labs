@@ -491,6 +491,8 @@ bow & $U \to X \to Y, U \to Y$ & 3 & 3 & \textbf{[TBD]} & \textbf{[TBD]} \\
 
 All \textbf{[TBD]} benchmarks complete in \textbf{[TBD]}, demonstrating CausalCert's efficiency on small to medium graphs.
 
+\paragraph{Implementation status.} \emph{Note:} The current implementation produces degenerate radius $= [0, 0]$ bounds on all 11 standard benchmark graphs (chain-5, chain-10, fork, collider, mediator, IV, backdoor, frontdoor, diamond, napkin, bow), failing to match expected nonzero ranges. Additionally, all 7 ablation experiment configurations encountered API errors (\texttt{PipelineRunConfig.\_\_init\_\_() got an unexpected keyword argument `ci\_test\_method'}), and convergence experiments produced no results. These failures indicate that the pipeline is still in active development; the theoretical framework and algorithm designs presented in this paper remain valid, but empirical validation is pending completion of the implementation.
+
 \subsection{Experiment 3: Solver Strategy Comparison}
 
 \begin{table}[H]
@@ -569,13 +571,13 @@ We benchmarked our fragility scoring approach against state-of-the-art baselines
 
 \begin{table}[H]
 \centering
-\caption{SOTA benchmark results: Average performance across 8 DAGs (11–100 nodes).}\label{tab:sota-benchmark}
+\caption{SOTA benchmark results: Average performance across 8 DAGs (8--100 nodes).}\label{tab:sota-benchmark}
 \begin{tabular}{lrrrl}
 \toprule
 \textbf{Method} & \textbf{Correlation} & \textbf{AUROC} & \textbf{Time (s)} & \textbf{Rank} \\
 \midrule
 Edge strength & \textbf{0.722 ± 0.096} & \textbf{0.790 ± 0.118} & 0.158 & \textbf{1} \\
-Bootstrap stability & 0.082 ± 0.211 & 0.443 ± 0.164 & \textbf{0.210} & 2 \\
+Bootstrap stability & 0.003 ± 0.163 & 0.436 ± 0.153 & \textbf{0.127} & 2 \\
 Random & -0.068 ± 0.103 & 0.482 ± 0.089 & 0.001 & 3 \\
 CausalCert fragility & -0.260 ± 0.277 & 0.417 ± 0.180 & 0.323 & 4 \\
 BIC difference & -0.722 ± 0.096 & 0.210 ± 0.118 & 0.877 & 5 \\
@@ -585,9 +587,11 @@ BIC difference & -0.722 ± 0.096 & 0.210 ± 0.118 & 0.877 & 5 \\
 
 \paragraph{Results:} Edge strength via partial correlations achieved the best correlation (0.722) with theoretical robustness, indicating that edge strength is a strong proxy for structural fragility in linear Gaussian models. CausalCert's bootstrap-based approach showed moderate performance (-0.260 correlation) but provides richer structural diagnostics beyond simple correlation analysis. The negative correlation suggests that the bootstrap stability metric captures structural stability rather than fragility—edges that appear frequently across resamples tend to be structurally robust.
 
-\paragraph{Scalability:} Computation times scale sublinearly with graph size (0.11s for 11 nodes, 0.76s for 100 nodes for CausalCert), demonstrating practical applicability to moderately sized causal graphs. Edge strength computation scales worst (0.877s average) due to partial correlation calculations for high-degree nodes.
+\paragraph{Scalability:} Computation times scale roughly quadratically with graph size (0.03s for 11 nodes, 0.55s for 100 nodes for CausalCert), demonstrating practical applicability to moderately sized causal graphs. BIC difference computation scales worst (0.625s average) due to refitting for each edge removal.
 
 \paragraph{Implications:} While simple correlation-based methods perform well on linear Gaussian data, CausalCert's structural perturbation approach provides theoretical guarantees and extensibility to non-linear models. The benchmark establishes baseline performance expectations and identifies opportunities for algorithmic improvements in future versions.
+
+\paragraph{Implementation status.} \emph{Note:} The SOTA benchmark results above were obtained from an early prototype. As noted in \Cref{sec:experiments}, the current pipeline produces degenerate radius bounds on standard benchmarks, and ablation configurations encounter API errors. The theoretical comparison framework and methodology remain sound, but readers should treat the specific numerical results as preliminary until the implementation issues are resolved.
 
 
 % ══════════════════════════════════════════════════════════════════
@@ -616,6 +620,8 @@ CausalCert provides three immediate benefits to applied researchers:
     \item \textbf{Back-door only.} The current version supports back-door identification only. Front-door and IV strategies are planned extensions.
 
     \item \textbf{Synthetic data.} Our evaluation uses synthetic data from known SEMs. Real-world data may exhibit model misspecification that synthetic experiments do not capture.
+
+    \item \textbf{Empirical validation incomplete.} The current implementation produces degenerate radius $= [0, 0]$ bounds on all 11 standard benchmark graphs, ablation experiments fail with API errors, and convergence experiments produce no output. The tool is still in active development; the theoretical results and algorithm designs are independent of these implementation issues, but empirical claims should be considered unvalidated until the pipeline is corrected.
 \end{enumerate}
 
 \subsection{Future Work}
