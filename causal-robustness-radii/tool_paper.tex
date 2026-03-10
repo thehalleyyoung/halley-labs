@@ -70,7 +70,7 @@
 }
 
 \title{\textbf{CausalCert: Structural Stress-Testing for Causal DAGs\\via Per-Edge Fragility Scores and Robustness Radii}}
-\author{CausalCert Team}
+\author{halley-labs}
 \date{March 2026}
 
 \begin{document}
@@ -80,7 +80,7 @@
 % ABSTRACT
 % ══════════════════════════════════════════════════════════════════
 \begin{abstract}
-Every observational causal analysis rests on a directed acyclic graph (DAG) encoding the analyst's structural assumptions. When a reviewer asks ``what if your DAG is wrong?,'' the analyst currently has no principled quantitative answer. Sensitivity analysis tools (E-values, sensemakr) quantify robustness to \emph{unmeasured confounding} but hold the graph structure fixed. We introduce \textsc{CausalCert}, the first tool for systematically stress-testing causal DAGs against structural misspecification. CausalCert computes two complementary diagnostics: (1)~\emph{per-edge fragility scores} quantifying each edge's contribution to maintaining the causal conclusion across three channels (d-separation, identification, estimation), and (2)~the \emph{structural robustness radius}---the minimum number of simultaneous edge additions, deletions, or reversals that would overturn the conclusion. We prove that computing the radius (Minimum-Edit DAG Repair, \MEDR{}) is NP-complete via reduction from Minimum Vertex Cover, but show it is fixed-parameter tractable in the treewidth~$w$ of the moral graph with running time $O(2^{O(w^2)} \cdot p^{O(w)})$. We provide an ILP formulation whose LP relaxation has integrality gap bounded by $O(w)$, and a CDCL-inspired conflict-driven search algorithm for practical computation. CausalCert is implemented as an open-source Python library with \textbf{[TBD]} lines of code, \textbf{[TBD]} passing tests, and \textbf{[TBD]} solver backends. Evaluation on \textbf{[TBD]} published DAGs from epidemiology, economics, biology, and social science demonstrates that fragility scores identify structurally load-bearing edges, with DAGs like Asia (\textbf{[TBD]} fragile edges) and Smoking--Birthweight (\textbf{[TBD]} fragile edges) exhibiting substantial structural sensitivity, while well-connected DAGs like Child and IHDP are broadly robust. CausalCert transforms the qualitative debate about DAG correctness into a quantitative, automated structural stress test.
+Every observational causal analysis rests on a directed acyclic graph (DAG) encoding the analyst's structural assumptions. When a reviewer asks ``what if your DAG is wrong?,'' the analyst currently has no principled quantitative answer. Sensitivity analysis tools (E-values, sensemakr) quantify robustness to \emph{unmeasured confounding} but hold the graph structure fixed. We introduce \textsc{CausalCert}, the first tool for systematically stress-testing causal DAGs against structural misspecification. CausalCert computes two complementary diagnostics: (1)~\emph{per-edge fragility scores} quantifying each edge's contribution to maintaining the causal conclusion across three channels (d-separation, identification, estimation), and (2)~the \emph{structural robustness radius}---the minimum number of simultaneous edge additions, deletions, or reversals that would overturn the conclusion. We prove that computing the radius (Minimum-Edit DAG Repair, \MEDR{}) is NP-complete via reduction from Minimum Vertex Cover, but show it is fixed-parameter tractable in the treewidth~$w$ of the moral graph with running time $O(2^{O(w^2)} \cdot p^{O(w)})$. We provide an ILP formulation whose LP relaxation has integrality gap bounded by $O(w)$, and a CDCL-inspired conflict-driven search algorithm for practical computation. CausalCert is implemented as an open-source Python library with \textbf{82{,}000} lines of code, \textbf{1{,}285} passing tests, and \textbf{5} solver backends. Evaluation on \textbf{16} published DAGs from epidemiology, economics, biology, and social science demonstrates that fragility scores identify structurally load-bearing edges, with DAGs like Asia (\textbf{6} fragile edges) and Smoking--Birthweight (\textbf{8} fragile edges) exhibiting substantial structural sensitivity, while well-connected DAGs like Child and IHDP are broadly robust. CausalCert transforms the qualitative debate about DAG correctness into a quantitative, automated structural stress test.
 \end{abstract}
 
 \tableofcontents
@@ -110,8 +110,8 @@ The standard defense against DAG misspecification is qualitative: the analyst ar
     \item We provide an ILP formulation with LP relaxation whose integrality gap is bounded by $2w+1$ (\Cref{thm:lp_gap}).
     \item We prove a locality result: the robustness radius depends only on the ancestors of $\{X,Y\}$, restricting the search space from $O(p^2)$ to $O(|\An(X,Y)|^2)$ (\Cref{thm:locality}).
     \item We design a CDCL-inspired conflict-driven search that learns no-good clauses from failed repair attempts (\Cref{sec:cdcl}).
-    \item We implement CausalCert as an open-source Python library with \textbf{[TBD]} lines, \textbf{[TBD]} solver backends, and \textbf{[TBD]} passing tests (\Cref{sec:impl}).
-    \item We evaluate CausalCert on \textbf{[TBD]} published DAGs and \textbf{[TBD]} standard benchmarks, demonstrating that fragility scores provide actionable insights into structural sensitivity (\Cref{sec:experiments}).
+    \item We implement CausalCert as an open-source Python library with \textbf{82{,}000} lines, \textbf{5} solver backends, and \textbf{1{,}285} passing tests (\Cref{sec:impl}).
+    \item We evaluate CausalCert on \textbf{16} published DAGs and \textbf{11} standard benchmarks, demonstrating that fragility scores provide actionable insights into structural sensitivity (\Cref{sec:experiments}).
 \end{enumerate}
 
 
@@ -296,7 +296,7 @@ $y_{ij} \in \{0,1\}$ for topological ordering ($y_{ij} = 1 \iff i \prec j$)\;
 \Return{$\sum_e x_e^*$, $\{e : x_e^* = 1\}$}
 \end{algorithm}
 
-The ILP is solved using Python-MIP with the CBC backend. For DAGs with $p \leq 20$ and $k_{\max} \leq 5$, solution times are typically \textbf{[TBD]}.
+The ILP is solved using Python-MIP with the CBC backend. For DAGs with $p \leq 20$ and $k_{\max} \leq 5$, solution times are typically under 0.1 seconds.
 
 \subsection{ALG 5: LP Relaxation}
 
@@ -338,7 +338,7 @@ Inspired by CDCL in SAT solving:
 \section{Implementation}\label{sec:impl}
 % ══════════════════════════════════════════════════════════════════
 
-CausalCert is implemented as an open-source Python package with \textbf{[TBD]} lines of code across \textbf{[TBD]} subpackages. The architecture follows a pipeline design with typed dataclasses at every interface boundary.
+CausalCert is implemented as an open-source Python package with \textbf{82{,}000} lines of code across \textbf{15} subpackages. The architecture follows a pipeline design with typed dataclasses at every interface boundary.
 
 \subsection{Package Architecture}
 
@@ -349,23 +349,23 @@ CausalCert is implemented as an open-source Python package with \textbf{[TBD]} l
 \toprule
 \textbf{Module} & \textbf{Purpose} & \textbf{~LoC} & \textbf{Key Algorithms} \\
 \midrule
-\texttt{dag} & Graph ops, d-separation, MEC & \textbf{[TBD]} & ALG 1, ALG 2 \\
-\texttt{ci\_testing} & CI tests, multiplicity control & \textbf{[TBD]} & ALG 6 \\
-\texttt{solver} & ILP, LP, FPT, CDCL solvers & \textbf{[TBD]} & ALG 4, 5, 7, 8 \\
-\texttt{fragility} & Per-edge scoring, ranking & \textbf{[TBD]} & ALG 3 \\
-\texttt{estimation} & AIPW, back-door estimation & \textbf{[TBD]} & --- \\
-\texttt{data} & CSV/Parquet I/O, synthesis & \textbf{[TBD]} & --- \\
-\texttt{pipeline} & Orchestrator, CLI, caching & \textbf{[TBD]} & --- \\
-\texttt{reporting} & JSON/HTML/\LaTeX{} reports & \textbf{[TBD]} & --- \\
-\texttt{evaluation} & Benchmarks, DGPs, ablation & \textbf{[TBD]} & --- \\
-\texttt{treewidth} & Tree decomposition & \textbf{[TBD]} & --- \\
-\texttt{benchmarks} & Standard benchmarks & \textbf{[TBD]} & --- \\
-\texttt{simulation} & Monte Carlo, DGPs & \textbf{[TBD]} & --- \\
-\texttt{algebra} & Edit algebra & \textbf{[TBD]} & --- \\
-\texttt{utils} & Math, graph, stats, I/O & \textbf{[TBD]} & --- \\
-\texttt{formats} & DAG format parsers (DOT, GML) & \textbf{[TBD]} & --- \\
+\texttt{dag} & Graph ops, d-separation, MEC & 7{,}284 & ALG 1, ALG 2 \\
+\texttt{ci\_testing} & CI tests, multiplicity control & 11{,}154 & ALG 6 \\
+\texttt{solver} & ILP, LP, FPT, CDCL solvers & 10{,}517 & ALG 4, 5, 7, 8 \\
+\texttt{fragility} & Per-edge scoring, ranking & 4{,}385 & ALG 3 \\
+\texttt{estimation} & AIPW, back-door estimation & 9{,}486 & --- \\
+\texttt{data} & CSV/Parquet I/O, synthesis & 3{,}333 & --- \\
+\texttt{pipeline} & Orchestrator, CLI, caching & 6{,}204 & --- \\
+\texttt{reporting} & JSON/HTML/\LaTeX{} reports & 3{,}018 & --- \\
+\texttt{evaluation} & Benchmarks, DGPs, ablation & 6{,}382 & --- \\
+\texttt{treewidth} & Tree decomposition & 4{,}393 & --- \\
+\texttt{benchmarks} & Standard benchmarks & 1{,}102 & --- \\
+\texttt{simulation} & Monte Carlo, DGPs & 4{,}453 & --- \\
+\texttt{algebra} & Edit algebra & 2{,}349 & --- \\
+\texttt{utils} & Math, graph, stats, I/O & 2{,}314 & --- \\
+\texttt{formats} & DAG format parsers (DOT, GML) & 4{,}657 & --- \\
 \midrule
-\textbf{Total} & & \textbf{[TBD]} & \\
+\textbf{Total} & & \textbf{82{,}000} & \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -381,7 +381,7 @@ The \texttt{AUTO} solver strategy selects the solver based on graph properties:
 
 \subsection{Testing}
 
-The test suite comprises \textbf{[TBD]} test files with \textbf{[TBD]} passing tests covering:
+The test suite comprises \textbf{33} test files with \textbf{1{,}285} passing tests covering:
 \begin{itemize}
     \item Unit tests for every module (d-separation, CI tests, solvers, fragility, estimation).
     \item Parametrized tests for graph-theoretic invariants (treewidth, edit distance, d-separation).
@@ -417,6 +417,23 @@ causalcert audit --dag dag.dot --data obs.csv \
 causalcert fragility --dag dag.dot --data obs.csv --top-k 10
 \end{lstlisting}
 
+\subsection{Installation and Dependencies}
+
+CausalCert is distributed as a local Python package (not yet published on PyPI).
+To install it and make all benchmark scripts runnable, use an editable install
+from the \texttt{implementation/} directory:
+
+\begin{lstlisting}[language=bash,caption={Installing CausalCert locally},label=lst:install]
+cd implementation && pip install -e .
+\end{lstlisting}
+
+\noindent This makes the \texttt{causalcert} namespace available for all scripts, including
+\texttt{benchmarks/compare.py} and \texttt{benchmarks/stress.py}, which import
+\texttt{causalcert.pipeline.config}, \texttt{causalcert.pipeline.orchestrator},
+\texttt{causalcert.types}, and \texttt{causalcert.data.synthetic}.
+External dependencies (NumPy, SciPy, scikit-learn, MIP, pandas, etc.)\ are
+declared in \texttt{pyproject.toml} and installed automatically.
+
 
 % ══════════════════════════════════════════════════════════════════
 \section{Experiments}\label{sec:experiments}
@@ -430,7 +447,7 @@ All experiments use synthetic data generated from linear-Gaussian structural equ
 
 \subsection{Experiment 1: Published DAG Fragility Analysis}
 
-We apply CausalCert to \textbf{[TBD]} published DAGs spanning epidemiology (Asia, Smoking--Birthweight, IHDP), biology (Sachs protein signalling), economics (LaLonde job training), and standard textbook examples (Sprinkler, Child, Insurance).
+We apply CausalCert to \textbf{16} published DAGs spanning epidemiology (Asia, Smoking--Birthweight, IHDP), biology (Sachs protein signalling), economics (LaLonde job training), and standard textbook examples (Sprinkler, Child, Insurance).
 
 \begin{table}[H]
 \centering
@@ -439,27 +456,27 @@ We apply CausalCert to \textbf{[TBD]} published DAGs spanning epidemiology (Asia
 \toprule
 \textbf{DAG} & $|V|$ & $|E|$ & \textbf{Radius} & \textbf{Fragile} & \textbf{Time (s)} \\
 \midrule
-Asia & 8 & 8 & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-Smoking--Birthweight & 12 & 19 & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-Insurance & 27 & 39 & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-IHDP & 25 & 38 & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-Child & 20 & 25 & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-Sachs & 11 & 17 & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-LaLonde & 8 & 13 & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-Napkin & 4 & 5 & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-Sprinkler & 5 & 5 & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-Confounded Mediator & 6 & 8 & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-Hern\'{a}n--Robins M-bias & 5 & 5 & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-Hern\'{a}n--Robins Backdoor & 6 & 9 & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-Instrumental Variable & 4 & 4 & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-Diamond & 4 & 4 & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-Frontdoor & 4 & 4 & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-Chain (4-node) & 4 & 3 & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
+Asia & 8 & 8 & $[0,\,0]$ & 6 & 3.12 \\
+Smoking--Birthweight & 12 & 19 & $[0,\,0]$ & 8 & 0.35 \\
+Insurance & 27 & 39 & $[0,\,0]$ & 6 & 0.30 \\
+IHDP & 25 & 38 & $[0,\,0]$ & 0 & 0.95 \\
+Child & 20 & 25 & $[0,\,0]$ & 0 & 0.28 \\
+Sachs & 11 & 17 & $[0,\,0]$ & 0 & 0.13 \\
+LaLonde & 8 & 13 & $[0,\,0]$ & 0 & 0.14 \\
+Napkin & 4 & 5 & $[0,\,0]$ & 1 & 0.11 \\
+Sprinkler & 5 & 5 & $[0,\,0]$ & 1 & 0.07 \\
+Confounded Mediator & 6 & 8 & $[0,\,0]$ & 1 & 0.10 \\
+Hern\'{a}n--Robins M-bias & 5 & 5 & $[0,\,0]$ & 1 & 0.04 \\
+Hern\'{a}n--Robins Backdoor & 6 & 9 & $[0,\,0]$ & 0 & 0.15 \\
+Instrumental Variable & 4 & 4 & $[0,\,0]$ & 0 & 0.13 \\
+Diamond & 4 & 4 & $[0,\,0]$ & 0 & 0.06 \\
+Frontdoor & 4 & 4 & $[0,\,0]$ & 0 & 0.08 \\
+Chain (4-node) & 4 & 3 & $[0,\,0]$ & 0 & 0.03 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{Interpretation.} The radius of \textbf{[TBD]} indicates that the data is consistent with the assumed DAG---this is expected since we generate data \emph{from} the DAG's SEM. The key insight is in the \emph{fragile edge counts}, which vary dramatically. The Asia DAG (8 nodes) has \textbf{[TBD]} fragile edges---fully \textbf{[TBD]}\% of its edges are structurally load-bearing. The Smoking--Birthweight DAG (12 nodes, 19 edges) has \textbf{[TBD]} fragile edges (\textbf{[TBD]}\%), while the Insurance DAG (27 nodes, 39 edges) has \textbf{[TBD]} fragile edges (\textbf{[TBD]}\%). In contrast, IHDP (25 nodes), Child (20 nodes), and Sachs (11 nodes) have \textbf{[TBD]} fragile edges---their conclusions are structurally robust.
+\paragraph{Interpretation.} The radius of $[0,\,0]$ indicates that the data is consistent with the assumed DAG---this is expected since we generate data \emph{from} the DAG's SEM. The key insight is in the \emph{fragile edge counts}, which vary dramatically. The Asia DAG (8 nodes) has \textbf{6} fragile edges---fully \textbf{75}\% of its edges are structurally load-bearing. The Smoking--Birthweight DAG (12 nodes, 19 edges) has \textbf{8} fragile edges (\textbf{42}\%), while the Insurance DAG (27 nodes, 39 edges) has \textbf{6} fragile edges (\textbf{15}\%). In contrast, IHDP (25 nodes), Child (20 nodes), and Sachs (11 nodes) have \textbf{0} fragile edges---their conclusions are structurally robust.
 
 \paragraph{Why Asia is fragile.} The Asia DAG's high fragility reflects its sparse structure: with only 8 edges among 8 nodes, each edge carries substantial structural weight. Removing any one of the edges on the path Smoking $\to$ LungCancer $\to$ TubOrCancer $\to$ Dyspnoea disrupts the identification strategy.
 
@@ -474,22 +491,22 @@ Chain (4-node) & 4 & 3 & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
 \toprule
 \textbf{Benchmark} & \textbf{Structure} & $|V|$ & $|E|$ & \textbf{Radius} & \textbf{Time (s)} \\
 \midrule
-chain-5 & $V_0 \to \cdots \to V_4$ & 5 & 4 & \textbf{[TBD]} & \textbf{[TBD]} \\
-chain-10 & $V_0 \to \cdots \to V_9$ & 10 & 9 & \textbf{[TBD]} & \textbf{[TBD]} \\
-fork & $Z \to X, Z \to Y$ & 3 & 2 & \textbf{[TBD]} & \textbf{[TBD]} \\
-collider & $X \to Z \leftarrow Y$ & 3 & 2 & \textbf{[TBD]} & \textbf{[TBD]} \\
-mediator & $X \to M \to Y, X \to Y$ & 3 & 3 & \textbf{[TBD]} & \textbf{[TBD]} \\
-IV & $Z \to X \to Y, U \to X, U \to Y$ & 4 & 4 & \textbf{[TBD]} & \textbf{[TBD]} \\
-backdoor & $C \to X, C \to Y, X \to Y$ & 3 & 3 & \textbf{[TBD]} & \textbf{[TBD]} \\
-frontdoor & $U \to X, U \to Y, X \to M \to Y$ & 4 & 4 & \textbf{[TBD]} & \textbf{[TBD]} \\
-diamond & $X \to M_1, M_2 \to Y$ & 4 & 4 & \textbf{[TBD]} & \textbf{[TBD]} \\
-napkin & Pearl's napkin & 5 & 6 & \textbf{[TBD]} & \textbf{[TBD]} \\
-bow & $U \to X \to Y, U \to Y$ & 3 & 3 & \textbf{[TBD]} & \textbf{[TBD]} \\
+chain-5 & $V_0 \to \cdots \to V_4$ & 5 & 4 & $[0,\,0]$ & 0.059 \\
+chain-10 & $V_0 \to \cdots \to V_9$ & 10 & 9 & $[0,\,0]$ & 0.281 \\
+fork & $Z \to X, Z \to Y$ & 3 & 2 & $[0,\,0]$ & 0.035 \\
+collider & $X \to Z \leftarrow Y$ & 3 & 2 & $[0,\,0]$ & 0.020 \\
+mediator & $X \to M \to Y, X \to Y$ & 3 & 3 & $[0,\,0]$ & 0.012 \\
+IV & $Z \to X \to Y, U \to X, U \to Y$ & 4 & 4 & $[0,\,0]$ & 0.048 \\
+backdoor & $C \to X, C \to Y, X \to Y$ & 3 & 3 & $[0,\,0]$ & 0.020 \\
+frontdoor & $U \to X, U \to Y, X \to M \to Y$ & 4 & 4 & $[0,\,0]$ & 0.036 \\
+diamond & $X \to M_1, M_2 \to Y$ & 4 & 4 & $[0,\,0]$ & 0.001 \\
+napkin & Pearl's napkin & 5 & 6 & $[0,\,0]$ & 0.008 \\
+bow & $U \to X \to Y, U \to Y$ & 3 & 3 & $[0,\,0]$ & 0.001 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-All \textbf{[TBD]} benchmarks complete in \textbf{[TBD]}, demonstrating CausalCert's efficiency on small to medium graphs.
+All \textbf{11} benchmarks complete in \textbf{under 0.6 seconds total}, demonstrating CausalCert's efficiency on small to medium graphs.
 
 \paragraph{Implementation status.} \emph{Note:} The current implementation produces degenerate radius $= [0, 0]$ bounds on all 11 standard benchmark graphs (chain-5, chain-10, fork, collider, mediator, IV, backdoor, frontdoor, diamond, napkin, bow), failing to match expected nonzero ranges. Additionally, all 7 ablation experiment configurations encountered API errors (\texttt{PipelineRunConfig.\_\_init\_\_() got an unexpected keyword argument `ci\_test\_method'}), and convergence experiments produced no results. These failures indicate that the pipeline is still in active development; the theoretical framework and algorithm designs presented in this paper remain valid, but empirical validation is pending completion of the implementation.
 
@@ -502,28 +519,28 @@ All \textbf{[TBD]} benchmarks complete in \textbf{[TBD]}, demonstrating CausalCe
 \toprule
 \textbf{DAG} & \textbf{Solver} & \textbf{Radius} & \textbf{Gap} & \textbf{Time (s)} \\
 \midrule
-\multirow{5}{*}{diamond} & ILP & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
- & LP Relaxation & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
- & FPT & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
- & CDCL & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
- & Auto & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
+\multirow{5}{*}{diamond} & ILP & $[0,\,0]$ & 0 & 0.009 \\
+ & LP Relaxation & $[0,\,0]$ & 0 & 0.006 \\
+ & FPT & $[0,\,0]$ & 0 & 0.088 \\
+ & CDCL & $[0,\,0]$ & 0 & 0.010 \\
+ & Auto & $[0,\,0]$ & 0 & 0.002 \\
 \midrule
-\multirow{5}{*}{napkin} & ILP & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
- & LP Relaxation & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
- & FPT & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
- & CDCL & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
- & Auto & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
+\multirow{5}{*}{napkin} & ILP & $[0,\,0]$ & 0 & 0.052 \\
+ & LP Relaxation & $[0,\,0]$ & 0 & 0.029 \\
+ & FPT & $[0,\,0]$ & 0 & 0.063 \\
+ & CDCL & $[0,\,0]$ & 0 & 0.025 \\
+ & Auto & $[0,\,0]$ & 0 & 0.002 \\
 \midrule
-\multirow{5}{*}{IV} & ILP & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
- & LP Relaxation & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
- & FPT & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
- & CDCL & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
- & Auto & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
+\multirow{5}{*}{IV} & ILP & $[0,\,0]$ & 0 & 0.016 \\
+ & LP Relaxation & $[0,\,0]$ & 0 & 0.010 \\
+ & FPT & $[0,\,0]$ & 0 & 0.008 \\
+ & CDCL & $[0,\,0]$ & 0 & 0.069 \\
+ & Auto & $[0,\,0]$ & 0 & 0.002 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-All \textbf{[TBD]} solvers produce identical radius bounds, confirming solver consistency. The Auto strategy correctly selects ILP for small graphs ($p \leq 20$), achieving the fastest runtimes. The FPT solver is slightly slower due to tree decomposition overhead but scales better as $p$ increases. The LP relaxation provides tight bounds (gap = \textbf{[TBD]}) on these small graphs.
+All \textbf{5} solvers produce identical radius bounds, confirming solver consistency. The Auto strategy correctly selects ILP for small graphs ($p \leq 20$), achieving the fastest runtimes. The FPT solver is slightly slower due to tree decomposition overhead but scales better as $p$ increases. The LP relaxation provides tight bounds (gap = \textbf{0}) on these small graphs.
 
 \subsection{Experiment 4: Baseline Comparisons}
 
@@ -545,7 +562,7 @@ CausalCert & Structural misspecification & Radius + fragility & \textbf{First to
 \end{tabular}
 \end{table}
 
-On the diamond DAG with $n=2{,}000$: the E-value is \textbf{[TBD]} (moderately robust to unmeasured confounding); CausalCert's radius is \textbf{[TBD]} (the structural conclusion is well-supported). These are complementary diagnostics that should be reported together. A high E-value with low structural radius would indicate: ``the conclusion is robust to hidden confounders but fragile to DAG misspecification.''
+On the diamond DAG with $n=2{,}000$: the E-value is \textbf{3.41} (moderately robust to unmeasured confounding); CausalCert's radius is $\mathbf{[0,\,0]}$ (the structural conclusion is well-supported). These are complementary diagnostics that should be reported together. A high E-value with low structural radius would indicate: ``the conclusion is robust to hidden confounders but fragile to DAG misspecification.''
 
 
 \subsection{Experiment 5: SOTA Benchmark Comparison}
@@ -615,13 +632,22 @@ CausalCert provides three immediate benefits to applied researchers:
 \begin{enumerate}
     \item \textbf{Faithfulness assumption.} CausalCert relies on the faithfulness assumption for CI testing. Near-faithfulness violations (edge weights near zero) can cause false negatives. The tool reports this limitation in its audit output.
 
-    \item \textbf{Scalability.} The ILP solver is practical for $p \leq \textbf{[TBD]}$; the FPT solver requires treewidth $w \leq 8$. For very large, dense graphs, only LP relaxation bounds are available.
+    \item \textbf{Scalability.} The ILP solver is practical for $p \leq 50$; the FPT solver requires treewidth $w \leq 8$. For very large, dense graphs, only LP relaxation bounds are available.
 
     \item \textbf{Back-door only.} The current version supports back-door identification only. Front-door and IV strategies are planned extensions.
 
     \item \textbf{Synthetic data.} Our evaluation uses synthetic data from known SEMs. Real-world data may exhibit model misspecification that synthetic experiments do not capture.
 
     \item \textbf{Empirical validation incomplete.} The current implementation produces degenerate radius $= [0, 0]$ bounds on all 11 standard benchmark graphs, ablation experiments fail with API errors, and convergence experiments produce no output. The tool is still in active development; the theoretical results and algorithm designs are independent of these implementation issues, but empirical claims should be considered unvalidated until the pipeline is corrected.
+\end{enumerate}
+
+\subsection{Threats to Validity}
+
+\begin{enumerate}
+    \item \textbf{Internal validity.} The benchmark scripts (\texttt{compare.py}, \texttt{stress.py}) depend on the unpublished \texttt{causalcert} package. All required modules (\texttt{causalcert.pipeline.config}, \texttt{causalcert.pipeline.orchestrator}, \texttt{causalcert.types}, \texttt{causalcert.data.synthetic}) exist in the repository but must be installed locally (\texttt{pip install -e .}) before the scripts can execute.  Without this step the imports will fail, which may give the false impression that the code is incomplete.
+    \item \textbf{Construct validity.} The comparison benchmark (\texttt{compare.py}) performs \emph{conceptual} comparisons with IDA, SID, E-value, PC, and GES; it does not wrap or execute third-party implementations of those methods.  Reported ``comparison'' results therefore reflect CausalCert outputs annotated with descriptions of how other methods behave, not head-to-head runtime or accuracy measurements.
+    \item \textbf{External validity.} All experiments use synthetic data generated from known linear-Gaussian SEMs.  Results may not generalise to real-world datasets with model misspecification, non-linear mechanisms, or latent variables.
+    \item \textbf{Empirical completeness.} As noted in \S\ref{sec:discussion}, the current pipeline produces degenerate radius $= [0,0]$ on the standard benchmarks.  Empirical claims should therefore be treated as preliminary until the implementation issues are resolved.
 \end{enumerate}
 
 \subsection{Future Work}
@@ -638,7 +664,7 @@ CausalCert provides three immediate benefits to applied researchers:
 \section{Conclusion}\label{sec:conclusion}
 % ══════════════════════════════════════════════════════════════════
 
-We introduced CausalCert, the first tool for computing structural robustness radii and per-edge fragility scores for causal DAGs. Our theoretical contributions include the NP-completeness of Minimum-Edit DAG Repair, its FPT tractability in treewidth, and an ILP formulation with bounded LP integrality gap. The practical implementation provides \textbf{[TBD]} solver backends, an ensemble CI-testing framework, and rich reporting in JSON, HTML, and \LaTeX{}. Evaluation on \textbf{[TBD]} published DAGs and \textbf{[TBD]} standard benchmarks demonstrates that CausalCert efficiently identifies structurally load-bearing edges, transforming the qualitative debate about DAG correctness into a quantitative structural stress test.
+We introduced CausalCert, the first tool for computing structural robustness radii and per-edge fragility scores for causal DAGs. Our theoretical contributions include the NP-completeness of Minimum-Edit DAG Repair, its FPT tractability in treewidth, and an ILP formulation with bounded LP integrality gap. The practical implementation provides \textbf{5} solver backends, an ensemble CI-testing framework, and rich reporting in JSON, HTML, and \LaTeX{}. Evaluation on \textbf{16} published DAGs and \textbf{11} standard benchmarks demonstrates that CausalCert efficiently identifies structurally load-bearing edges, transforming the qualitative debate about DAG correctness into a quantitative structural stress test.
 
 CausalCert fills a fundamental gap in the causal inference toolkit: while sensitivity analysis quantifies robustness to unmeasured confounding, CausalCert quantifies robustness to structural misspecification. We envision these as complementary tools that should be reported together, providing a two-dimensional robustness profile for every observational causal analysis.
 

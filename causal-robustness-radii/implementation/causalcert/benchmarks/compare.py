@@ -4,6 +4,15 @@ These are *conceptual* comparisons — they describe what each method measures,
 provide synthetic scenarios, and format results side-by-side.  They do **not**
 wrap third-party implementations; we focus on CausalCert's outputs and relate
 them to the other methods' published behaviour.
+
+NOTE: This script imports from the ``causalcert`` package, which is not
+published on PyPI.  To make the imports available, install the local package
+in editable mode from the ``implementation/`` directory::
+
+    cd implementation && pip install -e .
+
+Required imports: causalcert.pipeline.config, causalcert.pipeline.orchestrator,
+causalcert.types — all provided by the local package.
 """
 from __future__ import annotations
 

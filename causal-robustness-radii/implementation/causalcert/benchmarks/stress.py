@@ -2,6 +2,13 @@
 
 Use this module to push CausalCert to its limits and find performance
 regressions or numerical issues.
+
+NOTE: This script imports from the ``causalcert`` package (e.g.
+causalcert.pipeline.config, causalcert.pipeline.orchestrator,
+causalcert.data.synthetic, causalcert.types), which is not published on
+PyPI.  Install the local package in editable mode first::
+
+    cd implementation && pip install -e .
 """
 from __future__ import annotations
 
