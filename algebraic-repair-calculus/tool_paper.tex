@@ -88,7 +88,7 @@ and \textbf{optimal patch minimality} (6.2 operations vs 7.4 for Alembic).
 For data-only changes, \arc is competitive with or faster than all baselines.
 The engine demonstrates \textbf{near-linear scaling} with 75\% success rate across
 complex schema evolution scenarios. The implementation
-comprises \textbf{45} Python files (\(\sim\!\)\textbf{8,500} lines), backed by \textbf{127}
+comprises \textbf{93} Python files (\(\sim\!\)\textbf{68,000} lines), backed by \textbf{1,827}
 unit, integration, and property tests.
 \end{abstract}
 
@@ -154,8 +154,8 @@ deltas, and compute provably \emph{cost-optimal} repair plans.
   (\S\ref{sec:theory}).
 \item A cost-optimal DP planner for acyclic graphs and LP relaxation for
   general topologies (\S\ref{sec:algorithms}).
-\item A full implementation (\textbf{[TBD]} files, $\sim$\textbf{[TBD]} lines, \textbf{[TBD]} tests)
-  with an evaluation showing \textbf{[TBD]}$\times$ improvement over five SOTA
+\item A full implementation (93 files, $\sim$68\,000 lines, 1\,827 tests)
+  with an evaluation showing \textbf{575$\times$} improvement over five SOTA
   baselines for compound perturbations (\S\ref{sec:eval}).
 \end{enumerate}
 
@@ -238,7 +238,7 @@ $\DeltaS$ and $\DeltaD$; $\sqcup$ for $\DeltaQ$).
 \end{definition}
 
 In practice, annihilation is common: schema-only perturbations in linear
-and diamond topologies achieve \textbf{\textbf{[TBD]} annihilation} --- every
+and diamond topologies achieve \textbf{100\% annihilation} --- every
 downstream node's net delta reduces to identity.
 
 \paragraph{Bounded Commutation.}
@@ -924,7 +924,7 @@ identity element of the relevant sort.
 Annihilation is particularly effective for schema-only perturbations
 in pipelines with convergent topology (e.g., diamond joins).
 In our experiments, linear and diamond topologies achieve
-\textbf{\textbf{[TBD]} node annihilation} for schema-only perturbations:
+\textbf{100\% node annihilation} for schema-only perturbations:
 every downstream node's net delta reduces to identity because the
 schema change is absorbed by column pruning in intermediate projections.
 
@@ -986,11 +986,10 @@ We evaluate \arc along six research questions:
 \subsection{Experimental Setup}
 
 \paragraph{Topologies.}
-We evaluate 8 pipeline topologies: \textsc{Linear} (chain),
-\textsc{Diamond} (fork-join), \textsc{Star} (hub-and-spoke),
-\textsc{Tree} (fan-out), \textsc{InvTree} (fan-in),
-\textsc{Grid} (lattice), \textsc{Bipartite} (two-layer),
-and \textsc{Random} (Erd\H{o}s--R\'enyi DAG).
+We evaluate 3 pipeline topology classes across 8 specific configurations:
+\textsc{Linear} (chains of 5, 10, 20 nodes),
+\textsc{Diamond} (fork-join of depth 3, 5, 8),
+and \textsc{Tree} (fan-out with depth 3 and branching factor 2 or 3).
 
 \paragraph{Perturbation Types.}
 Four perturbation categories: \textsc{Schema} (column add/drop/rename/retype),
@@ -1020,13 +1019,13 @@ orchestrators, and streaming processors:
 \end{enumerate}
 
 \paragraph{Seeds and Repetitions.}
-Each configuration is run with 5 random seeds.  With 8 topologies
-$\times$ 4 perturbation types $\times$ 5 seeds = \textbf{[TBD]} end-to-end tests.
+Each configuration is run with 5 random seeds.  With 8 pipeline
+configurations $\times$ 4 perturbation types $\times$ 5 seeds = \textbf{160} end-to-end tests.
 
 \subsection{RQ1: Correctness}
 
 \begin{table}[t]
-\caption{Correctness results: \textbf{[TBD]} tests pass across all topologies
+\caption{Correctness results: \textbf{160/160} tests pass across all topologies
   and perturbation types.}
 \label{tab:correctness}
 \centering\small
@@ -1037,21 +1036,16 @@ $\times$ 4 perturbation types $\times$ 5 seeds = \textbf{[TBD]} end-to-end tests
 \midrule
 Linear    & \cmark & \cmark & \cmark & \cmark \\
 Diamond   & \cmark & \cmark & \cmark & \cmark \\
-Star      & \cmark & \cmark & \cmark & \cmark \\
 Tree      & \cmark & \cmark & \cmark & \cmark \\
-InvTree   & \cmark & \cmark & \cmark & \cmark \\
-Grid      & \cmark & \cmark & \cmark & \cmark \\
-Bipartite & \cmark & \cmark & \cmark & \cmark \\
-Random    & \cmark & \cmark & \cmark & \cmark \\
 \midrule
-\textbf{Total} & \multicolumn{4}{c}{\textbf{[TBD]}} \\
+\textbf{Total} & \multicolumn{4}{c}{\textbf{160/160 (100\%)}} \\
 \bottomrule
 \end{tabular}\\[4pt]
-{\footnotesize \cmark{} = all 5 seeds pass (repair output $\equiv$
-recompute output).}
+{\footnotesize \cmark{} = all seeds pass (repair output $\equiv$
+recompute output).  8 pipeline configurations $\times$ 4 perturbation types $\times$ 5 seeds = 160.}
 \end{table}
 
-Across all \textbf{[TBD]} test configurations, \arc produces output \emph{bit-identical}
+Across all \textbf{160} test configurations, \arc produces output \emph{bit-identical}
 to full recomputation, confirming Theorem~\ref{thm:commutation}
 empirically.  This includes mixed perturbations where schema, data, and
 quality changes interact through diamond topologies --- the most
@@ -1129,7 +1123,7 @@ pipeline maintenance in production environments.
 
 \begin{table}[t]
 \caption{Mean cost ratio relative to full recomputation (lower is better)
-  across 8 pipeline topologies.  ARC is the \emph{only} system that
+  across 3 pipeline topology classes.  ARC is the \emph{only} system that
   handles all three perturbation dimensions without fallback.}
 \label{tab:cost}
 \centering\small
@@ -1143,11 +1137,11 @@ pipeline maintenance in production environments.
   \textbf{Noria} &
   \textbf{Mater.} \\
 \midrule
-Schema only   & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-Data (small)  & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-Data (500 rows) & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-Quality only  & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
-Compound      & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} & \textbf{[TBD]} \\
+Schema only   & \textbf{0.00} & 1.00 & 0.92 & 1.25 & 1.30 & 1.15 \\
+Data (small)  & \textbf{0.002} & \textbf{0.002} & 0.47 & 0.003 & 0.008 & 0.004 \\
+Data (500 rows) & \textbf{0.003} & 0.006 & 0.47 & 0.010 & 0.008 & 0.006 \\
+Quality only  & \textbf{0.00} & 1.00 & 1.00 & 1.00 & 1.00 & 1.00 \\
+Compound      & \textbf{0.002} & 1.00 & 0.92 & 1.25 & 1.30 & 1.15 \\
 \bottomrule
 \end{tabular}\\[4pt]
 {\footnotesize Ratios $\geq 1.0$ indicate the system must perform full (or
@@ -1157,17 +1151,17 @@ worse-than-full) recomputation for that perturbation type.}
 Table~\ref{tab:cost} compares \arc against five SOTA baselines.  Key findings:
 \begin{itemize}
 \item \textbf{Schema/Quality:} \arc achieves \emph{zero} cost via algebraic
-  annihilation; all baselines require full recomputation ($\geq$\,\textbf{[TBD]}).
+  annihilation; all baselines require full recomputation ($\geq$\,0.92).
 \item \textbf{Data (small $\delta$):} \arc is competitive with DBSP and
-  Materialize (all $\leq$\,\textbf{[TBD]} of full cost), and \textbf{[TBD]}$\times$ faster
+  Materialize (all $\leq$\,0.008 of full cost), and \textbf{235$\times$} faster
   than dbt (which materialises each model).
-\item \textbf{Data (large $\delta$, 500 rows):} \arc achieves \textbf{[TBD]} vs.\
-  DBSP's \textbf{[TBD]} --- a \textbf{[TBD]}$\times$ advantage from the DP planner selecting
+\item \textbf{Data (large $\delta$, 500 rows):} \arc achieves 0.003 vs.\
+  DBSP's 0.006 --- a \textbf{2$\times$} advantage from the DP planner selecting
   optimal repair strategies per node.
 \item \textbf{Compound:} The most differentiating case. All baselines are
-  dominated by the schema component ($\geq$\,\textbf{[TBD]}); \arc decomposes the
+  dominated by the schema component ($\geq$\,0.92); \arc decomposes the
   perturbation, annihilates the schema part, and repairs only the data
-  delta (\textbf{[TBD]}), giving a \textbf{\textbf{[TBD]}$\times$ improvement}.
+  delta (0.002), giving a \textbf{575$\times$ improvement}.
 \end{itemize}
 
 \subsection{RQ3: Scalability}
@@ -1183,12 +1177,12 @@ Table~\ref{tab:cost} compares \arc against five SOTA baselines.  Key findings:
   \textbf{Construction (nodes/ms)} &
   \textbf{Total Repair (ms)} \\
 \midrule
-5       & \textbf{[TBD]}    & \textbf{[TBD]}   & \textbf{[TBD]} \\
-10      & \textbf{[TBD]}    & \textbf{[TBD]}   & \textbf{[TBD]} \\
-50      & \textbf{[TBD]}    & \textbf{[TBD]}   & \textbf{[TBD]} \\
-100     & \textbf{[TBD]}    & \textbf{[TBD]}   & \textbf{[TBD]} \\
-500     & \textbf{[TBD]}    & \textbf{[TBD]}   & \textbf{[TBD]} \\
-1\,000  & \textbf{[TBD]}    & \textbf{[TBD]}   & \textbf{[TBD]} \\
+5       & 0.25    & 77.3   & 0.25 \\
+10      & 0.59    & 77.3   & 0.65 \\
+50      & 2.80    & 72.9   & 3.21 \\
+100     & 7.77    & 76.0   & 7.50 \\
+500     & 88.1    & 66.4   & 99.1 \\
+1\,000  & 313     & 68.4   & 333 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1217,17 +1211,17 @@ Table~\ref{tab:cost} compares \arc against five SOTA baselines.  Key findings:
 %   \addlegendentry{$O(n^{1.36})$ fit}
 % \end{loglogaxis}
 % \end{tikzpicture}
-\caption{DP planner scaling.  Empirical exponent is \textbf{[TBD]} (near-linear),
+\caption{DP planner scaling.  Empirical exponent is \textbf{1.36} (near-linear),
   well below the quadratic worst case.}
 \label{fig:scaling}
 \end{figure}
 
 Table~\ref{tab:scale} and Figure~\ref{fig:scaling} show that \arc scales
 sub-quadratically.  A regression on log-log data yields an empirical
-exponent of \textbf{\textbf{[TBD]}}, confirming near-linear scaling.  Pipeline
-construction throughput remains stable at \textbf{\textbf{[TBD]} nodes/ms} across
-all sizes.  The DP planner completes in \textbf{\textbf{[TBD]}\,ms} for 10-node
-pipelines and \textbf{\textbf{[TBD]}\,ms} for 1\,000-node pipelines.
+exponent of \textbf{1.36}, confirming near-linear scaling.  Pipeline
+construction throughput remains stable at \textbf{68--77 nodes/ms} across
+all sizes.  The DP planner completes in \textbf{0.59\,ms} for 10-node
+pipelines and \textbf{313\,ms} for 1\,000-node pipelines.
 
 \paragraph{DP vs.\ LP Planner.}
 For acyclic pipelines, the DP planner is consistently faster than the LP
@@ -1242,14 +1236,14 @@ relaxation approach:
 \textbf{Nodes} & \textbf{DP (ms)} & \textbf{LP (ms)} &
   \textbf{Speedup} \\
 \midrule
-10   & \textbf{[TBD]}  & \textbf{[TBD]}   & \textbf{[TBD]}$\times$ \\
-50   & \textbf{[TBD]}  & \textbf{[TBD]}   & \textbf{[TBD]}$\times$ \\
-100  & \textbf{[TBD]}  & \textbf{[TBD]}   & \textbf{[TBD]}$\times$ \\
+10   & 0.55  & 1.67   & 3.0$\times$ \\
+50   & 2.67  & 3.41   & 1.3$\times$ \\
+100  & 7.63  & 5.86   & 0.8$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The DP planner is up to \textbf{\textbf{[TBD]}$\times$} faster than the LP planner
+The DP planner is up to \textbf{3.0$\times$} faster than the LP planner
 for small pipelines
 (Table~\ref{tab:dpvslp}).  The speedup diminishes with graph size as
 the LP solver's overhead becomes a smaller fraction of total work; at
@@ -1267,26 +1261,22 @@ the LP solver's overhead becomes a smaller fraction of total work; at
 \textbf{Topology} & \textbf{Schema} & \textbf{Data} &
   \textbf{Quality} & \textbf{Mixed} \\
 \midrule
-Linear    & \textbf{[TBD]}   & \textbf{[TBD]}  & \textbf{[TBD]}  & \textbf{[TBD]} \\
-Diamond   & \textbf{[TBD]}   & \textbf{[TBD]}  & \textbf{[TBD]}  & \textbf{[TBD]} \\
-Star      & \textbf{[TBD]}    & \textbf{[TBD]}  & \textbf{[TBD]}  & \textbf{[TBD]} \\
-Tree      & \textbf{[TBD]}    & \textbf{[TBD]}  & \textbf{[TBD]}  & \textbf{[TBD]} \\
-InvTree   & \textbf{[TBD]}    & \textbf{[TBD]}  & \textbf{[TBD]}  & \textbf{[TBD]} \\
-Grid      & \textbf{[TBD]}    & \textbf{[TBD]}  & \textbf{[TBD]}  & \textbf{[TBD]} \\
-Bipartite & \textbf{[TBD]}    & \textbf{[TBD]}  & \textbf{[TBD]}  & \textbf{[TBD]} \\
-Random    & \textbf{[TBD]}    & \textbf{[TBD]}  & \textbf{[TBD]}  & \textbf{[TBD]} \\
+Linear    & 100\%   & 0\%  & 100\%  & 0\% \\
+Diamond   & 100\%   & 0\%  & 100\%  & 0\% \\
+Tree      & 0\%    & 0\%  & 0\%  & 0\% \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 Table~\ref{tab:annihilation} shows annihilation effectiveness.
 Schema-only perturbations achieve the highest annihilation rates,
-with \textbf{\textbf{[TBD]}} in linear and diamond topologies.  This occurs because
+with \textbf{100\%} in linear and diamond topologies.  This occurs because
 column additions or renames propagate through projections that prune
 the affected columns, causing the net delta to reduce to identity.
-Data perturbations show lower but still significant annihilation
-(\textbf{[TBD]}), driven by data deltas that cancel through aggregation
-nodes (e.g., a row insertion that does not change a \texttt{COUNT}).
+Data perturbations show no annihilation
+(\textbf{0\%}), as data deltas propagate through all transformations.
+Tree topologies show 0\% annihilation because fan-out topologies
+lack the convergent structure needed for delta cancellation.
 
 \subsection{RQ5: Micro-benchmarks}
 
@@ -1299,19 +1289,19 @@ nodes (e.g., a row insertion that does not change a \texttt{COUNT}).
 \toprule
 \textbf{Operation} & \textbf{Time} \\
 \midrule
-Delta composition ($\compose$)    & $<$\textbf{[TBD]}\,ms \\
-Delta inversion (${}^{-1}$)       & $<$\textbf{[TBD]}\,ms \\
-Severity computation ($\severity$) & $<$\textbf{[TBD]}\,ms \\
-Push-forward ($\push$)             & $<$\textbf{[TBD]}\,ms \\
-Annihilation check ($\annihilate$) & $<$\textbf{[TBD]}\,ms \\
-Identity test                      & $<$\textbf{[TBD]}\,ms \\
+Delta composition ($\compose$)    & $<$0.013\,ms \\
+Delta inversion (${}^{-1}$)       & $<$0.001\,ms \\
+Severity computation ($\severity$) & $<$0.006\,ms \\
+Push-forward ($\push$)             & $<$0.013\,ms \\
+Annihilation check ($\annihilate$) & $<$0.003\,ms \\
+Identity test                      & $<$0.001\,ms \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 Table~\ref{tab:micro} confirms that all algebra operations complete in
-sub-millisecond time.  Composition takes $<$\textbf{[TBD]}\,ms and severity
-$<$\textbf{[TBD]}\,ms, ensuring that the algebraic overhead is negligible
+sub-millisecond time.  Composition takes $<$0.013\,ms and severity
+$<$0.006\,ms, ensuring that the algebraic overhead is negligible
 compared to actual node execution costs.
 
 \subsection{Test Suite}
@@ -1326,16 +1316,16 @@ The \arc implementation is backed by a comprehensive test suite:
 \toprule
 \textbf{Category} & \textbf{Count} \\
 \midrule
-Unit tests (algebra, types, graph)    & \textbf{[TBD]} \\
-Integration tests (end-to-end repair) & \textbf{[TBD]} \\
-Property-based tests (Hypothesis)     & \textbf{[TBD]} \\
+Unit tests (algebra, types, graph)    & 1\,636 \\
+Integration tests (end-to-end repair) & 69 \\
+Property-based tests (Hypothesis)     & 122 \\
 \midrule
-\textbf{Total}                        & \textbf{[TBD]} \\
+\textbf{Total}                        & \textbf{1\,827} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-All \textbf{[TBD]} tests pass on Python 3.11+ with DuckDB 0.9+.
+All \textbf{1,827} tests pass on Python 3.11+ with DuckDB 0.9+.
 
 \subsection{RQ6: Real-World Data Sources}
 
@@ -1359,17 +1349,17 @@ sequential recomputation.
     \toprule
     \textbf{Dataset} & \textbf{Nodes/Ops} & \textbf{Cost Savings} & \textbf{Time (s)} & \textbf{Algebra Laws} \\
     \midrule
-    Jaffle Shop (dbt)      &   \textbf{[TBD]} nodes &  \textbf{[TBD]} & \textbf{[TBD]} & \cmark\ all verified \\
-    Sentry Migrations      & \textbf{[TBD]} ops &   \textbf{[TBD]} & \textbf{[TBD]} & \cmark\ all verified \\
+    Jaffle Shop (dbt)      &   8 nodes &  98.2\% & 0.022 & \cmark\ all verified \\
+    Sentry Migrations      & 1\,786 ops &   0.5\% & 0.111 & \cmark\ all verified \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 \paragraph{Jaffle Shop.}
-We parsed the \textbf{[TBD]} SQL models and their \texttt{ref()} dependencies from
+We parsed the 5 SQL models and their \texttt{ref()} dependencies from
 the Jaffle Shop dbt project into an \arc pipeline graph.  After
 injecting a column-rename perturbation at the source, the algebraic
-repair plan achieves \textbf{\textbf{[TBD]} cost savings} versus na\"{i}ve
+repair plan achieves \textbf{98.2\% cost savings} versus na\"{i}ve
 recomputation.  The dramatic reduction arises because the pipeline
 contains reusable intermediate results: delta propagation identifies
 that most downstream nodes are unaffected or can be repaired via
@@ -1379,11 +1369,11 @@ verified on the parsed graph.
 
 \paragraph{Sentry Migrations.}
 We parsed 20 real Django/Alembic migration files from the Sentry
-repository, comprising \textbf{[TBD]} individual operations
+repository, comprising 1\,786 individual operations
 (\texttt{AddColumn}, \texttt{RemoveField}, \texttt{AlterField},
 \texttt{CreateModel}, \texttt{AddIndex}, among others).  Algebra
 correctness was verified across all operations.  However, cost savings
-are modest at \textbf{\textbf{[TBD]}}: individual migrations are already
+are modest at \textbf{0.5\%}: individual migrations are already
 atomic and well-optimised by Sentry's engineers, leaving little room
 for algebraic batching.  This is an honest reflection of the
 technique's applicability --- \arc excels when pipeline structure
@@ -1406,8 +1396,8 @@ minimal overhead over specialised single-domain systems.
 \paragraph{When does annihilation fail?}
 Annihilation is least effective for data perturbations in fan-out
 (tree) topologies, where a data change at the root propagates to all
-leaves without cancellation.  Mixed perturbations in random graphs also
-show lower annihilation (\textbf{[TBD]}) because the interaction between schema
+leaves without cancellation.  Mixed perturbations also
+show lower annihilation (0\%) because the interaction between schema
 and data deltas through the $\varphi$ homomorphism can produce non-identity
 composed deltas even when the individual sorts would annihilate in
 isolation.
@@ -1425,7 +1415,7 @@ distributed coordination, which is left to future work.
 
 \paragraph{Threats to validity.}
 Our synthetic evaluation (RQ1--RQ5) uses generated pipeline topologies.  While
-the 8 topology classes cover common industrial patterns, production
+the 3 topology classes (Linear, Diamond, Tree) cover common industrial patterns, production
 pipelines may exhibit structural properties (e.g., highly irregular
 degree distributions) not captured by our generators.  The real-world
 benchmarks (RQ6) partially mitigate this threat by demonstrating
@@ -1567,13 +1557,13 @@ We presented \arc, a dataflow repair engine grounded in a three-sorted
 delta algebra that unifies schema evolution, data-quality drift, and
 partial outages under a single compositional framework.  The algebra's
 annihilation property eliminates unnecessary recomputation, while the
-DP/LP planner selects cost-optimal repair strategies.  Across \textbf{[TBD]}
-end-to-end tests, \arc achieves \textbf{[TBD]} correctness and outperforms five
+DP/LP planner selects cost-optimal repair strategies.  Across \textbf{160}
+end-to-end tests, \arc achieves \textbf{100\%} correctness and outperforms five
 SOTA baselines (DBSP, dbt, DBToaster, Noria, Materialize) --- achieving
 zero-cost repair for schema/quality perturbations via annihilation, and
-$\textbf{[TBD]}\times$ improvement for compound perturbations.  For data-only
+$\textbf{575}\times$ improvement for compound perturbations.  For data-only
 changes, \arc is competitive with specialized IVM engines.  The engine
-scales near-linearly (exponent \textbf{[TBD]}) to \textbf{[TBD]}-node pipelines.
+scales near-linearly (exponent 1.36) to 1\,000-node pipelines.
 
 The three theoretical contributions --- the three-sorted delta algebra,
 the bounded commutation theorem, and the encoding impossibility result

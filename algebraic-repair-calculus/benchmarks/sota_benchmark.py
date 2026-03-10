@@ -1,3 +1,4 @@
+# AUDIT NOTE: This benchmark contains simulated results. See groundings.json for details.
 #!/usr/bin/env python3
 """
 SOTA Benchmark Suite for ARC: Algebraic Repair Calculus
