@@ -1,0 +1,66 @@
+{
+  "name": "tpcc_portability",
+  "description": "TPC-C New Order and Stock Level transactions for cross-engine portability analysis between PostgreSQL and MySQL.",
+  "workload_type": "portability",
+  "source_engine": "postgresql-16",
+  "target_engine": "mysql-8.0",
+  "isolation_level": "serializable",
+  "schema": {
+    "warehouse": {
+      "columns": [
+        { "name": "w_id", "type": "integer", "nullable": false },
+        { "name": "w_tax", "type": "real", "nullable": false }
+      ],
+      "primary_key": "w_id"
+    },
+    "district": {
+      "columns": [
+        { "name": "d_id", "type": "integer", "nullable": false },
+        { "name": "d_w_id", "type": "integer", "nullable": false },
+        { "name": "d_next_o_id", "type": "integer", "nullable": false }
+      ],
+      "primary_key": ["d_id", "d_w_id"]
+    },
+    "stock": {
+      "columns": [
+        { "name": "s_i_id", "type": "integer", "nullable": false },
+        { "name": "s_w_id", "type": "integer", "nullable": false },
+        { "name": "s_quantity", "type": "integer", "nullable": false }
+      ],
+      "primary_key": ["s_i_id", "s_w_id"]
+    }
+  },
+  "transaction_programs": [
+    {
+      "name": "new_order",
+      "transactions": [
+        {
+          "id": "T_new_order_1",
+          "operations": [
+            { "type": "begin", "isolation": "serializable" },
+            { "type": "read", "table": "warehouse", "key": { "w_id": 1 } },
+            { "type": "read", "table": "district", "key": { "d_id": 1, "d_w_id": 1 } },
+            { "type": "write", "table": "district", "key": { "d_id": 1, "d_w_id": 1 }, "column": "d_next_o_id", "value": 3001 },
+            { "type": "read", "table": "stock", "key": { "s_i_id": 100, "s_w_id": 1 } },
+            { "type": "write", "table": "stock", "key": { "s_i_id": 100, "s_w_id": 1 }, "column": "s_quantity", "value": 90 },
+            { "type": "commit" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "stock_level",
+      "transactions": [
+        {
+          "id": "T_stock_level_1",
+          "operations": [
+            { "type": "begin", "isolation": "serializable" },
+            { "type": "read", "table": "district", "key": { "d_id": 1, "d_w_id": 1 } },
+            { "type": "predicate_read", "table": "stock", "predicate": "s_w_id = 1 AND s_quantity < 10", "result_count": 5 },
+            { "type": "commit" }
+          ]
+        }
+      ]
+    }
+  ]
+}

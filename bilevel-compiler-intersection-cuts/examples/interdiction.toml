@@ -1,0 +1,167 @@
+# Network Interdiction Problem as a Bilevel Program
+#
+# A defender (leader) removes edges from a network to maximize the shortest
+# path that an attacker (follower) can achieve from source to sink.
+#
+# Network:  s --[3]--> A --[2]--> t
+#           s --[1]--> B --[4]--> t
+#           A --[1]--> B
+#
+# Leader: selects up to K=1 edges to interdict (binary variables)
+# Follower: finds the shortest path in the residual network
+#
+# If edge (s,A) is interdicted, shortest path becomes s->B->t = 5
+# If edge (A,t) is interdicted, shortest path becomes s->A->B->t = 8 or s->B->t = 5, so 5
+# If edge (s,B) is interdicted, shortest path becomes s->A->t = 5 or s->A->B->t = 8, so 5
+# If edge (B,t) is interdicted, shortest path becomes s->A->t = 5
+# If edge (A,B) is interdicted, shortest path is min(s->A->t=5, s->B->t=5) = 5
+# Optimal: interdict (s,A) or (s,B) or (A,t) or (B,t) — all give shortest path = 5
+
+[problem]
+name = "network_interdiction"
+description = "Shortest-path interdiction on a 4-node network (s, A, B, t)"
+type = "bilevel-interdiction"
+
+[network]
+nodes = ["s", "A", "B", "t"]
+source = "s"
+sink = "t"
+
+[[network.edges]]
+from = "s"
+to = "A"
+cost = 3.0
+id = "e_sA"
+
+[[network.edges]]
+from = "s"
+to = "B"
+cost = 1.0
+id = "e_sB"
+
+[[network.edges]]
+from = "A"
+to = "B"
+cost = 1.0
+id = "e_AB"
+
+[[network.edges]]
+from = "A"
+to = "t"
+cost = 2.0
+id = "e_At"
+
+[[network.edges]]
+from = "B"
+to = "t"
+cost = 4.0
+id = "e_Bt"
+
+[leader]
+objective = "maximize"
+description = "Interdict edges to maximize the follower's shortest-path cost"
+
+[leader.variables]
+z_sA = { type = "binary", description = "Interdict edge s->A" }
+z_sB = { type = "binary", description = "Interdict edge s->B" }
+z_AB = { type = "binary", description = "Interdict edge A->B" }
+z_At = { type = "binary", description = "Interdict edge A->t" }
+z_Bt = { type = "binary", description = "Interdict edge B->t" }
+
+# Leader objective: maximize the follower's shortest-path distance
+# (expressed via the follower's dual / value function)
+[leader.objective_coefficients]
+eta = 1.0
+
+[[leader.constraints]]
+name = "budget"
+description = "At most K=1 edge can be interdicted"
+coefficients = { z_sA = 1.0, z_sB = 1.0, z_AB = 1.0, z_At = 1.0, z_Bt = 1.0 }
+sense = "<="
+rhs = 1.0
+
+[[leader.constraints]]
+name = "eta_bound"
+description = "eta <= follower optimal value (value function coupling)"
+coefficients = { eta = 1.0 }
+sense = "<="
+rhs_expr = "follower_objective"
+
+[follower]
+objective = "minimize"
+description = "Find shortest s-t path in the residual network"
+
+[follower.variables]
+f_sA = { lower = 0.0, upper = 1.0, description = "Flow on s->A" }
+f_sB = { lower = 0.0, upper = 1.0, description = "Flow on s->B" }
+f_AB = { lower = 0.0, upper = 1.0, description = "Flow on A->B" }
+f_At = { lower = 0.0, upper = 1.0, description = "Flow on A->t" }
+f_Bt = { lower = 0.0, upper = 1.0, description = "Flow on B->t" }
+
+[follower.objective_coefficients]
+f_sA = 3.0
+f_sB = 1.0
+f_AB = 1.0
+f_At = 2.0
+f_Bt = 4.0
+
+# Flow conservation constraints
+[[follower.constraints]]
+name = "flow_source"
+description = "One unit of flow leaves source s"
+coefficients = { f_sA = 1.0, f_sB = 1.0 }
+sense = "="
+rhs = 1.0
+
+[[follower.constraints]]
+name = "flow_A"
+description = "Flow conservation at node A"
+coefficients = { f_sA = -1.0, f_AB = 1.0, f_At = 1.0 }
+sense = "="
+rhs = 0.0
+
+[[follower.constraints]]
+name = "flow_B"
+description = "Flow conservation at node B"
+coefficients = { f_sB = -1.0, f_AB = -1.0, f_Bt = 1.0 }
+sense = "="
+rhs = 0.0
+
+[[follower.constraints]]
+name = "flow_sink"
+description = "One unit of flow enters sink t"
+coefficients = { f_At = -1.0, f_Bt = -1.0 }
+sense = "="
+rhs = -1.0
+
+# Interdiction coupling: if leader interdicts edge e, flow on e is forced to 0
+# f_e <= 1 - z_e  (parameterized by leader's z variables)
+[[follower.constraints]]
+name = "interdict_sA"
+coefficients = { f_sA = 1.0, z_sA = 1.0 }
+sense = "<="
+rhs = 1.0
+
+[[follower.constraints]]
+name = "interdict_sB"
+coefficients = { f_sB = 1.0, z_sB = 1.0 }
+sense = "<="
+rhs = 1.0
+
+[[follower.constraints]]
+name = "interdict_AB"
+coefficients = { f_AB = 1.0, z_AB = 1.0 }
+sense = "<="
+rhs = 1.0
+
+[[follower.constraints]]
+name = "interdict_At"
+coefficients = { f_At = 1.0, z_At = 1.0 }
+sense = "<="
+rhs = 1.0
+
+[[follower.constraints]]
+name = "interdict_Bt"
+coefficients = { f_Bt = 1.0, z_Bt = 1.0 }
+sense = "<="
+rhs = 1.0

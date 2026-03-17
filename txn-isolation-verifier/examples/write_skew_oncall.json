@@ -1,0 +1,43 @@
+{
+  "name": "write_skew_oncall",
+  "description": "Hospital on-call constraint: at least one doctor must be on call. Write skew anomaly where both doctors sign off simultaneously.",
+  "engine": "postgresql-16",
+  "isolation_level": "repeatable_read",
+  "schema": {
+    "doctors": {
+      "columns": [
+        { "name": "name", "type": "varchar", "nullable": false },
+        { "name": "on_call", "type": "boolean", "nullable": false }
+      ],
+      "primary_key": "name"
+    }
+  },
+  "initial_state": {
+    "doctors": [
+      { "name": "alice", "on_call": true },
+      { "name": "bob", "on_call": true }
+    ]
+  },
+  "transactions": [
+    {
+      "id": "T1",
+      "operations": [
+        { "type": "begin", "isolation": "repeatable_read" },
+        { "type": "predicate_read", "table": "doctors", "predicate": "on_call = true", "result_count": 2 },
+        { "type": "write", "table": "doctors", "key": "alice", "column": "on_call", "value": false },
+        { "type": "commit" }
+      ]
+    },
+    {
+      "id": "T2",
+      "operations": [
+        { "type": "begin", "isolation": "repeatable_read" },
+        { "type": "predicate_read", "table": "doctors", "predicate": "on_call = true", "result_count": 2 },
+        { "type": "write", "table": "doctors", "key": "bob", "column": "on_call", "value": false },
+        { "type": "commit" }
+      ]
+    }
+  ],
+  "expected_anomaly": "G2-item (write skew)",
+  "integrity_constraint": "COUNT(doctors WHERE on_call = true) >= 1"
+}

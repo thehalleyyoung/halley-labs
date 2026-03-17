@@ -1,0 +1,129 @@
+// menu_navigation.choreo
+// Hierarchical spatial menu with gaze + hand selection.
+// Demonstrates choice, seq, multiple interactions, and a custom
+// verification annotation for deadlock freedom.
+//
+// The menu has three tiers: top-level tabs, a sub-menu per tab,
+// and leaf actions.  At each tier the user may select an item or
+// go back.  The choreography guarantees that exactly one path is
+// active at any time (deadlock-free by construction via `choice`).
+
+// ---------------------------------------------------------------------------
+// Regions
+// ---------------------------------------------------------------------------
+
+// Top-level menu bar floating at eye height.
+region menu_bar = box(vec3(0.0, 1.5, -1.0), vec3(0.6, 0.08, 0.01));
+
+// Sub-menu panels (one per tab).
+region file_submenu = box(vec3(-0.3, 1.3, -1.0), vec3(0.2, 0.25, 0.01));
+region edit_submenu = box(vec3(0.0, 1.3, -1.0), vec3(0.2, 0.25, 0.01));
+region view_submenu = box(vec3(0.3, 1.3, -1.0), vec3(0.2, 0.25, 0.01));
+
+// Dismiss zone — looking/pointing away from all menus.
+region dismiss_zone = difference(
+    sphere(vec3(0.0, 1.4, -1.0), 2m),
+    box(vec3(0.0, 1.4, -1.0), vec3(0.8, 0.4, 0.05))
+);
+
+// ---------------------------------------------------------------------------
+// Entities
+// ---------------------------------------------------------------------------
+
+entity user : User {}
+entity head : Head { position: vec3(0.0, 1.7, 0.0); }
+entity right_hand : Hand(Right) { position: vec3(0.2, 1.1, -0.4); }
+
+entity menu_root : Object { position: vec3(0.0, 1.5, -1.0); }
+entity file_panel : Object { position: vec3(-0.3, 1.3, -1.0); }
+entity edit_panel : Object { position: vec3(0.0, 1.3, -1.0); }
+entity view_panel : Object { position: vec3(0.3, 1.3, -1.0); }
+
+// ---------------------------------------------------------------------------
+// Interactions — hierarchical menu navigation
+// ---------------------------------------------------------------------------
+
+// Open the menu bar when the user gazes at its region.
+interaction open_menu {
+    when gaze(head, menu_root, 8deg) then {
+        activate(menu_root);
+        emit(menu_opened);
+    }
+}
+
+// Top-level tab selection — exactly one branch may proceed.
+interaction select_tab {
+    choice {
+        // File tab
+        when gaze(head, file_panel, 6deg) and proximity(right_hand, file_panel, 40cm) => seq {
+            {
+                activate(file_panel);
+                emit(tab_selected, "file");
+            };
+            // Leaf action inside file sub-menu
+            when reach(right_hand, file_panel, 15cm) => {
+                emit(file_action_triggered);
+            };
+        }
+        |
+        // Edit tab
+        when gaze(head, edit_panel, 6deg) and proximity(right_hand, edit_panel, 40cm) => seq {
+            {
+                activate(edit_panel);
+                emit(tab_selected, "edit");
+            };
+            when reach(right_hand, edit_panel, 15cm) => {
+                emit(edit_action_triggered);
+            };
+        }
+        |
+        // View tab
+        when gaze(head, view_panel, 6deg) and proximity(right_hand, view_panel, 40cm) => seq {
+            {
+                activate(view_panel);
+                emit(tab_selected, "view");
+            };
+            when reach(right_hand, view_panel, 15cm) => {
+                emit(view_action_triggered);
+            };
+        }
+    }
+}
+
+// Dismiss: close everything if the user looks away for 1.5 s.
+interaction dismiss_menu {
+    when gaze(head, dismiss_zone) and timeout(1500ms) then {
+        deactivate(menu_root);
+        deactivate(file_panel);
+        deactivate(edit_panel);
+        deactivate(view_panel);
+        emit(menu_dismissed);
+    }
+}
+
+// Verification annotation — the choice combinator ensures that
+// the compiled automaton is deadlock-free: every reachable state
+// has at least one enabled transition.
+// @verify deadlock_free(select_tab)
+
+// ---------------------------------------------------------------------------
+// Scene
+// ---------------------------------------------------------------------------
+
+scene menu_navigation_demo {
+    entity user;
+    entity head;
+    entity right_hand;
+    entity menu_root;
+    entity file_panel;
+    entity edit_panel;
+    entity view_panel;
+    region menu_bar;
+    region file_submenu;
+    region edit_submenu;
+    region view_submenu;
+    region dismiss_zone;
+    interaction open_menu;
+    interaction select_tab;
+    interaction dismiss_menu;
+}

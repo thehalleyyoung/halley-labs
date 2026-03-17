@@ -1,0 +1,77 @@
+{
+  "name": "mysql_gap_lock_phantom",
+  "description": "MySQL InnoDB gap-lock behavior under REPEATABLE READ. InnoDB uses next-key locking on index ranges to prevent phantoms, but the locked range depends on which index the optimizer selects. This example shows how the same predicate can exhibit different locking behavior with different indexes.",
+  "engine": "mysql-8.0",
+  "isolation_level": "repeatable_read",
+  "anomaly_class": "G2",
+  "references": [
+    "MySQL 8.0 Reference Manual, Section 15.7.1: InnoDB Locking",
+    "MySQL 8.0 Reference Manual, Section 15.7.3: Locks Set by Different SQL Statements",
+    "Berenson et al. A Critique of ANSI SQL Isolation Levels. SIGMOD 1995"
+  ],
+  "schema": {
+    "accounts": {
+      "columns": [
+        { "name": "id", "type": "integer", "nullable": false },
+        { "name": "balance", "type": "integer", "nullable": false },
+        { "name": "region", "type": "varchar", "nullable": false }
+      ],
+      "primary_key": "id",
+      "indexes": [
+        { "name": "idx_balance", "columns": ["balance"] },
+        { "name": "idx_region", "columns": ["region"] }
+      ]
+    }
+  },
+  "setup_sql": [
+    "CREATE TABLE accounts (id INT PRIMARY KEY, balance INT NOT NULL, region VARCHAR(32) NOT NULL, INDEX idx_balance(balance), INDEX idx_region(region))",
+    "INSERT INTO accounts VALUES (1, 100, 'US'), (2, 200, 'US'), (3, 300, 'EU'), (5, 500, 'US')"
+  ],
+  "transactions": [
+    {
+      "id": "T1",
+      "label": "Range scan on balance (uses idx_balance)",
+      "operations": [
+        { "type": "begin" },
+        { "type": "read", "table": "accounts", "predicate": "balance BETWEEN 150 AND 350", "result": [{"id": 2, "balance": 200}, {"id": 3, "balance": 300}] },
+        { "type": "commit" }
+      ]
+    },
+    {
+      "id": "T2",
+      "label": "Attempt insert into gap locked by T1",
+      "operations": [
+        { "type": "begin" },
+        { "type": "insert", "table": "accounts", "values": { "id": 4, "balance": 250, "region": "EU" } },
+        { "type": "commit" }
+      ]
+    }
+  ],
+  "schedule": [
+    "T1: START TRANSACTION",
+    "T2: START TRANSACTION",
+    "T1: SELECT * FROM accounts WHERE balance BETWEEN 150 AND 350",
+    "    -- InnoDB acquires next-key locks on idx_balance gap (100, 200], (200, 300], (300, 500]",
+    "T2: INSERT INTO accounts VALUES (4, 250, 'EU')",
+    "    -- BLOCKS: gap lock on idx_balance covers (200, 300) which includes balance=250",
+    "T1: COMMIT  -- releases gap locks",
+    "T2: COMMIT  -- now succeeds"
+  ],
+  "expected_outcome": {
+    "phantom_prevented": true,
+    "mechanism": "InnoDB next-key gap locking on idx_balance B-tree",
+    "note": "If the optimizer chose idx_region instead, the gap locks would cover different ranges and the insert might NOT be blocked — this is the index-dependent behavior that IsoSpec models"
+  },
+  "index_sensitivity_demo": {
+    "scenario_a": {
+      "index_used": "idx_balance",
+      "gaps_locked": ["(100, 200]", "(200, 300]", "(300, 500]"],
+      "insert_blocked": true
+    },
+    "scenario_b": {
+      "index_used": "idx_region (forced via USE INDEX)",
+      "gaps_locked": ["gap before 'EU' records in region index"],
+      "insert_blocked": "depends on region value, not balance range"
+    }
+  }
+}

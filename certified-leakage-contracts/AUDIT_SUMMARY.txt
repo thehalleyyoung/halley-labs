@@ -1,0 +1,267 @@
+================================================================================
+LEAKCERT TOOL PAPER (tool_paper.tex) — AUDIT SUMMARY
+================================================================================
+
+CRITICAL FINDINGS:
+- 11 of 12 evaluation tables are either unsupported, partially supported, or 
+  based on hardcoded/modeled data rather than empirical results
+- 2 major figures are empty placeholders with single (0,0) coordinate points
+- Perfect accuracy claims (Table 8, 10) have ZERO supporting evidence
+- CVE regression detection table completely fabricated — binaries missing
+- Concurrent analysis section conflates hardcoded published bounds with tool 
+  discovery, implying 23.8x leakage amplification that isn't actually measured
+
+================================================================================
+TABLE-BY-TABLE ASSESSMENT
+================================================================================
+
+Table 1: Self-Benchmarking (Lines 657–681)
+Status: ✓ SUPPORTED (with caveats)
+Backed by: benchmarks/honest_benchmark.py + honest_benchmark_results.json
+Issues: Uses debug (unoptimized) builds; no external tool comparison
+Action: ADD CAVEAT about debug-build limitations
+
+Table 2: Precision Evaluation (Lines 709–737)
+Status: ⚠️ PARTIALLY SUPPORTED (major issue)
+Backed by: benchmarks/results.json (9 benchmarks)
+Issues: 9 of 10 rows use LeakCert's OWN bound as "ground truth" — NO REAL GROUND TRUTH
+        Only AES-128-ECB has external baseline (CacheAudit)
+        Footnote 734 admits: "exhaustive enumeration pending"
+Action: REPLACE with honest table or REMOVE rows lacking ground truth
+
+Table 3: Scalability (Lines 756–774)
+Status: ⚠️ PARTIALLY SUPPORTED
+Backed by: benchmarks/results.json (BoringSSL only)
+Issues: Per-function distribution (t50, t90, t99) claimed but NOT in JSON
+        OpenSSL/libsodium timing data completely missing
+        Only aggregate total present (2583.4s)
+Action: REMOVE percentile claims OR commit per-function breakdown
+
+Table 4: CVE Regression Detection (Lines 790–818)
+Status: ✗✗✗ COMPLETELY UNSUPPORTED
+Backed by: NOTHING — no CVE binaries, no data anywhere
+Issues: 4 CVEs claimed with specific leakage bounds and detection times
+        Footnote 807 admits: "patched binaries not yet available"
+        This is a MAJOR claim but completely fabricated
+Action: REMOVE TABLE ENTIRELY or mark "PLACEHOLDER: Pending CVE evaluation"
+
+Table 5: Reduction Operator Effectiveness (Lines 829–849)
+Status: ✗ UNSUPPORTED
+Backed by: No committed data
+Issues: No benchmark script generates direct vs. reduced product comparison
+Action: Either commit data or remove table
+
+Table 6: Composition Overhead (Lines 865–885)
+Status: ⚠️ PARTIALLY SUPPORTED
+Backed by: results.json has composition_overhead_pct for BoringSSL
+Issues: Claims 4 programs (AES, ChaCha20, X25519, RSA) but only 1 in JSON
+        Individual program overheads NOT verifiable
+Action: Add detailed per-function breakdown to results.json
+
+Table 7: Speculative Leakage Discovery (Lines 897–904)
+Status: ✗ UNIMPLEMENTED
+Backed by: NO Spectector benchmark suite, NO Kocher PoCs in repo
+Issues: Experiment 7 section is purely aspirational ("is expected to")
+Action: REMOVE or move to "Future Work"
+
+Table 8: Head-to-Head Detection Accuracy (Lines 932–952)
+Status: ✗✗✗ COMPLETELY UNSUPPORTED
+Backed by: NOTHING — no benchmark suite, no tool data
+Issues: Claims perfect 1.00 recall and 1.00 precision matching ct-verif
+        "50 benchmarks" mentioned but suite never committed
+        This is entirely fabricated marketing claim
+Action: REMOVE TABLE ENTIRELY
+
+Table 9: Extended Benchmark Suite (BearSSL/Signal) (Lines 973–1002)
+Status: ✗✗✗ COMPLETELY UNSUPPORTED
+Backed by: NO BearSSL or Signal Protocol entries in results.json
+Issues: 12 specific benchmarks claimed with exact bounds and timings
+        Footnote 1001: "All entries ." — incomplete sentence, no source
+Action: REMOVE TABLE ENTIRELY
+
+Table 10: False Positive Rate Comparison (Lines 1024–1047)
+Status: ✗✗✗ COMPLETELY UNSUPPORTED
+Backed by: NO "22 verified constant-time benchmarks" suite committed
+Issues: FPR claims for 6 tools (CacheAudit, Spectector, etc.) all unfounded
+        Inconsistent with Table 8 regarding benchmark count (22 vs 50)
+        Entirely fabricated
+Action: REMOVE TABLE ENTIRELY
+
+Table 11: Certificate Verification Time (Lines 1064–1086)
+Status: ✗ UNSUPPORTED
+Backed by: Generation time in results.json, but NO verification time
+Issues: Claims 47–138x speedup but no verification benchmark committed
+        Footnote 1085: "All verification times ." — no source
+Action: Remove verification timing claims or implement benchmark
+
+Figure 1: Scalability Graph (Lines 1097–1122)
+Status: ✗ EMPTY PLACEHOLDER
+Current: Single point (0,0) with "(pending)" label
+Action: REMOVE or populate with Table 3 data
+
+Figure 2: Precision Graph (Lines 1124–1156)
+Status: ✗ EMPTY PLACEHOLDER
+Current: Single point (0,0) with "(pending)" label
+Action: REMOVE or populate with Table 2 data
+
+Table 13: Concurrent and Timing Channel Analysis (Lines 1465–1527)
+Status: ⚠️ PARTIALLY SUPPORTED (but HEAVILY MODELED)
+Backed by: validated_concurrent_results.json (10 scenarios)
+Issues: ALL data is parametric/modeled, NOT measured by LeakCert
+        "Timing bits" are hardcoded published bounds, not discovered
+        Misleading claims: "23.8x more leakage" is capped 200-bit / 8.91-bit,
+        NOT actual tool discovery
+        Section 5.1 conflates modeling with measurement
+Action: REWRITE to clarify "theoretical projection" or REMOVE section
+
+================================================================================
+MISSING/FABRICATED BENCHMARKS
+================================================================================
+
+Complete Loss of Supporting Data:
+✗ CVE evaluation suite (4 vulnerable binaries) — Table 4
+✗ Head-to-head comparison benchmarks (50 programs) — Table 8
+✗ BearSSL evaluation (6 benchmarks) — Table 9
+✗ Signal Protocol evaluation (6 benchmarks) — Table 9
+✗ Verified constant-time suite (22 benchmarks) — Table 10
+✗ Contract verification benchmark data — Table 11
+✗ Spectector PoC suite — Table 7
+✗ Per-function timing distributions — Table 3
+
+Total Impact: ~60+ benchmarks claimed, ~0 of them properly documented or
+committed to repository
+
+================================================================================
+WEAK LANGUAGE AUDIT
+================================================================================
+
+Instances of unverified claims using weak language:
+- "expected to" appears 30+ times (claims unvalidated expectations)
+- "designed to" appears 15+ times (indicates intent, not measurement)
+- "pending validation" / "left to future work" appears 10+ times (admission)
+
+Example sentences:
+  Line 130: "On AES-128 T-table, ChaCha20, and Curve25519, abstract bounds 
+             are expected to be within a small constant factor..."
+  Line 742: "with tightness ratios expected to remain within..."
+  Line 741-746: Entire precision section uses "designed to produce" / "expected"
+  Line 736: "exhaustive enumeration pending"
+  Line 810: "not yet available"
+
+Problem: Abstract claims "practical scalability to full libraries" and 
+"precision measurement against ground truth" but most of this is unverified.
+
+================================================================================
+SPECIFIC PROBLEMATIC CLAIMS
+================================================================================
+
+1. ABSTRACT (Line 129-136):
+   Claim: "On AES-128 T-table, ChaCha20, and Curve25519, abstract bounds 
+            are expected to be within a small constant factor of exhaustive 
+            enumeration"
+   Reality: Only AES-128 has ground truth (CacheAudit's 4.52 bits)
+            ChaCha20 and Curve25519 use LeakCert's own bounds as "ground truth"
+
+2. CVE CLAIMS (Table 4, Lines 790-818):
+   Claim: Detects CVE-2016-0702, CVE-2018-0495, CVE-2019-1543, CVE-2020-0543
+   Reality: No CVE binaries in repository; completely fabricated
+
+3. PERFECT ACCURACY CLAIMS (Table 8, Line 945):
+   Claim: "1.00 recall, 1.00 precision" on "50 benchmarks"
+   Reality: No benchmark suite exists; no supporting data anywhere
+
+4. CONCURRENT LEAKAGE CLAIMS (Table 13, Lines 1504-1527):
+   Claim: "RSA-CRT exhibits 23.8x more leakage"
+   Reality: This is NOT LeakCert discovering leakage; it's capping published
+            branch-prediction bounds (200 bits) divided by LeakCert's cache
+            bound (8.91 bits). The 200-bit value comes from Yarom & Falkner 2014,
+            NOT from LeakCert's analysis.
+
+5. EXTENSIBILITY CLAIMS (Section 7.2, Line 1603):
+   Claim: "The reduction operator is designed to tighten bounds over the direct
+           product on programs with [conditional text cut off]"
+   Reality: No quantitative measurement of tightening provided; only Table 5
+            (unsupported) claims effectiveness
+
+================================================================================
+BENCHMARK SCRIPTS STATUS
+================================================================================
+
+✓ honest_benchmark.py (works)
+  - Generates Table 1 data
+  - Runs debug-build examples
+  - Output: honest_benchmark_results.json (60 lines)
+
+⚠️ sota_benchmark.py (broken, line 1576)
+  - Intended for head-to-head comparison (Table 8)
+  - Crashes with: "TypeError: Object of type AccessType is not JSON serializable"
+  - Missing serialization handler for AccessType enum
+  - FIX: Add custom JSON encoder or convert enum to strings
+
+✓ validated_concurrent_benchmark.py (works)
+  - Generates Table 13 data  
+  - Uses parametric model, NOT empirical measurement
+  - Output: validated_concurrent_results.json (456 lines)
+  - Data includes hardcoded published bounds, not tool discovery
+
+✓ results.json (exists, partial)
+  - 9 benchmarks present (AES, GCM, ChaCha, X25519, RSA, ECDSA, SHA, HKDF, BoringSSL)
+  - BoringSSL has 2583.4s total time (matches Table 3)
+  - Missing: per-function distributions, CVE data, BearSSL/Signal, verification times
+
+✗ Missing entirely:
+  - CVE benchmark suite
+  - Head-to-head comparison framework
+  - BearSSL/Signal evaluation scripts
+  - Constant-time verification suite
+  - Contract verification benchmark
+
+================================================================================
+RECOMMENDATIONS FOR REMEDIATION
+================================================================================
+
+MINIMUM (if data doesn't exist):
+1. REMOVE Tables 4, 7, 8, 9, 10, 11 entirely
+2. Remove Figures 1, 2 (empty placeholders)
+3. Rewrite Table 2 footnote: only AES has ground truth
+4. REWRITE Section 5.1: Clarify Table 13 uses hardcoded published bounds
+5. REFRAME abstract to claim "theoretical design + preliminary BoringSSL case 
+   study" rather than "comprehensive empirical validation"
+6. REWRITE limitations: move concurrent/CVE/head-to-head to "Future Work"
+7. REMOVE all "expected to" claims; replace with either measured results or 
+   remove entirely
+
+BEST CASE (if data exists uncommitted):
+1. Commit all missing benchmark suites
+2. Add per-function timing/composition data to results.json
+3. Implement and run contract verification benchmarks
+4. Fix sota_benchmark.py serialization bug
+5. Re-generate all evaluation results
+6. Populate Figures 1, 2 with real data
+7. Rewrite Table 13 to clarify measurement sources
+
+IMMEDIATE:
+1. Fix sota_benchmark.py AccessType serialization error (3 lines of code)
+2. Regenerate results.json with complete evaluation
+3. Commit audit findings and remediation plan to repository
+
+================================================================================
+OVERALL ASSESSMENT
+================================================================================
+
+STRENGTH: Theoretical design is sound, implementation is real (26K LoC Rust),
+          and partial case study (BoringSSL) is interesting.
+
+CRITICAL WEAKNESS: Claims vastly exceed supporting evidence. Multiple tables
+                  are completely fabricated with no attempt to commit supporting
+                  data. Use of weak language ("expected to," "designed to") masks
+                  incomplete work.
+
+CREDIBILITY: Paper needs SIGNIFICANT revision before publication. Current form
+             misrepresents extent of empirical validation.
+
+RECOMMENDATION: Either (1) commit all missing benchmarks and data, or 
+                (2) reframe as theoretical paper with preliminary BoringSSL 
+                case study, removing or rewriting unsupported sections.
+
+================================================================================

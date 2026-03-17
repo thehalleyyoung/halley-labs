@@ -1,0 +1,108 @@
+// gesture_sequence.choreo
+// Complex gesture recognition: pinch-drag-release on a virtual slider.
+// The entire gesture must complete within a time window; if it doesn't
+// the partial gesture is cancelled.  Demonstrates seq, within
+// (temporal bounds), touch, grab, release, and timeout fallback.
+
+// ---------------------------------------------------------------------------
+// Regions
+// ---------------------------------------------------------------------------
+
+// Slider track — a thin horizontal bar.
+region slider_track = box(vec3(0.0, 1.4, -0.8), vec3(0.3, 0.015, 0.015));
+
+// Slider thumb — the draggable handle.
+region slider_thumb = sphere(vec3(-0.2, 1.4, -0.8), 2cm);
+
+// Extended interaction volume around the slider for approach detection.
+region slider_approach = box(vec3(0.0, 1.4, -0.8), vec3(0.4, 0.1, 0.1));
+
+// ---------------------------------------------------------------------------
+// Entities
+// ---------------------------------------------------------------------------
+
+entity user : User {}
+
+entity right_hand : Hand(Right) {
+    position: vec3(0.2, 1.1, -0.4);
+}
+
+entity thumb_knob : Object {
+    position: vec3(-0.2, 1.4, -0.8);
+    bounds: sphere(vec3(0.0, 0.0, 0.0), 2cm);
+    draggable: true;
+}
+
+entity slider_fill : Object {
+    position: vec3(-0.2, 1.4, -0.8);
+}
+
+entity drag_preview : Object {
+    position: vec3(0.0, 1.4, -0.8);
+    visible: false;
+}
+
+// ---------------------------------------------------------------------------
+// Interactions
+// ---------------------------------------------------------------------------
+
+// The full pinch-drag-release must happen within 5 seconds.
+interaction pinch_drag_release {
+    seq {
+        // Phase 1: hand approaches the thumb knob.
+        when proximity(right_hand, thumb_knob, 5cm) within 2s => {
+            emit(slider_hover, thumb_knob);
+            activate(drag_preview);
+        };
+
+        // Phase 2: pinch (touch) to grab the knob.
+        when touch(right_hand, thumb_knob) within 1s => {
+            emit(pinch_start, thumb_knob);
+        };
+
+        // Phase 3: drag — the hand holds the knob and moves.
+        when grab(thumb_knob) within 500ms => {
+            emit(drag_active, thumb_knob);
+        };
+
+        // Phase 4: release to commit the new value.
+        when release(thumb_knob) within 3s => {
+            emit(drag_commit, thumb_knob);
+            deactivate(drag_preview);
+        };
+    }
+}
+
+// If the gesture times out at any phase, reset.
+interaction gesture_timeout {
+    when timeout(5s) then {
+        deactivate(drag_preview);
+        emit(gesture_cancelled);
+    }
+}
+
+// Quick-tap shortcut: if the user touches and releases within 200 ms
+// without dragging, treat it as a tap-to-toggle.
+interaction tap_toggle {
+    when (touch(right_hand, thumb_knob); release(thumb_knob)) within 200ms then {
+        emit(slider_tap_toggle, thumb_knob);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Scene
+// ---------------------------------------------------------------------------
+
+scene gesture_sequence_demo {
+    entity user;
+    entity right_hand;
+    entity thumb_knob;
+    entity slider_fill;
+    entity drag_preview;
+    region slider_track;
+    region slider_thumb;
+    region slider_approach;
+    interaction pinch_drag_release;
+    interaction gesture_timeout;
+    interaction tap_toggle;
+}

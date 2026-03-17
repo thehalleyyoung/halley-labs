@@ -1,0 +1,108 @@
+; FPBench standard suite for Penumbra evaluation
+; Source: fpbench.org — community standard floating-point benchmarks
+; These benchmarks are used to compare Penumbra against Herbie, Precimonious, and other tools.
+;
+; Format: FPCore (see https://fpbench.org/spec/fpcore-2.0.html)
+
+; ── Cancellation benchmarks ──────────────────────────────────────────────────
+
+(FPCore (x)
+  :name "NMSE-example-3.1"
+  :cite (hamming-1987)
+  :description "sqrt(x+1) - sqrt(x): catastrophic cancellation for large x"
+  :penumbra-category "cancellation"
+  (- (sqrt (+ x 1.0)) (sqrt x)))
+
+(FPCore (x)
+  :name "NMSE-example-3.3"
+  :cite (hamming-1987)
+  :description "1/(x+1) - 1/x: cancellation for large x"
+  :penumbra-category "cancellation"
+  (- (/ 1.0 (+ x 1.0)) (/ 1.0 x)))
+
+(FPCore (x)
+  :name "NMSE-example-3.4"
+  :cite (hamming-1987)
+  :description "(1-cos(x))/x: cancellation near x=0"
+  :penumbra-category "cancellation"
+  (/ (- 1.0 (cos x)) x))
+
+(FPCore (x)
+  :name "expm1"
+  :cite (goldberg-1991)
+  :description "exp(x) - 1: total cancellation for small x"
+  :penumbra-category "cancellation"
+  :penumbra-repair "expm1"
+  (- (exp x) 1.0))
+
+(FPCore (x)
+  :name "log1p"
+  :cite (goldberg-1991)
+  :description "log(1+x): cancellation for small x"
+  :penumbra-category "cancellation"
+  :penumbra-repair "log1p"
+  (log (+ 1.0 x)))
+
+(FPCore (a b c)
+  :name "quadratic-formula-positive"
+  :cite (goldberg-1991)
+  :description "(-b + sqrt(b^2-4ac)) / 2a: cancellation when b^2 >> 4ac"
+  :penumbra-category "cancellation"
+  :penumbra-repair "stable-quadratic"
+  (/ (+ (neg b) (sqrt (- (* b b) (* (* 4.0 a) c)))) (* 2.0 a)))
+
+(FPCore (a b c)
+  :name "quadratic-formula-negative"
+  :cite (goldberg-1991)
+  :description "(-b - sqrt(b^2-4ac)) / 2a: cancellation when b^2 >> 4ac"
+  :penumbra-category "cancellation"
+  (/ (- (neg b) (sqrt (- (* b b) (* (* 4.0 a) c)))) (* 2.0 a)))
+
+; ── Overflow / underflow benchmarks ──────────────────────────────────────────
+
+(FPCore (a b)
+  :name "hypot-naive"
+  :description "sqrt(a^2 + b^2): overflow for large a,b"
+  :penumbra-category "overflow"
+  :penumbra-repair "hypot"
+  (sqrt (+ (* a a) (* b b))))
+
+; ── Absorption benchmarks ────────────────────────────────────────────────────
+
+(FPCore (x)
+  :name "sum-absorption"
+  :description "Accumulation with large + small: absorption"
+  :penumbra-category "absorption"
+  :penumbra-repair "kahan-summation"
+  (+ 1e16 x))
+
+; ── Ill-conditioned subproblem benchmarks ────────────────────────────────────
+
+(FPCore (x)
+  :name "wilkinson-polynomial"
+  :description "Wilkinson's polynomial near a root: extreme sensitivity"
+  :penumbra-category "amplified-rounding"
+  (* (- x 1.0) (- x 2.0)))
+
+; ── Herbie benchmark suite (subset) ──────────────────────────────────────────
+
+(FPCore (x)
+  :name "herbie-exp-minus-1-over-x"
+  :cite (panchekha-pldi-2015)
+  :description "(exp(x)-1)/x for small x"
+  :penumbra-category "cancellation"
+  (/ (- (exp x) 1.0) x))
+
+(FPCore (x)
+  :name "herbie-log1p-over-x"
+  :cite (panchekha-pldi-2015)
+  :description "log(1+x)/x for small x"
+  :penumbra-category "cancellation"
+  (/ (log (+ 1.0 x)) x))
+
+(FPCore (x y)
+  :name "herbie-sum-of-squares-diff"
+  :cite (panchekha-pldi-2015)
+  :description "(x^2 - y^2) via factored form"
+  :penumbra-category "cancellation"
+  (- (* x x) (* y y)))

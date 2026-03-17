@@ -1,0 +1,293 @@
+[
+  {
+    "project": "IsoVerify Transaction Isolation Verifier",
+    "version": "0.5.0",
+    "generated": "2026-01-15",
+    "description": "SMT-based verification of database transaction isolation guarantees with witness validation"
+  },
+  {
+    "id": "B1",
+    "type": "empirical",
+    "claim": "100% average F1 score across 34 benchmark scenarios, outperforming Elle-style detector (25.0% F1) by 75 percentage points",
+    "evidence": "GROUNDED \u2014 benchmarks/real_benchmark_results.json field summary.overall: smt_f1_avg=1.0, elle_f1_avg=0.25, improvement=75.0",
+    "paper_location": "Table 2, Abstract, Conclusion"
+  },
+  {
+    "id": "B2",
+    "type": "empirical",
+    "claim": "100% precision (zero false positives) achieved through counterexample-guided witness validation",
+    "evidence": "GROUNDED \u2014 benchmarks/real_benchmark_results.json: all 34 results have smt_precision=1.0; per-type aggregation shows 0 FP across all anomaly types",
+    "paper_location": "Table 2"
+  },
+  {
+    "id": "B3",
+    "type": "empirical",
+    "claim": "Perfect detection of all 5 anomaly types: dirty read (3/3 TP), lost update (22/22 TP), write skew (12/12 TP), phantom read (13/13 TP), read skew (3/3 TP), total 53 TP, 0 FP, 0 FN",
+    "evidence": "GROUNDED \u2014 benchmarks/real_benchmark_results.json: per-result aggregation of smt_detected vs known_anomalies yields TP=53, FP=0, FN=0",
+    "paper_location": "Table 4"
+  },
+  {
+    "id": "B4",
+    "type": "empirical",
+    "claim": "Witness validation raised F1 from 68.2% to 100% by eliminating 16/34 false-positive scenarios; precision from 0.706 to 1.000",
+    "evidence": "GROUNDED \u2014 comparison of pre-fix vs post-fix benchmarks/real_benchmark_results.json: smt_f1_avg improved from 0.682 to 1.0",
+    "paper_location": "Section 8.4"
+  },
+  {
+    "id": "B5",
+    "type": "empirical",
+    "claim": "Complete anomaly taxonomy: 8 anomaly types (G0, G1a, G1b, G1c, G2-item, G2, G-SIa, G-SIb), 7 isolation levels",
+    "evidence": "GROUNDED \u2014 code: implementation/crates/isospec-core/ implements all 8 anomaly types and 7 isolation levels",
+    "paper_location": "Section 7, Appendix D"
+  },
+  {
+    "id": "B6",
+    "type": "empirical",
+    "claim": "By-size: small (15 scenarios) Elle F1=0.300, IsoVerify F1=1.000, Elle time=0.21ms, IsoVerify time=2.49ms",
+    "evidence": "GROUNDED \u2014 benchmarks/real_benchmark_results.json field summary.by_size.small: elle_f1_avg=0.3, smt_f1_avg=1.0, elle_time_avg=0.21, smt_time_avg=2.49",
+    "paper_location": "Table 3"
+  },
+  {
+    "id": "B7",
+    "type": "empirical",
+    "claim": "By-size: medium (9 scenarios) Elle F1=0.000, IsoVerify F1=1.000, Elle time=0.43ms, IsoVerify time=290.44ms",
+    "evidence": "GROUNDED \u2014 benchmarks/real_benchmark_results.json field summary.by_size.medium: elle_f1_avg=0.0, smt_f1_avg=1.0, elle_time_avg=0.43, smt_time_avg=290.44",
+    "paper_location": "Table 3"
+  },
+  {
+    "id": "B8",
+    "type": "empirical",
+    "claim": "By-size: large (10 scenarios) Elle F1=0.400, IsoVerify F1=1.000, Elle time=9.97ms, IsoVerify time=36783.86ms",
+    "evidence": "GROUNDED \u2014 benchmarks/real_benchmark_results.json field summary.by_size.large: elle_f1_avg=0.4, smt_f1_avg=1.0, elle_time_avg=9.97, smt_time_avg=36783.86",
+    "paper_location": "Table 3"
+  },
+  {
+    "id": "B9",
+    "type": "empirical",
+    "claim": "Distributed: CockroachDB/clock_skew 17 injected, 16 detected (94.1%), 6 FP",
+    "evidence": "GROUNDED \u2014 benchmarks/distributed_results.json cell cockroachdb_serializable/clock_skew: total_injected=17, detected=16, detection_rate=0.9412, false_positives=6",
+    "paper_location": "Table 5"
+  },
+  {
+    "id": "B10",
+    "type": "empirical",
+    "claim": "Distributed: Spanner/clock_skew 31 injected, 27 detected (87.1%), 7 FP",
+    "evidence": "GROUNDED \u2014 benchmarks/distributed_results.json cell spanner_truetime/clock_skew: total_injected=31, detected=27, detection_rate=0.8710, false_positives=7",
+    "paper_location": "Table 5"
+  },
+  {
+    "id": "B11",
+    "type": "empirical",
+    "claim": "Distributed: Vitess/clean 91 injected, 90 detected (98.9%), 0 FP",
+    "evidence": "GROUNDED \u2014 benchmarks/distributed_results.json cell vitess_shard_eventual/clean: total_injected=91, detected=90, detection_rate=0.9890, false_positives=0",
+    "paper_location": "Table 5"
+  },
+  {
+    "id": "B12",
+    "type": "empirical",
+    "claim": "Distributed: Vitess/node_failure 86 injected, 81 detected (94.2%), 0 FP",
+    "evidence": "GROUNDED \u2014 benchmarks/distributed_results.json cell vitess_shard_eventual/single_node_failure: total_injected=86, detected=81, detection_rate=0.9419, false_positives=0",
+    "paper_location": "Table 5"
+  },
+  {
+    "id": "B13",
+    "type": "empirical",
+    "claim": "Distributed: Vitess/partition 85 injected, 69 detected (81.2%), 6 FP",
+    "evidence": "GROUNDED \u2014 benchmarks/distributed_results.json cell vitess_shard_eventual/network_partition: total_injected=85, detected=69, detection_rate=0.8118, false_positives=6",
+    "paper_location": "Table 5"
+  },
+  {
+    "id": "B14",
+    "type": "empirical",
+    "claim": "Distributed: Vitess/clock_skew 94 injected, 80 detected (85.1%), 3 FP",
+    "evidence": "GROUNDED \u2014 benchmarks/distributed_results.json cell vitess_shard_eventual/clock_skew: total_injected=94, detected=80, detection_rate=0.8511, false_positives=3",
+    "paper_location": "Table 5"
+  },
+  {
+    "id": "B15",
+    "type": "empirical",
+    "claim": "IsoVerify wins on 31/34 scenarios vs Elle-style detector",
+    "evidence": "GROUNDED \u2014 benchmarks/real_benchmark_results.json field summary.overall.smt_wins=31, total_cases=34",
+    "paper_location": "Section 8.2"
+  },
+  {
+    "id": "B16",
+    "type": "empirical",
+    "claim": "Verification time for 110 transactions: 83,373ms (IsoVerify) vs 17.72ms (Elle)",
+    "evidence": "GROUNDED \u2014 benchmarks/real_benchmark_results.json: ecommerce_large_10 result smt_time_ms=83373, elle_time_ms=17.72",
+    "paper_location": "Table 6"
+  },
+  {
+    "id": "B17",
+    "type": "implementation",
+    "claim": "NULL-aware predicate conflict resolution under SQL three-valued logic",
+    "evidence": "GROUNDED \u2014 code: implementation/crates/isospec-core/src/null_aware.rs (NullAwarePredicateResolver)",
+    "paper_location": "Section 9"
+  },
+  {
+    "id": "B18",
+    "type": "implementation",
+    "claim": "Corrected Adya anomaly cycle bounds: G1a requires k=2 (not k=3), G2-item requires k=2",
+    "evidence": "GROUNDED \u2014 code: implementation/crates/isospec-core/src/null_aware.rs (KBoundCorrector with unit tests)",
+    "paper_location": "Section 9"
+  },
+  {
+    "id": "B19",
+    "type": "implementation",
+    "claim": "Three false-positive sources fixed: spurious dirty reads from default-zero timestamps, phantom/NRR conflation, missing read-skew detection",
+    "evidence": "GROUNDED \u2014 code: benchmarks/enhanced_sota_benchmark.py: _check_dirty_reads, _check_read_anomalies, _validate_witnesses",
+    "paper_location": "Section 8.4"
+  },
+  {
+    "id": "T1",
+    "type": "theorem",
+    "claim": "Graph Construction Soundness and Completeness (Theorem 1): dependency graph is complete and sound",
+    "proof_status": "proven",
+    "proof_location": "Appendix A",
+    "references": [
+      "Adya 1999 Theorem 3.1"
+    ],
+    "paper_location": "Theorem 1"
+  },
+  {
+    "id": "T2",
+    "type": "theorem",
+    "claim": "Verification Soundness and Completeness (Theorem 2): cycle detection reports violation iff history violates isolation level per Adya",
+    "proof_status": "proven",
+    "proof_location": "Appendix B",
+    "references": [
+      "Adya 1999 Theorem 4.2"
+    ],
+    "paper_location": "Theorem 2"
+  },
+  {
+    "id": "T3",
+    "type": "theorem",
+    "claim": "Verification Complexity (Theorem 3): graph O(m log m), serializable O(n+|E|), SI O(n^2*|E|), certificate O(|E|)",
+    "proof_status": "proven",
+    "proof_location": "Appendix C",
+    "references": [
+      "Johnson 1975"
+    ],
+    "paper_location": "Theorem 3"
+  },
+  {
+    "id": "C1",
+    "type": "citation",
+    "key": "jepsen",
+    "status": "verified",
+    "notes": "Kingsbury, Jepsen project, https://jepsen.io"
+  },
+  {
+    "id": "C2",
+    "type": "citation",
+    "key": "elle",
+    "status": "verified",
+    "notes": "Kingsbury & Alvaro 2020, PVLDB 14(3):268-280"
+  },
+  {
+    "id": "C3",
+    "type": "citation",
+    "key": "cobra",
+    "status": "verified",
+    "notes": "Tan et al. 2020, OSDI"
+  },
+  {
+    "id": "C4",
+    "type": "citation",
+    "key": "biswas2019",
+    "status": "verified",
+    "notes": "Biswas & Enea 2019, OOPSLA"
+  },
+  {
+    "id": "C5",
+    "type": "citation",
+    "key": "isopredict",
+    "status": "verified",
+    "notes": "Geng et al. 2024, PLDI"
+  },
+  {
+    "id": "C6",
+    "type": "citation",
+    "key": "monkeydb",
+    "status": "verified",
+    "notes": "Biswas et al. 2021, SIGMOD"
+  },
+  {
+    "id": "C7",
+    "type": "citation",
+    "key": "polysi",
+    "status": "verified",
+    "notes": "Huang et al. 2023, PVLDB 16(6):1264-1276"
+  },
+  {
+    "id": "C8",
+    "type": "citation",
+    "key": "adya1999",
+    "status": "verified",
+    "notes": "Adya 1999, PhD thesis MIT"
+  },
+  {
+    "id": "C9",
+    "type": "citation",
+    "key": "berenson1995",
+    "status": "verified",
+    "notes": "Berenson et al. 1995, SIGMOD"
+  },
+  {
+    "id": "C10",
+    "type": "citation",
+    "key": "fekete2005",
+    "status": "verified",
+    "notes": "Fekete et al. 2005, ACM TODS 30(2):492-528"
+  },
+  {
+    "id": "C11",
+    "type": "citation",
+    "key": "cahill2009",
+    "status": "verified",
+    "notes": "Cahill et al. 2009, ACM TODS 34(4):1-42"
+  },
+  {
+    "id": "C12",
+    "type": "citation",
+    "key": "ports2012",
+    "status": "verified",
+    "notes": "Ports & Grittner 2012, PVLDB 5(12):1850-1861"
+  },
+  {
+    "id": "B20",
+    "type": "empirical",
+    "claim": "100% isolation level coverage: 18 test cases across all 5 standard levels (Read Uncommitted, Read Committed, Repeatable Read, Snapshot Isolation, Serializable) with perfect F1",
+    "evidence": "GROUNDED \u2014 benchmarks/isolation_level_results.json field level_coverage: all 5 levels show coverage_rate=1.0, total_fp=0, total_fn=0",
+    "paper_location": "Table 8"
+  },
+  {
+    "id": "B21",
+    "type": "empirical",
+    "claim": "100% anomaly detection confidence across 6 anomaly types: dirty_read (3 TP), lost_update (4 TP), non_repeatable_read (2 TP), phantom_read (2 TP), read_skew (2 TP), write_skew (4 TP), total 17 TP, 0 FP, 0 FN",
+    "evidence": "GROUNDED \u2014 benchmarks/isolation_level_results.json field confidence_scores: all types show precision=1.0, recall=1.0, confidence=1.0",
+    "paper_location": "Table 9"
+  },
+  {
+    "id": "B22",
+    "type": "empirical",
+    "claim": "IsoVerify achieves 1.0 average F1 vs Elle-style 0.463 average F1 on isolation level coverage benchmark (18 cases), winning 13/18 scenarios",
+    "evidence": "GROUNDED \u2014 benchmarks/isolation_level_results.json field overall: smt_f1_avg=1.0, elle_f1_avg=0.463, smt_wins=13",
+    "paper_location": "Section 8.8"
+  },
+  {
+    "id": "B23",
+    "type": "empirical",
+    "claim": "Validated against Berenson et al. 1995 anomaly patterns: dirty reads (G1a), non-repeatable reads (P2), phantom reads (P3/G2), lost updates (P4), read skew (A5A), write skew (A5B/G-SIa)",
+    "evidence": "GROUNDED \u2014 benchmarks/isolation_level_coverage_benchmark.py: each generator cites specific literature pattern (Berenson 1995, Adya 1999, Fekete 2005, Cahill 2009)",
+    "paper_location": "Section 8.8"
+  },
+  {
+    "id": "B24",
+    "type": "empirical",
+    "claim": "Elle-style detector average precision 0.216 and average recall 0.324 across 34 benchmark scenarios",
+    "evidence": "GROUNDED \u2014 benchmarks/real_benchmark_results.json: mean of elle_precision across all 34 results = 0.216, mean of elle_recall across all 34 results = 0.324",
+    "paper_location": "Table 2"
+  }
+]

@@ -1,0 +1,2897 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-03-10",
+  "description": "Global hallucination audit for halley-labs/. Flags fabricated results, simulated benchmarks, unverifiable claims, broken references, and missing evidence across all 27 repos.",
+  "methodology": [
+    "1. Cross-referenced every empirical claim in groundings.json against real_benchmark_results.json data",
+    "2. Scanned all sota_benchmark.py scripts for random metric assignment, simulate comments, placeholder values",
+    "3. Verified all 511 citation DOIs for format validity and year consistency",
+    "4. Verified all code_references point to existing files on disk",
+    "5. Checked all 4 tool_paper.tex files for ungrounded theorems/definitions",
+    "6. Detected sentinel values (999.0) indicating benchmark infrastructure failures",
+    "7. Detected error entries in benchmark results indicating runtime crashes"
+  ],
+  "summary": {
+    "total_repos": 27,
+    "total_claims_audited": 2375,
+    "total_flagged_claims": 227,
+    "flagged_percentage": 9.6,
+    "confidence_distribution": {
+      "high": 1702,
+      "medium": 580,
+      "low": 93
+    },
+    "simulation_only_claims": 93,
+    "claims_with_audit_notes": 227,
+    "broken_code_refs_fixed": 4,
+    "structural_issues_by_severity": {
+      "critical": 5,
+      "high": 5,
+      "medium": 5
+    },
+    "repos_with_critical_issues": [
+      "dp-verify-repair",
+      "ml-pipeline-selfheal",
+      "pram-compiler",
+      "tlaplus-coalgebra-compress",
+      "zk-nlp-scoring"
+    ],
+    "repos_clean": [
+      "diversity-decoding",
+      "nn-init-phases",
+      "sparse-cpu-inference"
+    ],
+    "audit_dimensions": {
+      "citations_checked": 511,
+      "citation_dois_verified": 365,
+      "citation_issues_found": 0,
+      "tool_papers_audited": 4,
+      "ungrounded_theorems_found": 0,
+      "code_references_fixed": 4
+    }
+  },
+  "repos": {
+    "algebraic-repair-calculus": {
+      "project": "ARC",
+      "total_claims": 90,
+      "flagged_claims": [
+        {
+          "claim_id": "E2",
+          "type": "empirical",
+          "statement": "For schema-only perturbations, ARC achieves zero cost (ratio 0.00) via algebraic annihilation; all baselines require full recomputation (ratios ≥ 0.92).",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "Claim that 'all baselines require full recomputation (ratios >= 0.92)' includes brute-force baseline with simulated timing (time.sleep at L555). Alembic-DDL baseline performs real DataFrame operations."
+          ]
+        },
+        {
+          "claim_id": "E3",
+          "type": "empirical",
+          "statement": "For compound perturbations, ARC achieves cost ratio 0.002 while all baselines have ratio ≥ 0.92, giving a 575× improvement.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "The 575x improvement figure includes comparison to brute-force baseline which uses time.sleep simulation (L555), not actual pipeline re-execution.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E12",
+          "type": "empirical",
+          "statement": "ARC delivers 3.6× faster repair than Alembic-DDL (1.02ms vs 3.72ms), and 78× faster than brute-force (1.02ms vs 79.78ms), across 500 realistic pipeline repair tests.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Brute-force baseline timing uses time.sleep(0.001*len/1000) at L555, not real re-execution. The 78x speedup vs brute-force is fabricated. ARC vs Alembic-DDL comparison (3.6x) uses real DataFrame operations.",
+            "Result was simulated, not measured"
+          ]
+        }
+      ],
+      "structural_issues": [
+        {
+          "type": "heavy_simulation",
+          "severity": "medium",
+          "description": "Benchmark contains 7 'simulate' comments"
+        }
+      ],
+      "claim_confidence_distribution": {
+        "high": 65,
+        "low": 2,
+        "medium": 23
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 3
+    },
+    "bio-phase-atlas": {
+      "project": "PhaseCartographer",
+      "total_claims": 128,
+      "flagged_claims": [
+        {
+          "claim_id": "E2",
+          "type": "empirical",
+          "statement": "Krawczyk contraction factors range from rho_bar=0.000 (van der Pol) to rho_bar=0.910 (MAPK cascade).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E4",
+          "type": "empirical",
+          "statement": "Composed delta-error: Sel'kov delta_max=0.050, Repressilator 0.127, Toggle switch 0.305, Goodwin 0.338, Lotka-Volterra 0.479.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E14",
+          "type": "empirical",
+          "statement": "The four-stage stability cascade classifies 96.3% of equilibria (26/27) across all 15 models, with the single unclassified equilibrium being the Lotka-Volterra center.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E18",
+          "type": "empirical",
+          "statement": "3.7% degenerate rate: 1/27 equilibria unclassified (Lotka-Volterra center).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E19",
+          "type": "empirical",
+          "statement": "Brusselator achieves 37.5% coverage at depth 3 with 3 certified cells.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E20",
+          "type": "empirical",
+          "statement": "Brusselator reaches 84.4% coverage at depth 5 with 16 certified cells.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E22",
+          "type": "empirical",
+          "statement": "Circadian clock achieves 87.5% coverage with 3 certified cells.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E24",
+          "type": "empirical",
+          "statement": "4 of 15 models have <100% coverage: Brusselator (37.5%), FitzHugh-Nagumo (50%), circadian clock (87.5%), mutual activation (75%). Coverage gaps occur exclusively at bifurcation boundaries.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E28",
+          "type": "empirical",
+          "statement": "The transition from depth 4 to depth 5 produces the largest Brusselator coverage gain (34.4 percentage points).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E35",
+          "type": "empirical",
+          "statement": "Total BioModels benchmark time is 76.0s.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E40",
+          "type": "empirical",
+          "statement": "Lotka-Volterra composed delta_max = 0.479.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        }
+      ],
+      "structural_issues": [],
+      "claim_confidence_distribution": {
+        "high": 94,
+        "medium": 34
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 11
+    },
+    "bounded-rational-usability-oracle": {
+      "project": "BRU-Oracle",
+      "total_claims": 172,
+      "flagged_claims": [
+        {
+          "claim_id": "E2",
+          "type": "empirical",
+          "statement": "Experiment 1: On 350 synthetic UI pairs (250 positive across 5 mutation categories, 100 negative), UsabilityOracle achieves 0.918 F1 for regression detection, outperforming KLM-GOMS (0.623 F1), static",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E3",
+          "type": "empirical",
+          "statement": "Experiment 2: On 100 ordered pairs with monotonically increasing mutation severity, UsabilityOracle achieves Spearman rho=0.355 (p<0.001) and Kendall tau=0.245 (p<0.001), significantly outperforming K",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E5",
+          "type": "empirical",
+          "statement": "Experiment 4: Bottleneck classification on 200 cases (40 per type) achieves macro F1=0.485 (overall accuracy=0.545). Motor difficulty: F1=0.656 (recall=1.0). Memory decay: F1=0.857. Perceptual overloa",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E6",
+          "type": "empirical",
+          "statement": "Experiment 5: Ablation on 210 cases. Full system F1=0.944. No Fitts: F1=0.837 (delta=-0.107). No visual search: F1=0.881 (delta=-0.063). No Hick/WM/interference: F1=0.944 (delta=0.0). Fitts only: F1=0",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E7",
+          "type": "empirical",
+          "statement": "Experiment 7: GovUK Design System analysis of 9 components. Accessibility-tree sizes range from 7 nodes (tabs) to 495 nodes (textarea). Cognitive cost scores range from 25.5 (tabs) to 193.5 (text-inpu",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E10",
+          "type": "empirical",
+          "statement": "Paired regression analysis on GovUK: 3 of 9 components (accordion, select, tabs) flagged as regressions with effect sizes 0.158, 0.119, and 0.238 respectively. Remaining 6 marked inconclusive (effect ",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E12",
+          "type": "empirical",
+          "statement": "All GovUK components complete in under 1.2 seconds (max: text-input at 1.178s), confirming real-time feasibility.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E14",
+          "type": "empirical",
+          "statement": "Visual search modeling: -0.063 F1 when removed, the second-most important component.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        }
+      ],
+      "structural_issues": [],
+      "claim_confidence_distribution": {
+        "high": 107,
+        "medium": 65
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 8
+    },
+    "causal-plasticity-atlas": {
+      "project": "CPA",
+      "total_claims": 80,
+      "flagged_claims": [
+        {
+          "claim_id": "E7",
+          "type": "empirical",
+          "statement": "21.4-percentage-point precision gain from masked-majority over standard majority (0.714 vs 0.500).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E10",
+          "type": "empirical",
+          "statement": "On CSVM-medium, CPA achieves highest macro-F1 of 0.477, outperforming next-best by 11.4 percentage points.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E11",
+          "type": "empirical",
+          "statement": "On CSVM-large, CPA achieves highest macro-F1 of 0.316.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        }
+      ],
+      "structural_issues": [],
+      "claim_confidence_distribution": {
+        "high": 54,
+        "medium": 26
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 3
+    },
+    "causal-qd-illumination": {
+      "project": "CausalQD",
+      "total_claims": 112,
+      "flagged_claims": [
+        {
+          "claim_id": "E6",
+          "type": "empirical",
+          "statement": "Table 4: All true edges achieve bootstrap frequency 1.000 across all scales. Certificate computation ≤3.4s for 22 edges at p=20.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E8",
+          "type": "empirical",
+          "statement": "Table 6: Runtime scaling — p5: 7.9s, p8: 17.3s, p10: 22.9s, p15: 22.4s, p20: 39.7s, p30: 65.3s.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E9",
+          "type": "empirical",
+          "statement": "Table 7: Comprehensive benchmarks across 13 networks — GES avg SHD=18.73 (18 wins), PC avg SHD=23.85 (3 wins), RandomDAG avg SHD=49.04, CausalQD avg SHD=49.92 (5 wins).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E12",
+          "type": "empirical",
+          "statement": "PC is fastest (0.086s average), CausalQD moderate (5.51s), GES slowest (16.38s).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        }
+      ],
+      "structural_issues": [],
+      "claim_confidence_distribution": {
+        "high": 87,
+        "medium": 25
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 4
+    },
+    "causal-risk-bounds": {
+      "project": "CausalBound",
+      "total_claims": 82,
+      "flagged_claims": [
+        {
+          "claim_id": "E2",
+          "type": "empirical",
+          "statement": "CausalBound polytope bounds achieve 86% average tightness with 97% coverage probability, outperforming all baselines in bound quality while maintaining computational efficiency.",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "coverage_probability in polytope solver is hardcoded to 0.95 as placeholder (L616: '# Mock coverage probability'). The '97% coverage probability' claim cannot be verified from the benchmark source code."
+          ]
+        },
+        {
+          "claim_id": "E21",
+          "type": "empirical",
+          "statement": "SOTA benchmark: CausalBound achieves 86% tightness, 97% coverage on 15 scenarios. Monte Carlo 0.5% error in 7.0s. Gaussian Copula 13.3% error. Correlation VaR 40.3% error. DebtRank 12.0% error.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Contains two placeholder-derived metrics: (1) coverage_probability=0.95 placeholder in polytope solver (L616), (2) Correlation VaR baseline uses var_99=0.1 placeholder for non-credit networks (L825). The '40.3% error' for Correlation VaR traces to placeholder values.",
+            "Result was simulated, not measured"
+          ]
+        }
+      ],
+      "structural_issues": [
+        {
+          "type": "placeholder_values",
+          "severity": "high",
+          "description": "2 placeholder/hardcoded values in benchmark",
+          "lines": [
+            "L617: coverage_probability = 0.95  # Placeholder",
+            "L826: var_99 = 0.1  # Placeholder"
+          ]
+        }
+      ],
+      "claim_confidence_distribution": {
+        "high": 70,
+        "medium": 11,
+        "low": 1
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 2
+    },
+    "causal-robustness-radii": {
+      "project": "CRR",
+      "total_claims": 99,
+      "flagged_claims": [
+        {
+          "claim_id": "E1",
+          "type": "empirical",
+          "statement": "The test suite comprises [TBD] test files with [TBD] passing tests.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E2",
+          "type": "empirical",
+          "statement": "Experiment 1: Fragility analysis of [TBD] published DAGs spanning epidemiology, biology, economics, and textbook examples.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E3",
+          "type": "empirical",
+          "statement": "The Asia DAG has [TBD] fragile edges — fully [TBD]% of its edges are structurally load-bearing.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E4",
+          "type": "empirical",
+          "statement": "The Smoking-Birthweight DAG (12 nodes, 19 edges) has [TBD] fragile edges ([TBD]%).",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E5",
+          "type": "empirical",
+          "statement": "IHDP, Child, and Sachs have [TBD] fragile edges — their conclusions are structurally robust.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E6",
+          "type": "empirical",
+          "statement": "Experiment 2: Standard benchmark validation on [TBD] canonical graph structures.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E7",
+          "type": "empirical",
+          "statement": "Experiment 3: All [TBD] solvers produce identical radius bounds; runtime varies.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E8",
+          "type": "empirical",
+          "statement": "On the diamond DAG with n=2000: E-value is [TBD]; CausalCert radius is [TBD].",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E9",
+          "type": "empirical",
+          "statement": "SOTA benchmark: Edge strength achieved best correlation (0.722) with theoretical robustness; CausalCert fragility showed -0.260 correlation.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E10",
+          "type": "empirical",
+          "statement": "Table 6: SOTA benchmark numerical results across 5 methods and 8 DAGs.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E11",
+          "type": "empirical",
+          "statement": "Computation times scale roughly quadratically with graph size (0.03s for 11 nodes, 0.55s for 100 nodes for CausalCert).",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E12",
+          "type": "empirical",
+          "statement": "Ablation experiments evaluating different pipeline configurations.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E13",
+          "type": "empirical",
+          "statement": "CI test comparison across different test methods.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E14",
+          "type": "empirical",
+          "statement": "Scalability experiments with repeated runs.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E15",
+          "type": "empirical",
+          "statement": "Convergence experiments.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E16",
+          "type": "empirical",
+          "statement": "All experiments use synthetic data from linear-Gaussian SEMs with edge weights in [0.3, 0.9], standard-normal noise, n=2000, alpha=0.05, seed=42.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E17",
+          "type": "empirical",
+          "statement": "All robustness radii in all experiments are [0,0].",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E18",
+          "type": "empirical",
+          "statement": "CausalCert's bootstrap-based approach showed moderate performance (-0.260 correlation), with negative correlation suggesting bootstrap stability captures structural stability rather than fragility.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E19",
+          "type": "empirical",
+          "statement": "CausalCert fragility scoring ranks 4th of 5 methods in SOTA benchmark.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E20",
+          "type": "empirical",
+          "statement": "The Insurance DAG (27 nodes, 39 edges) has [TBD] fragile edges ([TBD]%).",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        }
+      ],
+      "structural_issues": [
+        {
+          "type": "missing_results",
+          "severity": "high",
+          "description": "Benchmark script exists but no real_benchmark_results.json"
+        }
+      ],
+      "claim_confidence_distribution": {
+        "high": 71,
+        "low": 20,
+        "medium": 8
+      },
+      "benchmark_status": "no_results_file",
+      "flagged_count": 20
+    },
+    "causal-trading-shields": {
+      "project": "CSAT",
+      "total_claims": 100,
+      "flagged_claims": [
+        {
+          "claim_id": "E11",
+          "type": "empirical",
+          "statement": "Real-world benchmark: 15 market regimes, 6 assets, mean shield improvement 70.3% (dominated by COVID-crash outlier).",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "Benchmark results include regime_detection_accuracy=0.7 as a hardcoded placeholder (L510), not an actual measurement of regime detection performance. Trading metrics (returns, Sharpe) are computed independently and not affected by this placeholder."
+          ]
+        },
+        {
+          "claim_id": "E12",
+          "type": "empirical",
+          "statement": "COVID-19 crash: Momentum+Shield Sharpe=4.18 vs Momentum Sharpe=-0.43, shield activation 35%.",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "Benchmark results for shield strategies include placeholder regime_detection_accuracy=0.7 (L510). Shield activation rate and trading metrics are computed from actual strategy logic, not from this placeholder."
+          ]
+        }
+      ],
+      "structural_issues": [],
+      "claim_confidence_distribution": {
+        "high": 77,
+        "medium": 23
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 2
+    },
+    "cross-lang-verifier": {
+      "project": "SemRec",
+      "total_claims": 88,
+      "flagged_claims": [
+        {
+          "claim_id": "E3",
+          "type": "empirical",
+          "statement": "All baselines (differential testing naive 10K, UB-aware, IR comparison) detect 0/30 UB divergences.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Differential testing baseline uses random.random() to simulate results (L878-881). LLVM IR baseline uses random.random() (L959-961). Neither baseline performs actual compilation, execution, or IR analysis. The '0/30 detection' result is from random simulation, not real differential testing.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E10",
+          "type": "empirical",
+          "statement": "On 10 controlled pairs (Table 5): differential testing 100% accuracy, SemRec 70% accuracy; each finds 1 unique divergence.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Differential testing baseline results are from random.random() simulation (L873-881), not actual compilation and execution of C/Rust code pairs. The '100% accuracy' figure is a random-seed-dependent outcome of simulated testing.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E11",
+          "type": "empirical",
+          "statement": "Ablation study (Table 9): Full pipeline 80% accuracy, no σ-bridge (plain BV) 40%, random testing 10K 80%.",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "Ablation study may include comparisons to simulated baselines (differential testing at L858-881 uses random.random()). Main pipeline results appear to be from actual tool execution."
+          ]
+        }
+      ],
+      "structural_issues": [],
+      "claim_confidence_distribution": {
+        "high": 73,
+        "low": 2,
+        "medium": 13
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 3
+    },
+    "diversity-decoding": {
+      "project": "DivFlow",
+      "total_claims": 128,
+      "flagged_claims": [],
+      "structural_issues": [],
+      "claim_confidence_distribution": {
+        "high": 103,
+        "medium": 25
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 0
+    },
+    "dp-mechanism-forge": {
+      "project": "DP-Forge",
+      "total_claims": 103,
+      "flagged_claims": [
+        {
+          "claim_id": "I18",
+          "type": "implementation",
+          "statement": "Real-world benchmark uses realistic statistical distributions: gamma for ages, log-normal for incomes, Pareto for web metrics, and beta for click-through rates.",
+          "confidence": "high",
+          "verification": "implementation_verified",
+          "issues": [
+            "Code references removed: paths do not exist on disk.",
+            "Code references pointed to non-existent paths"
+          ]
+        },
+        {
+          "claim_id": "I19",
+          "type": "implementation",
+          "statement": "Real-world benchmark compares against 5 baseline mechanisms: Laplace, Gaussian, Geometric, Exponential, and Randomized Response with optimal noise calibration.",
+          "confidence": "high",
+          "verification": "implementation_verified",
+          "issues": [
+            "Code references removed: paths do not exist on disk.",
+            "Code references pointed to non-existent paths"
+          ]
+        },
+        {
+          "claim_id": "E7",
+          "type": "empirical",
+          "statement": "DP-Forge synthesis achieves median runtime of 27.8ms with 100% success rate across all 270 real-world benchmark configurations.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E10",
+          "type": "empirical",
+          "statement": "Counting query MSE at eps=1.0: n=2 CEGIS=0.1966 (10.17× vs Laplace), n=5 CEGIS=0.8861 (2.26× vs Laplace), n=10 CEGIS=1.3469 (1.48× vs Laplace). Laplace MSE=2.0 for all n.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E11",
+          "type": "empirical",
+          "statement": "Approximate DP: CEGIS vs Gaussian. eps=0.1/delta=1e-5/n=5: CEGIS=3.86 vs Gauss=2347.21 (607.9×). eps=0.5/delta=1e-5/n=5: CEGIS=2.19 vs Gauss=93.89 (42.9×). eps=1.0/delta=1e-5/n=5: CEGIS=0.89 vs Gauss=",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E13",
+          "type": "empirical",
+          "statement": "Sum query MSE at eps=1.0, n=5: Delta=1 CEGIS=0.0554 vs Laplace=2.0 (36.12×), Delta=10 CEGIS=5.5378 vs Laplace=200.0 (36.12×), Delta=50 CEGIS=138.4462 vs Laplace=5000.0 (36.12×).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E15",
+          "type": "empirical",
+          "statement": "Loss function comparison (n=10, k=30, eps=1.0): L1-optimized MSE=1.4877 MAE=0.7922; L2-optimized MSE=1.3469 MAE=0.8731; Linf-optimized MSE=1.4877 MAE=0.7922.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E17",
+          "type": "empirical",
+          "statement": "Synthesis time vs domain size (k=30, eps=1.0): n=2: 2.8ms, n=5: 4.8ms, n=10: 11.9ms.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E18",
+          "type": "empirical",
+          "statement": "Detailed timing for n=10, k=30, eps=1.0 (20 trials): Mean=10.64ms, Median=10.53ms, Std=0.28ms, P5=10.47ms, P95=11.38ms.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E25",
+          "type": "empirical",
+          "statement": "Abstract: 'evaluation on 18 real-world benchmark problems...demonstrates that DP-Forge achieves up to 1,463× improvement over standard baselines across privacy budgets eps in [0.1, 5.0] and dataset si",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        }
+      ],
+      "structural_issues": [],
+      "claim_confidence_distribution": {
+        "high": 88,
+        "medium": 15
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 10
+    },
+    "dp-verify-repair": {
+      "project": "DP-CEGAR",
+      "total_claims": 127,
+      "flagged_claims": [
+        {
+          "claim_id": "E23",
+          "type": "empirical",
+          "statement": "DP-CEGAR achieves F1=1.000 on SOTA benchmark (20 mechanisms, real query workloads), outperforming statistical testing (F1=0.500), type checking (F1=0.571), and manual review (F1=0.941).",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Benchmark uses simulated/random values rather than measuring real tool execution",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E24",
+          "type": "empirical",
+          "statement": "Statistical testing F1=0.500 (6 TP, 10 FP, 2 FN), type checking F1=0.571 (4 TP, 2 FP, 4 FN), manual review F1=0.941 (8 TP, 1 FP, 0 FN, avg 5.8 min/mechanism).",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Expert review timing (avg 5.8 min) from np.random.exponential, not real measurement. Benchmark uses simulated/random values rather than measuring real tool execution",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E25",
+          "type": "empirical",
+          "statement": "SOTA benchmark: 20 DP mechanisms (12 correct, 8 buggy) with real query workloads on 10,000-record synthetic census dataset.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Benchmark uses simulated/random values rather than measuring real tool execution",
+            "Result was simulated, not measured"
+          ]
+        }
+      ],
+      "structural_issues": [
+        {
+          "type": "fabricated_metrics",
+          "severity": "critical",
+          "description": "Benchmark script assigns random values to 1 result metrics",
+          "lines": [
+            "L509: review_time = np.random.exponential(300) + 120  # 2-20 minutes"
+          ]
+        },
+        {
+          "type": "heavy_simulation",
+          "severity": "medium",
+          "description": "Benchmark contains 7 'simulate' comments"
+        }
+      ],
+      "claim_confidence_distribution": {
+        "high": 75,
+        "medium": 49,
+        "low": 3
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 3
+    },
+    "litmus-inf": {
+      "project": "LITMUS-Inf",
+      "total_claims": 84,
+      "flagged_claims": [
+        {
+          "claim_id": "E1",
+          "type": "empirical",
+          "statement": "69 proof certificates checked (21 UNSAT + 48 SAT): 100% SMT re-verification (69/69), 100% SAT model verification (48/48), 0% UNSAT structural validation (0/21) due to broken premise references.",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "No benchmarks/real_benchmark_results.json file exists to verify this claim. Empirical data cannot be independently confirmed from stored benchmark outputs."
+          ]
+        },
+        {
+          "claim_id": "E2",
+          "type": "empirical",
+          "statement": "Owicki-Gries classification of 6 standard litmus tests: 5/6 interference-free (mp, sb, lb, mp_fence, mp_ra), 1 not (multi_writer with overapproximation bound 2^1-1=1).",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "No benchmarks/real_benchmark_results.json file exists to verify this claim. Empirical data cannot be independently confirmed from stored benchmark outputs."
+          ]
+        },
+        {
+          "claim_id": "E3",
+          "type": "empirical",
+          "statement": "Compositional false positive rate: 5/60 = 8.3% overall (CI [3.6%, 18.1%]); 5/57 = 8.8% among shared-variable analyses (CI [3.8%, 19.0%]). FPs in flag_sharing (3/9=33.3%) and counter_sharing (2/9=22.2%",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "No benchmarks/real_benchmark_results.json file exists to verify this claim. Empirical data cannot be independently confirmed from stored benchmark outputs."
+          ]
+        },
+        {
+          "claim_id": "E4",
+          "type": "empirical",
+          "statement": "40-snippet adversarial evaluation benchmark across 8 categories (application, coherence, dependency_patterns, gpu, kernel_patterns, lock_free, message_passing, store_buffering).",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "No benchmarks/real_benchmark_results.json file exists to verify this claim. Empirical data cannot be independently confirmed from stored benchmark outputs."
+          ]
+        },
+        {
+          "claim_id": "E5",
+          "type": "empirical",
+          "statement": "35 LKMM litmus tests, 35/35 parsed, 100% verification accuracy, 7 symmetric tests with 2.0x compression.",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "No benchmarks/real_benchmark_results.json file exists to verify this claim. Empirical data cannot be independently confirmed from stored benchmark outputs."
+          ]
+        },
+        {
+          "claim_id": "E6",
+          "type": "empirical",
+          "statement": "50 herd7 instruction tests from 10 ISA directories, 23/50 parsed successfully, 100% accuracy among parsed tests.",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "No benchmarks/real_benchmark_results.json file exists to verify this claim. Empirical data cannot be independently confirmed from stored benchmark outputs."
+          ]
+        },
+        {
+          "claim_id": "E7",
+          "type": "empirical",
+          "statement": "Symmetry-based compression delivers 2.0x reduction on symmetric two-thread tests (SB, LB, IRIW).",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "No benchmarks/real_benchmark_results.json file exists to verify this claim. Empirical data cannot be independently confirmed from stored benchmark outputs."
+          ]
+        },
+        {
+          "claim_id": "E8",
+          "type": "empirical",
+          "statement": "Cohen's h for pairwise category comparisons, with interpretation (negligible/small/medium/large).",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "No benchmarks/real_benchmark_results.json file exists to verify this claim. Empirical data cannot be independently confirmed from stored benchmark outputs."
+          ]
+        },
+        {
+          "claim_id": "E9",
+          "type": "empirical",
+          "statement": "Expected Calibration Error (ECE), Maximum Calibration Error (MCE), and Brier score for LLM evaluation.",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "No benchmarks/real_benchmark_results.json file exists to verify this claim. Empirical data cannot be independently confirmed from stored benchmark outputs."
+          ]
+        },
+        {
+          "claim_id": "E10",
+          "type": "empirical",
+          "statement": "Failure mode classification: correct, conservative, no-match, related, dangerous.",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "No benchmarks/real_benchmark_results.json file exists to verify this claim. Empirical data cannot be independently confirmed from stored benchmark outputs."
+          ]
+        },
+        {
+          "claim_id": "E11",
+          "type": "empirical",
+          "statement": "8 adversarial benchmark categories: message_passing, store_buffering, lock_free, gpu, kernel_patterns, application, dependency_patterns, coherence.",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "No benchmarks/real_benchmark_results.json file exists to verify this claim. Empirical data cannot be independently confirmed from stored benchmark outputs."
+          ]
+        },
+        {
+          "claim_id": "E12",
+          "type": "empirical",
+          "statement": "LKMM: 7 symmetric tests (SB, LB, IRIW variants), 28 asymmetric tests (MP, CoRR, WRC, etc.).",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "No benchmarks/real_benchmark_results.json file exists to verify this claim. Empirical data cannot be independently confirmed from stored benchmark outputs."
+          ]
+        },
+        {
+          "claim_id": "E13",
+          "type": "empirical",
+          "statement": "Herd7 ISA breakdown: x86_64 5/5, ARM family 7/25, ASL 10/10, PPC 0/5, RISC-V 1/5.",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "No benchmarks/real_benchmark_results.json file exists to verify this claim. Empirical data cannot be independently confirmed from stored benchmark outputs."
+          ]
+        },
+        {
+          "claim_id": "E14",
+          "type": "empirical",
+          "statement": "Sub-millisecond per-pattern checking time (<1 ms).",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "No benchmarks/real_benchmark_results.json file exists to verify this claim. Empirical data cannot be independently confirmed from stored benchmark outputs."
+          ]
+        }
+      ],
+      "structural_issues": [
+        {
+          "type": "missing_results",
+          "severity": "high",
+          "description": "Benchmark script exists but no real_benchmark_results.json"
+        }
+      ],
+      "claim_confidence_distribution": {
+        "high": 61,
+        "medium": 23
+      },
+      "benchmark_status": "no_results_file",
+      "flagged_count": 14
+    },
+    "market-manipulation-prover": {
+      "project": "VMEE",
+      "total_claims": 105,
+      "flagged_claims": [
+        {
+          "claim_id": "E1",
+          "type": "empirical",
+          "statement": "VMEE achieves F1=1.000 on four of five SEC scenarios; momentum ignition achieves F1=0.750 (precision 1.000, recall 0.600).",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E2",
+          "type": "empirical",
+          "statement": "Proof certificate rate averages 94.8% across five scenarios (range 85.7%--98.7%).",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E3",
+          "type": "empirical",
+          "statement": "Threshold and z-score baselines both achieve F1=0.769 per scenario.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E4",
+          "type": "empirical",
+          "statement": "ML baselines (RF, LR, GB) evaluation code exists but no stored results are available.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E5",
+          "type": "empirical",
+          "statement": "Maximum posterior variation across four prior classes is approximately 0.0038.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E6",
+          "type": "empirical",
+          "statement": "ACF RMSE against reference is 0.211.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E7",
+          "type": "empirical",
+          "statement": "Mean cancel rate across scenarios is 67.5%.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E8",
+          "type": "empirical",
+          "statement": "Misspecification bounds with Delta_max=0.064: k=1 TV<=0.064, k=2 TV<=0.128, k=3 TV<=0.192, k=5 TV<=0.320.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E9",
+          "type": "empirical",
+          "statement": "Real-world benchmarks: TPR 100%, FPR 0%, F1=1.000, mean latency 88.5 events.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E10",
+          "type": "empirical",
+          "statement": "Real-world benchmarks: 0/10 proof certificates valid (all DISPROVED).",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E11",
+          "type": "empirical",
+          "statement": "Threshold baseline on real benchmarks: F1=0.571.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E12",
+          "type": "empirical",
+          "statement": "TCB coverage: 5 of 9 links formally verified (55.6%).",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E13",
+          "type": "empirical",
+          "statement": "Implementation: approximately 23,000 lines of Python.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E14",
+          "type": "empirical",
+          "statement": "Per-scenario evidence strength (Table 5): proof rates 97.4%, 98.6%, 93.8%, 85.7%, 98.7%; Bayes factors and posteriors per scenario.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E15",
+          "type": "empirical",
+          "statement": "Bayes factor analysis (Table 7): BF_10 values per scenario are all < 1, indicating the Bayesian component alone does not favor manipulation over the uniform prior.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E16",
+          "type": "empirical",
+          "statement": "Threshold sensitivity (Table 9): tau=0.45 gives optimal F1=0.950; higher thresholds trade recall for precision.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E17",
+          "type": "empirical",
+          "statement": "Implementation statistics (Table 10): ~23,000 total lines of Python across all components.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E18",
+          "type": "empirical",
+          "statement": "Translation validation: maximum discrepancy across all benchmark scenarios is < 10^{-6}.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E19",
+          "type": "empirical",
+          "statement": "Real-world benchmarks per-category detection latency: spoofing 81.0 events, layering 73.0 events, wash trading 114.0 events, mean 88.5 events.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E20",
+          "type": "empirical",
+          "statement": "VMEE achieves FPR=0.000 on all five synthetic scenarios.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E21",
+          "type": "empirical",
+          "statement": "Threshold and z-score baselines have FPR=1.000 on all scenarios.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E22",
+          "type": "empirical",
+          "statement": "Test suite contains 122 tests across 2 test files.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E23",
+          "type": "empirical",
+          "statement": "Adversarial evaluation: 200 episodes, 52/54 strategy cells covered (96.3%), 25.5% evasion rate, 74.5% detection rate.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E24",
+          "type": "empirical",
+          "statement": "KS calibration test: statistic 0.036, critical value 0.086 at alpha=0.05, test passes (0.036 < 0.086), n=499 observations.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E25",
+          "type": "empirical",
+          "statement": "Computation time on 20 real-world benchmarks: total mean 21.3s (range 13.3-27.4s), causal discovery dominates at mean 21.0s.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E26",
+          "type": "empirical",
+          "statement": "Policy network is a 3-layer MLP with ~16K parameters, trained via REINFORCE with baseline subtraction, entropy regularization, gradient clipping (max norm 1.0), and cosine learning rate schedule.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E27",
+          "type": "empirical",
+          "statement": "20 real-world SEC enforcement case benchmarks: 10 manipulation (4 Sarao-type spoofing, 3 Coscia-type layering, 3 wash trading) and 10 clean scenarios.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E28",
+          "type": "empirical",
+          "statement": "Multi-prior sensitivity: uniform posterior=0.00380, Jeffreys=0.00380, empirical Bayes (5%)=0.00020, skeptical (1%)=0.00004.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E29",
+          "type": "empirical",
+          "statement": "Circuit verification via brute-force enumeration for networks with <=12 variables confirms total discrepancy < 10^{-6}.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E30",
+          "type": "empirical",
+          "statement": "Per-scenario proof rates: Sarao 97.4%, Coscia 98.6%, Quote Stuffing 93.8%, Momentum Ignition 85.7%, Combined 98.7%.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "No benchmark results data file exists; empirical claims cannot be verified",
+            "Result was simulated, not measured"
+          ]
+        }
+      ],
+      "structural_issues": [],
+      "claim_confidence_distribution": {
+        "high": 56,
+        "low": 30,
+        "medium": 19
+      },
+      "benchmark_status": "unknown",
+      "flagged_count": 30
+    },
+    "marl-race-detect": {
+      "project": "MARACE",
+      "total_claims": 109,
+      "flagged_claims": [
+        {
+          "claim_id": "E1",
+          "type": "empirical",
+          "statement": "MARACE achieves mean recall 0.9444, precision 0.8982, F1 0.9205 across 11 benchmarks (Table 1).",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "33/100 benchmark results have errors (happens_before tool crashes). Recall/precision/F1 computed from partially failed benchmark. Benchmark has error entries affecting reliability of this measurement",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E2",
+          "type": "empirical",
+          "statement": "MARACE achieves the highest recall among methods that scale to all 11 benchmarks without timeouts. 8 baselines compared (Table 2).",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "33/100 benchmark results have errors (happens_before tool crashes). Recall/precision/F1 computed from partially failed benchmark. Benchmark has error entries affecting reliability of this measurement",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E8",
+          "type": "empirical",
+          "statement": "Realistic multi-agent scenarios: MARACE detects races across 5 scenarios with 0 false positives and 100% state-space coverage (Table 7).",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "33 error entries across 20 scenarios in benchmark results (HBGraph.add_edge, list index, unpacking errors). '0 false positives' and '100% coverage' unreliable. Benchmark has error entries affecting reliability of this measurement",
+            "Result was simulated, not measured"
+          ]
+        }
+      ],
+      "structural_issues": [
+        {
+          "type": "runtime_errors",
+          "severity": "high",
+          "description": "Benchmark results contain 33 error entries"
+        }
+      ],
+      "claim_confidence_distribution": {
+        "high": 97,
+        "low": 3,
+        "medium": 9
+      },
+      "benchmark_status": "partial_errors",
+      "flagged_count": 3
+    },
+    "ml-pipeline-selfheal": {
+      "project": "SilentFail",
+      "total_claims": 70,
+      "flagged_claims": [
+        {
+          "claim_id": "E1",
+          "type": "empirical",
+          "statement": "On 14 controlled scenarios against 8 baselines, repair-guided diagnosis achieves 100% detection, 85.7% diagnosis, 85.7% repair (mean 0.327s).",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Mean time 0.327s derived from np.random.uniform for anomaly_detection_time, diagnosis_time, repair_time. Benchmark uses simulated/random values rather than measuring real tool execution",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E2",
+          "type": "empirical",
+          "statement": "SBFL (Ochiai) achieves 100% detection, 100% diagnosis, 0% repair, 1.323s mean time.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Mean time 1.323s derived from simulated timing metrics. Benchmark uses simulated/random values rather than measuring real tool execution",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E3",
+          "type": "empirical",
+          "statement": "Delta debugging achieves only 7.1% detection because ML pipeline failures produce degraded outputs rather than binary pass/fail.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Baseline detection rate from benchmark with simulated retry/recovery. Benchmark uses simulated/random values rather than measuring real tool execution",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E6",
+          "type": "empirical",
+          "statement": "Four ML-specific pathology detectors (concept drift, feature leakage, label corruption, catastrophic forgetting) achieve 100% detection across 30 independent runs.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Benchmark has 20 error entries in data_corruption scenarios (label_noise, missing_values all crashed). Benchmark has error entries affecting reliability of this measurement",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E8",
+          "type": "empirical",
+          "statement": "SilentFail achieves 100% repair across all 10 correlated fault scenarios (independent, cluster-correlated, cascade, shared infrastructure).",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Recovery uses simulated rollback_time=np.random.uniform(3,8), repair_time=np.random.uniform(2,6). Benchmark uses simulated/random values rather than measuring real tool execution",
+            "Result was simulated, not measured"
+          ]
+        }
+      ],
+      "structural_issues": [
+        {
+          "type": "runtime_errors",
+          "severity": "high",
+          "description": "Benchmark results contain 20 error entries"
+        },
+        {
+          "type": "fabricated_metrics",
+          "severity": "critical",
+          "description": "Benchmark script assigns random values to 8 result metrics",
+          "lines": [
+            "L572: rollback_time = np.random.uniform(3, 8)",
+            "L645: anomaly_detection_time = np.random.uniform(0.1, 0.3)",
+            "L649: diagnosis_time = np.random.uniform(0.2, 0.5)",
+            "L684: repair_time = np.random.uniform(2, 4)",
+            "L686: repair_time = np.random.uniform(3, 6)",
+            "L688: repair_time = np.random.uniform(1, 3)",
+            "L690: repair_time = np.random.uniform(2, 5)",
+            "L692: repair_time = np.random.uniform(1, 4)"
+          ]
+        },
+        {
+          "type": "heavy_simulation",
+          "severity": "medium",
+          "description": "Benchmark contains 8 'simulate' comments"
+        }
+      ],
+      "claim_confidence_distribution": {
+        "high": 59,
+        "low": 5,
+        "medium": 6
+      },
+      "benchmark_status": "partial_errors",
+      "flagged_count": 5
+    },
+    "nn-init-phases": {
+      "project": "PhaseKit",
+      "total_claims": 5,
+      "flagged_claims": [],
+      "structural_issues": [],
+      "claim_confidence_distribution": {
+        "high": 5
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 0
+    },
+    "pram-compiler": {
+      "project": "PRAM-Compiler",
+      "total_claims": 79,
+      "flagged_claims": [
+        {
+          "claim_id": "E1",
+          "type": "empirical",
+          "statement": "Average simulated cache bound ratio of 0.49 at sizes up to n=65,536 (cache-resident regime).",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Explicitly 'simulated' cache bound ratio. parallel_efficiency=0.75+0.2*random.random(), work_efficiency=0.85+0.1*random.random(). Benchmark uses simulated/random values rather than measuring real tool execution",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E26",
+          "type": "empirical",
+          "statement": "SOTA Benchmark Results: On 5 key parallel algorithms (prefix sum, merge sort, matrix multiplication, BFS, histogram) across 3 problem sizes (1K-50K elements), our compiler achieves 7.08x average paral",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "SOTA benchmark uses 20 simulated computations with random parallel/work efficiency values. Benchmark uses simulated/random values rather than measuring real tool execution",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E27",
+          "type": "empirical",
+          "statement": "The compiler maintains excellent scalability across problem sizes with 0.92-1.10x speedup retention, demonstrating the effectiveness of hash-partition locality for real-world parallel workloads.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Scalability data from SOTA benchmark with simulated efficiency metrics. Benchmark uses simulated/random values rather than measuring real tool execution",
+            "Result was simulated, not measured"
+          ]
+        }
+      ],
+      "structural_issues": [
+        {
+          "type": "fabricated_metrics",
+          "severity": "critical",
+          "description": "Benchmark script assigns random values to 8 result metrics",
+          "lines": [
+            "L317: parallel_efficiency = 0.75 + 0.2 * random.random()  # Simulate 75-95% efficiency",
+            "L318: work_efficiency = 0.85 + 0.1 * random.random()     # Simulate 85-95% efficiency",
+            "L607: parallel_efficiency=0.4 + 0.2 * random.random(),  # Lower efficiency",
+            "L608: work_efficiency=0.6 + 0.2 * random.random()",
+            "L632: parallel_efficiency=0.65 + 0.15 * random.random(),",
+            "L633: work_efficiency=0.80 + 0.15 * random.random()",
+            "L654: parallel_efficiency=0.55 + 0.2 * random.random(),",
+            "L655: work_efficiency=0.75 + 0.15 * random.random()"
+          ]
+        },
+        {
+          "type": "heavy_simulation",
+          "severity": "medium",
+          "description": "Benchmark contains 21 'simulate' comments"
+        }
+      ],
+      "claim_confidence_distribution": {
+        "high": 65,
+        "low": 3,
+        "medium": 11
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 3
+    },
+    "rag-fusion-compiler": {
+      "project": "RetrieverFusion",
+      "total_claims": 78,
+      "flagged_claims": [
+        {
+          "claim_id": "E1",
+          "type": "empirical",
+          "statement": "Ablation-measured 4.96x speedup (10K corpus, d=384, k=10) from combined optimizations (precomputed norms 2.71x, partial sort 3.43x, fused gather-project 3.88x, all 4.96x). Serial baseline: 2.811ms, al",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Benchmark data shows max_speedup=2.08x, not 4.96x. Results explicitly state 4_96x_speedup_achieved=false. Speedup measured via simulated time.sleep() delays.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E3",
+          "type": "empirical",
+          "statement": "Cost model validated on 250 fusion decisions with 100% accuracy (95% CI Wilson: [98.5%, 100%]), precision/recall 100%/100%, F1=1.000, mean actual speedup 6.45x.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Evidence references internal cross-reference IDs not present in benchmark data. Cannot independently verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E4",
+          "type": "empirical",
+          "statement": "BEIR-style evaluation on 6 pipeline configurations: Simple RAG NQ 1.06x, SciFact 1.06x, HotpotQA 1.10x, Multi-retriever NQ 1.36x, Iterative refine NQ 1.09x, Batched x8 NQ 1.95x.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Speedup numbers derived from simulated time.sleep() delays in benchmark, not from actual computation latency.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E5",
+          "type": "empirical",
+          "statement": "BEIR retrieval-only speedup: Simple RAG 1.33x, Multi-retriever 2.28x, Iterative refine 1.50x, Batched x8 3.13x.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Speedup numbers derived from simulated time.sleep() delays in benchmark, not from actual computation latency.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E6",
+          "type": "empirical",
+          "statement": "BEIR node reduction: Simple RAG NQ 5->4, SciFact 5->4, HotpotQA 7->5, Multi-retriever NQ 9->6, Iterative refine NQ 9->7, Batched x8 26->18.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Evidence references internal cross-reference IDs not present in benchmark data. Cannot independently verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E7",
+          "type": "empirical",
+          "statement": "BEIR fusion rules applied: Simple RAG NQ/SciFact use R2, HotpotQA uses R16+R2x2, Multi-retriever uses R2x3+R11, Iterative refine uses R16+R2x2, Batched x8 uses R2x8+R11.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Evidence references internal cross-reference IDs not present in benchmark data. Cannot independently verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E8",
+          "type": "empirical",
+          "statement": "All 15 algebraic proofs verified with separate fused and unfused implementations testing genuinely different code paths.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Evidence references internal cross-reference IDs not present in benchmark data. Cannot independently verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E9",
+          "type": "empirical",
+          "statement": "Progress theorem constructively verified on 1000 randomly generated well-typed programs with 100% success rate.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Evidence references internal cross-reference IDs not present in benchmark data. Cannot independently verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E10",
+          "type": "empirical",
+          "statement": "Preservation theorem constructively verified on 1000 randomly generated well-typed programs with 100% success rate.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Evidence references internal cross-reference IDs not present in benchmark data. Cannot independently verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E11",
+          "type": "empirical",
+          "statement": "Fusion preservation verified on 100 randomly generated fused programs with 100% success rate.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Evidence references internal cross-reference IDs not present in benchmark data. Cannot independently verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E12",
+          "type": "empirical",
+          "statement": "Confluence of the rewrite system verified via 14 critical pairs, all joinable.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Evidence references internal cross-reference IDs not present in benchmark data. Cannot independently verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E13",
+          "type": "empirical",
+          "statement": "Quantization bridge counit error measured at approximately epsilon ~= 0.008 for d=64.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Evidence references internal cross-reference IDs not present in benchmark data. Cannot independently verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E14",
+          "type": "empirical",
+          "statement": "Sparse bridge lossless round-trip confirmed on n=500, d=128, density=0.1.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Evidence references internal cross-reference IDs not present in benchmark data. Cannot independently verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E15",
+          "type": "empirical",
+          "statement": "Cost model stratified analysis: 101 decisions for n<=1000 (100%), 65 for n>10000 (100%), 107 for d<=128 (100%), 72 for d>384 (100%).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Evidence references internal cross-reference IDs not present in benchmark data. Cannot independently verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E16",
+          "type": "empirical",
+          "statement": "Speedup increases with corpus size: ~3x at n=1K, 4.96x at n=10K, ~5x at n=50K.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Speedup numbers derived from simulated time.sleep() delays in benchmark, not from actual computation latency.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E17",
+          "type": "empirical",
+          "statement": "Mean actual speedup across 250 cost model validation decisions: 6.45x.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Claimed 6.45x mean speedup not reproducible from benchmark data (max observed: 2.08x). Speedup measured via simulated time.sleep() delays.",
+            "Result was simulated, not measured"
+          ]
+        }
+      ],
+      "structural_issues": [],
+      "claim_confidence_distribution": {
+        "high": 41,
+        "low": 5,
+        "medium": 32
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 16
+    },
+    "sparse-cpu-inference": {
+      "project": "SparseCPU",
+      "total_claims": 11,
+      "flagged_claims": [],
+      "structural_issues": [],
+      "claim_confidence_distribution": {
+        "high": 11
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 0
+    },
+    "spatial-hash-compiler": {
+      "project": "HashPlan",
+      "total_claims": 5,
+      "flagged_claims": [
+        {
+          "claim_id": "E3",
+          "type": "empirical",
+          "statement": "Benchmark suite covers 6 algorithms across 15 workloads with diverse spatial data types and scales.",
+          "confidence": "high",
+          "verification": "empirically_validated",
+          "issues": [
+            "Algorithm naming note: groundings reference 'GeohashIndex' but benchmark results use 'Octree' for the 6th algorithm. All other data verified."
+          ]
+        }
+      ],
+      "structural_issues": [],
+      "claim_confidence_distribution": {
+        "high": 5
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 1
+    },
+    "synbio-verifier": {
+      "project": "BioProver",
+      "total_claims": 141,
+      "flagged_claims": [
+        {
+          "claim_id": "E8",
+          "type": "empirical",
+          "statement": "Monte Carlo approach fails on 2 of 11 models (BIOMD012, BIOMD289) with 0% pass rate.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Gillespie/Monte Carlo baseline is a placeholder implementation (L479: 'This is a placeholder for proper stochastic simulation'). Uses deterministic ODE integration with random noise, not actual Gillespie SSA. Comparison metrics (speedup, failure rates) are not from real stochastic simulation.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E9",
+          "type": "empirical",
+          "statement": "Geometric mean speedup across all 11 models is 5.7x over Monte Carlo simulation.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Gillespie/Monte Carlo baseline is a placeholder implementation (L479: 'This is a placeholder for proper stochastic simulation'). Uses deterministic ODE integration with random noise, not actual Gillespie SSA. Comparison metrics (speedup, failure rates) are not from real stochastic simulation.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E26",
+          "type": "empirical",
+          "statement": "On 9 of 11 real-world models, BioProver is faster than the Monte Carlo approach while providing formal guarantees.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Gillespie/Monte Carlo baseline is a placeholder implementation (L479: 'This is a placeholder for proper stochastic simulation'). Uses deterministic ODE integration with random noise, not actual Gillespie SSA. Comparison metrics (speedup, failure rates) are not from real stochastic simulation.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E27",
+          "type": "empirical",
+          "statement": "Monte Carlo fails on 2 of 11 models: BIOMD012 (repressilator oscillation) and BIOMD289 (T-cell non-negativity) yield 0% pass rate.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Gillespie/Monte Carlo baseline is a placeholder implementation (L479: 'This is a placeholder for proper stochastic simulation'). Uses deterministic ODE integration with random noise, not actual Gillespie SSA. Comparison metrics (speedup, failure rates) are not from real stochastic simulation.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E29",
+          "type": "empirical",
+          "statement": "Two exceptions where BioProver is slower than MC: BIOMD035 (Vilar oscillator, 88.8s vs 36.7s) and BIOMD056 (Chen cell cycle, 102.4s vs 44.2s).",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Gillespie/Monte Carlo baseline is a placeholder implementation (L479: 'This is a placeholder for proper stochastic simulation'). Uses deterministic ODE integration with random noise, not actual Gillespie SSA. Comparison metrics (speedup, failure rates) are not from real stochastic simulation.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E30",
+          "type": "empirical",
+          "statement": "BIOMD035 (Vilar oscillator, 10 species) requires 2 CEGAR iterations and 88.8 seconds.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Gillespie/Monte Carlo baseline is a placeholder implementation (L479: 'This is a placeholder for proper stochastic simulation'). Uses deterministic ODE integration with random noise, not actual Gillespie SSA. Comparison metrics (speedup, failure rates) are not from real stochastic simulation.",
+            "Result was simulated, not measured"
+          ]
+        }
+      ],
+      "structural_issues": [],
+      "claim_confidence_distribution": {
+        "high": 95,
+        "low": 6,
+        "medium": 40
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 6
+    },
+    "tensor-train-modelcheck": {
+      "project": "TN-Check",
+      "total_claims": 81,
+      "flagged_claims": [
+        {
+          "claim_id": "E1",
+          "type": "empirical",
+          "statement": "We evaluate TN-Check on 15 realistic CTMC benchmark instances spanning birth-death processes, queueing networks, epidemic models, reliability systems, and population dynamics with state spaces ranging",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "TN-Check (tensor_train) method failed 100% in benchmark due to code bug. Only baseline methods produced results. Overall evaluation claim unverifiable for TT method."
+          ]
+        },
+        {
+          "claim_id": "E2",
+          "type": "empirical",
+          "statement": "Comparative evaluation against four state-of-the-art CTMC analysis methods: sparse matrix exponential, uniformization, Krylov subspace methods, and dense matrix exponential.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Baseline methods succeeded but TN-Check method failed. Partial verification only."
+          ]
+        },
+        {
+          "claim_id": "E3",
+          "type": "empirical",
+          "statement": "Benchmark includes realistic CTMC models: M/M/1 and M/M/c queueing systems, SIR epidemic on complete graphs, parallel/series reliability systems, birth-death processes with absorbing boundaries.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Baseline methods succeeded but TN-Check method failed. Partial verification only."
+          ]
+        },
+        {
+          "claim_id": "E4",
+          "type": "empirical",
+          "statement": "Birth-death process (N=1, M=30, Poisson(10)): MPS recovers exact distribution with L1 error 0.0, mean 9.999998, max bond dimension 1.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "tensor_train method failed 100% (30/30) in benchmark with error 'name svd_truncate is not defined'. Claimed results not reproducible from benchmark data.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E5",
+          "type": "empirical",
+          "statement": "Gene expression model (N=2, |S|=1000): L1 errors of 2.35e-1 (chi=1), 4.71e-2 (chi=2), 4.88e-5 (chi=5), 1.62e-12 (chi=10).",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "tensor_train method failed 100% (30/30) in benchmark with error 'name svd_truncate is not defined'. Claimed results not reproducible from benchmark data.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E6",
+          "type": "empirical",
+          "statement": "MPO compression ratio grows exponentially: 6.2x at N=2, 6.0e1 at N=3, 1.8e3 at N=4, 8.1e4 at N=5, 4.3e6 at N=6, 1.6e10 at N=8, 7.8e13 at N=10.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "tensor_train method failed 100% (30/30) in benchmark with error 'name svd_truncate is not defined'. Claimed results not reproducible from benchmark data.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E7",
+          "type": "empirical",
+          "statement": "Clamping bound (Proposition 1) holds in all 10 random trials with aggressive truncation (chi in {1,2,3}, physical dim d in {4,5,6,7,8}).",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "tensor_train method failed 100% (30/30) in benchmark with error 'name svd_truncate is not defined'. Claimed results not reproducible from benchmark data.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E8",
+          "type": "empirical",
+          "statement": "3-species cascade (N=3, M=8, |S|=512): CSL property P>=0.5[F<=2 (X2>=3)] returns INDETERMINATE with probability interval [0,1], L1 error bound 1.98, true probability 0.006.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "tensor_train method failed 100% (30/30) in benchmark with error 'name svd_truncate is not defined'. Claimed results not reproducible from benchmark data.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E9",
+          "type": "empirical",
+          "statement": "Certificate pipeline: 2-species 10x10 yields SOUND with error 8.50e-3; end-to-end yields SOUND with error 2.38e-2. Both pass all 11 checks.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "tensor_train method failed 100% (30/30) in benchmark with error 'name svd_truncate is not defined'. Claimed results not reproducible from benchmark data.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E10",
+          "type": "empirical",
+          "statement": "Cross-validation against dense reference: 30 CSL properties across 10 models, zero disagreements (22 agree, 8 INDETERMINATE).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Cannot verify from benchmark data. TN-Check method failed 100% in benchmark."
+          ]
+        },
+        {
+          "claim_id": "E11",
+          "type": "empirical",
+          "statement": "Compressibility analysis across 20 models: 8 deficiency-zero + WR (rigorous rank-1 pi), 6 product-form/weak coupling (rigorous), 6 area-law (empirical). All exhibit S_max < 3.0.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Cannot verify from benchmark data. TN-Check method failed 100% in benchmark."
+          ]
+        },
+        {
+          "claim_id": "E12",
+          "type": "empirical",
+          "statement": "Cumulative clamping bias analysis: bias rate stable (not growing) across 100 steps. Birth-death: cumulative eps_trunc = 4.2e-9, eps_clamp = 1.8e-10. Gene expression: eps_trunc = 3.1e-5, eps_clamp = 8.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Cannot verify from benchmark data. TN-Check method failed 100% in benchmark."
+          ]
+        },
+        {
+          "claim_id": "E13",
+          "type": "empirical",
+          "statement": "Mathematical rigor verification: all theorems (1-4, 6-9) and propositions (1, 2, 3, 5) verified numerically across randomized trials (3-51 trials per claim).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Cannot verify from benchmark data. TN-Check method failed 100% in benchmark."
+          ]
+        },
+        {
+          "claim_id": "E14",
+          "type": "empirical",
+          "statement": "FSP-TT coupling analysis: non-conservativity bound tight for boundary states; TT rank remains constant (rank 1) for product-form birth-death regardless of M.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "tensor_train method failed 100% (30/30) in benchmark with error 'name svd_truncate is not defined'. Claimed results not reproducible from benchmark data.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E15",
+          "type": "empirical",
+          "statement": "CME generators are severely stiff: stiffness ratios range from 1.8e4 (toggle switch) to 2.0e7 (birth-death M=30).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Cannot verify from benchmark data. TN-Check method failed 100% in benchmark."
+          ]
+        },
+        {
+          "claim_id": "E16",
+          "type": "empirical",
+          "statement": "Graph-theoretic predictors: all three (tree-width, deficiency, modularity) correctly identify birth-death as maximally compressible (rank 1). Tree-width tau=0 gives d^0=1, deficiency delta=0+WR gives ",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Cannot verify from benchmark data. TN-Check method failed 100% in benchmark."
+          ]
+        },
+        {
+          "claim_id": "E17",
+          "type": "empirical",
+          "statement": "Error bound tightness: certified bounds are within ~40x of actual errors for birth-death (chi=4: 38.7x, chi=8: 40.0x). Tightness ratio stable across bond dimensions.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Cannot verify from benchmark data. TN-Check method failed 100% in benchmark."
+          ]
+        },
+        {
+          "claim_id": "E18",
+          "type": "empirical",
+          "statement": "SMC comparison: SPRT and TN-Check agree on birth-death verdict (TRUE for P>=0.5[X>=5 at t=1.0]). SMC: probability 0.93±0.02, ~1000 trajectories. TN-Check: probability 0.934, chi=8.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "tensor_train method failed 100% (30/30) in benchmark with error 'name svd_truncate is not defined'. Claimed results not reproducible from benchmark data.",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E19",
+          "type": "empirical",
+          "statement": "51 biological models organized into 3 tiers: 13 core, 12 extended, 26 broad coverage. All compile to valid MPO generators.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Cannot verify from benchmark data. TN-Check method failed 100% in benchmark."
+          ]
+        }
+      ],
+      "structural_issues": [],
+      "claim_confidence_distribution": {
+        "high": 50,
+        "medium": 23,
+        "low": 8
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 19
+    },
+    "tensorguard": {
+      "project": "TensorGuard",
+      "total_claims": 98,
+      "flagged_claims": [
+        {
+          "claim_id": "E1",
+          "type": "empirical",
+          "statement": "Table 1: TensorGuard achieves F1=0.625 with precision=1.000 and recall=0.455 on 52-model cross-cutting benchmark (44 buggy, 8 correct).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E3",
+          "type": "empirical",
+          "statement": "Table 2: Phase+Shape category (14 models): TP=9, FN=5, F1=0.783.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E4",
+          "type": "empirical",
+          "statement": "Table 2: Triple-theory category (10 models): TP=6, FN=4, F1=0.750.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E5",
+          "type": "empirical",
+          "statement": "Table 2: Device+Shape category (16 models): TP=4, FN=12, F1=0.400.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E6",
+          "type": "empirical",
+          "statement": "Table 2: Device+Phase category (4 models): TP=1, FN=3, F1=0.400.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E10",
+          "type": "empirical",
+          "statement": "Table 6: Combined PyTEA + real-model benchmark (44 tests): precision=0.833, recall=0.714, F1=0.769.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E11",
+          "type": "empirical",
+          "statement": "Table 6: PyTEA real-world subset (34 tests): TP=4, FP=1, FN=1, TN=28, precision=0.800, recall=0.800, F1=0.800.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        },
+        {
+          "claim_id": "E12",
+          "type": "empirical",
+          "statement": "Table 6: Synthetic model subset (10 tests): TP=1, FP=0, FN=1, TN=8, precision=1.000, recall=0.500, F1=0.667.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific numbers not verified against data files"
+          ]
+        }
+      ],
+      "structural_issues": [],
+      "claim_confidence_distribution": {
+        "high": 74,
+        "medium": 24
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 8
+    },
+    "tlaplus-coalgebra-compress": {
+      "project": "CoaCert-TLA",
+      "total_claims": 6,
+      "flagged_claims": [
+        {
+          "claim_id": "E1",
+          "type": "empirical",
+          "statement": "Benchmark suite evaluates 15 scenarios across Peterson (2-4 processes), dining philosophers (3-5), producer-consumer, and readers-writers specifications.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "All 15 benchmark scenarios crashed with 'name traceback is not defined'. All times are 999.0 sentinels. Benchmark crashed: all timing values are 999.0 sentinels, all have errors",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E2",
+          "type": "empirical",
+          "statement": "Coalgebraic compression achieves 1.0 compression ratio on Peterson benchmarks, indicating bisimulation quotient equals the original state space for these specifications.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Compression ratio 1.0 is default/error value, not measured. All property_preserved=false. Benchmark crashed: all timing values are 999.0 sentinels, all have errors",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E3",
+          "type": "empirical",
+          "statement": "Total benchmark suite execution completes in 13.0 seconds across all 15 scenarios on a 10-core system with 32GB memory.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "13.0s total time is misleading — all individual results are 999.0 error sentinels. Benchmark crashed: all timing values are 999.0 sentinels, all have errors",
+            "Result was simulated, not measured"
+          ]
+        },
+        {
+          "claim_id": "E4",
+          "type": "empirical",
+          "statement": "Additional experiment suite with dedicated experiment_results.json covering multiple benchmark families.",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "Experiment results file may have same issues as main benchmark. Benchmark crashed: all timing values are 999.0 sentinels, all have errors",
+            "Result was simulated, not measured"
+          ]
+        }
+      ],
+      "structural_issues": [
+        {
+          "type": "benchmark_failure",
+          "severity": "critical",
+          "description": "75/272 values (28%) are 999 sentinels — benchmarks crashed/timed out"
+        }
+      ],
+      "claim_confidence_distribution": {
+        "high": 2,
+        "low": 4
+      },
+      "benchmark_status": "failed",
+      "flagged_count": 4
+    },
+    "wasserstein-bounds": {
+      "project": "QELens",
+      "total_claims": 118,
+      "flagged_claims": [
+        {
+          "claim_id": "E1",
+          "type": "empirical",
+          "statement": "QELens achieves 0/64 coverage failures across 8 distributions x 8 sample sizes (n=10 to n=500), 500 trials per configuration at delta=0.05.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Coverage validation experiment (8 distributions × 8 sample sizes) not present in benchmark results, which tests drift detection scenarios only."
+          ]
+        },
+        {
+          "claim_id": "E2",
+          "type": "empirical",
+          "statement": "Normal CI fails 15/64 configurations (minimum 90.0% coverage) at all sample sizes.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E3",
+          "type": "empirical",
+          "statement": "Subsampling CI fails 27/64 configurations (minimum 84.4% coverage) at all sample sizes.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E4",
+          "type": "empirical",
+          "statement": "At n<=50: QELens 0/40 failures, Normal CI 10/40 failures, Subsampling CI 11/40 failures.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E5",
+          "type": "empirical",
+          "statement": "Bootstrap CI exhibits 12.7% FPR under the null hypothesis at n=300.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E11",
+          "type": "empirical",
+          "statement": "Finite-difference estimation recovers the exact Lipschitz constant for linear functions: f(x)=x gives L=1.000, f(x)=2x gives L=2.000, f(x)=0.5x gives L=0.500.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Lipschitz estimation experiments not present in benchmark results."
+          ]
+        },
+        {
+          "claim_id": "E12",
+          "type": "empirical",
+          "statement": "For sin(x), the W1-based estimator yields L_hat = 0.988 (true L=1.0), within 1.2%.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific experimental conditions not reproduced in benchmark results. Cannot independently verify."
+          ]
+        },
+        {
+          "claim_id": "E13",
+          "type": "empirical",
+          "statement": "In a 3-stage pipeline with 5% per-stage Lipschitz estimation error, experiments measure ~6% composed error (vs 15.8% theoretical worst case).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Lipschitz estimation experiments not present in benchmark results."
+          ]
+        },
+        {
+          "claim_id": "E14",
+          "type": "empirical",
+          "statement": "Drift direction classification achieves 83% accuracy; variance-only shifts are sometimes ambiguous.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Variance estimation experiments not present in benchmark results."
+          ]
+        },
+        {
+          "claim_id": "E15",
+          "type": "empirical",
+          "statement": "Debiased bootstrap reduces FPR to ~5-7% at n=300 compared to 12.7% for standard bootstrap.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E16",
+          "type": "empirical",
+          "statement": "Naive sample variance of Z_i underestimates true Var(W1_hat) by ~1000x; jackknife + Maurer-Pontil achieves >=99.8% coverage.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Coverage validation experiment (8 distributions × 8 sample sizes) not present in benchmark results, which tests drift detection scenarios only."
+          ]
+        },
+        {
+          "claim_id": "E17",
+          "type": "empirical",
+          "statement": "MDES at 80% power: n=50 gives MDES~0.38 (Hoeffding) or ~0.85 (Bernstein), n=1000 gives MDES~0.086 or ~0.091 respectively.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific experimental conditions not reproduced in benchmark results. Cannot independently verify."
+          ]
+        },
+        {
+          "claim_id": "E18",
+          "type": "empirical",
+          "statement": "Detection power increases with sample size: at shift=0.1, Bernstein power is 19.3% (n=50), 42.7% (n=100), 90.7% (n=200), 100% (n=500).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific experimental conditions not reproduced in benchmark results. Cannot independently verify."
+          ]
+        },
+        {
+          "claim_id": "E19",
+          "type": "empirical",
+          "statement": "3-stage LLM pipeline: W1 distances are Stage1=0.133, Stage2=0.378, Stage3=0.414 with composed bound under unit Lipschitz of 0.925.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Lipschitz estimation experiments not present in benchmark results."
+          ]
+        },
+        {
+          "claim_id": "E20",
+          "type": "empirical",
+          "statement": "QELens maintains >= 99.5% empirical coverage even at n = 10.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Coverage validation experiment (8 distributions × 8 sample sizes) not present in benchmark results, which tests drift detection scenarios only."
+          ]
+        },
+        {
+          "claim_id": "E21",
+          "type": "empirical",
+          "statement": "Bootstrap CI achieves 0/40 failures at n <= 50 but exhibits high FPR at larger n under the null.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E22",
+          "type": "empirical",
+          "statement": "Permutation CI achieves 0/40 failures at n <= 50 with minimum 97.8% coverage.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E23",
+          "type": "empirical",
+          "statement": "At n=30, normal CI achieves only 91-92% coverage on normal, beta, and LLM-quality distributions.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E24",
+          "type": "empirical",
+          "statement": "Subsampling CI drops to 84% at n=30 for normal distributions.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E25",
+          "type": "empirical",
+          "statement": "Theoretical worst-case Lipschitz error inflation for 3 stages at 5% each: (1.05)^3 - 1 ≈ 15.8%.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Lipschitz estimation experiments not present in benchmark results."
+          ]
+        },
+        {
+          "claim_id": "E26",
+          "type": "empirical",
+          "statement": "Table 2: At n <= 50, QELens (Bernstein, Tight Bernstein, Hoeffding) achieves 0/40 coverage failures; Normal CI fails 10/40 (min 90.0%); Subsampling CI fails 11/40 (min 84.4%); Bootstrap CI 0/40 (min 9",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E27",
+          "type": "empirical",
+          "statement": "Table 3: All Tier 1 methods achieve >= 99.8% empirical coverage across 6 distribution families and 5 sample sizes (n in {50,100,200,500,1000}) at delta=0.05 with 1000 trials. Bootstrap CI ranges 95.8-",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E28",
+          "type": "empirical",
+          "statement": "Table 4: Tightness ratios at n=1000, delta=0.05. Bernstein: 1.30x-3.36x; Hoeffding: 1.35x-3.40x; DKW: 2.80x-6.50x; Bootstrap: 1.08x-1.45x.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E29",
+          "type": "empirical",
+          "statement": "Table 5: Detection at n=300, delta=0.05. FPR: Bernstein 0.0%, Hoeffding 0.0%, DKW 0.0%, Bootstrap 12.7%. Power at Delta=0.10: Bernstein 99.3%, Hoeffding 99.0%, DKW 0.0%, Bootstrap 100%.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E30",
+          "type": "empirical",
+          "statement": "Table 6: Variance estimation on U[0,1] vs U[0.1,1.1] at n=1000. Naive underestimates by ~1000x (1.7e-7 vs true 1.7e-4). Jackknife+Maurer-Pontil produces slight overestimate (1.8e-4) with >= 99.8% cove",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Coverage validation experiment (8 distributions × 8 sample sizes) not present in benchmark results, which tests drift detection scenarios only."
+          ]
+        },
+        {
+          "claim_id": "E31",
+          "type": "empirical",
+          "statement": "Appendix Table 8: Normalized autocorrelation rho(h) for Z_i differences. Uniform shift: rho(1)=0.80, rho(10)=0.50, rho(100)=0.10. Beta(2,5): rho(1)=0.50, rho(10)=0.12. Discrete: rho(1)=0.30, rho(10)=0",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific experimental conditions not reproduced in benchmark results. Cannot independently verify."
+          ]
+        },
+        {
+          "claim_id": "E32",
+          "type": "empirical",
+          "statement": "Appendix Table 9: Variance estimator convergence. Naive: ratio ~0.001 at all n. Jackknife: 0.70 at n=50, 0.97 at n=1000. Jackknife+MP: 1.20 at n=50, 1.04 at n=1000 (always >= 1, ensuring validity).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Variance estimation experiments not present in benchmark results."
+          ]
+        },
+        {
+          "claim_id": "E33",
+          "type": "empirical",
+          "statement": "Appendix Table 10: Bernstein coverage using different variance estimators on uniform distributions. Naive: 96.5% at n=50, degrades to 90.7% at n=1000. Jackknife+MP: 100% at n=50, >= 99.8% at all n.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Coverage validation experiment (8 distributions × 8 sample sizes) not present in benchmark results, which tests drift detection scenarios only."
+          ]
+        },
+        {
+          "claim_id": "E34",
+          "type": "empirical",
+          "statement": "Appendix Table 18: Bernstein coverage under AR(1) autocorrelation. At rho=0: 99.8%; rho=0.3: 97.5%; rho=0.5: 93.0%; rho=0.7: 85.0%. Certificates robust at moderate autocorrelation (rho <= 0.3).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Coverage validation experiment (8 distributions × 8 sample sizes) not present in benchmark results, which tests drift detection scenarios only."
+          ]
+        },
+        {
+          "claim_id": "E35",
+          "type": "empirical",
+          "statement": "Appendix Table 17: Bootstrap FPR decreases with n: 15.0% at n=50, 12.7% at n=300, 10.5% at n=1000. All Tier 1 methods maintain 0.0% FPR at all sample sizes.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E36",
+          "type": "empirical",
+          "statement": "Appendix Table 12: Detection power on variance inflation. At Var x2.0: Bernstein 0.4%, DKW 0.0%, Bootstrap 100%. At Var x3.0: Bernstein 39.6%, DKW 0.0%, Bootstrap 100%.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E37",
+          "type": "empirical",
+          "statement": "Appendix Table 13: Detection power on contamination. At 10% contamination rate: Bernstein 1.0%, Bootstrap 97.2%. At 20%: Bernstein 65.0%, Bootstrap 100%.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E38",
+          "type": "empirical",
+          "statement": "Appendix Table 14: Compositional bound tightness. Depth 2: 2.11x. Depth 3: WC 4.17x, adaptive 3.17x (1.30x tightening). Depth 5: WC 12.00x, adaptive 5.81x (2.04x tightening).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific experimental conditions not reproduced in benchmark results. Cannot independently verify."
+          ]
+        },
+        {
+          "claim_id": "E39",
+          "type": "empirical",
+          "statement": "Appendix Table 15: Composed error from per-stage Lipschitz estimation errors. At eta=5%: theory 15.76%, measured 6.0% (ratio 0.38x). At eta=10%: theory 33.10%, measured 12.0% (ratio 0.36x).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Lipschitz estimation experiments not present in benchmark results."
+          ]
+        },
+        {
+          "claim_id": "E40",
+          "type": "empirical",
+          "statement": "Appendix Table 16: Composed error vs pipeline depth at eta_i=5%. K=3: theory 15.8%, measured 6.0%. K=10: theory 62.9%, measured 25.0%. Ratio remarkably stable at ~0.39x.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific experimental conditions not reproduced in benchmark results. Cannot independently verify."
+          ]
+        },
+        {
+          "claim_id": "E41",
+          "type": "empirical",
+          "statement": "Appendix Table 20: Power at Delta=0.10, n=300. Gaussian: Bernstein 99.3%. Uniform: 99.8%. Heavy-tailed t_3: only 20.0%. Multimodal: 85.0%.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific experimental conditions not reproduced in benchmark results. Cannot independently verify."
+          ]
+        },
+        {
+          "claim_id": "E42",
+          "type": "empirical",
+          "statement": "Appendix Tables 18-19: Bernstein power at Delta=0.10: n=50 -> 5%, n=100 -> 45%, n=200 -> 88%, n=300 -> 99.3%, n=500 -> 100%. At Delta=0.05: n=500 -> 50%, n=1000 -> 95%.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific experimental conditions not reproduced in benchmark results. Cannot independently verify."
+          ]
+        },
+        {
+          "claim_id": "E43",
+          "type": "empirical",
+          "statement": "Appendix Table 21: MDES comparison at 80% power. n=100: Bernstein 0.22, Hoeffding 0.24, DKW 0.55, Bootstrap 0.08. n=1000: Bernstein 0.04, Hoeffding 0.05, DKW 0.15, Bootstrap 0.02.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E44",
+          "type": "empirical",
+          "statement": "Appendix Table 22: Computational cost. Hoeffding: 0.1ms (n=100) to 5ms (n=10000). Bernstein jackknife: 5ms (n=100) to 48s (n=10000). Bootstrap B=2000: 50ms (n=100) to 5s (n=10000).",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E45",
+          "type": "empirical",
+          "statement": "Appendix Table 23: Bernstein width at n=500. delta=0.01: width 0.095, tightness 1.95x. delta=0.05: width 0.065, tightness 1.65x. delta=0.10: width 0.055, tightness 1.55x.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific experimental conditions not reproduced in benchmark results. Cannot independently verify."
+          ]
+        },
+        {
+          "claim_id": "E46",
+          "type": "empirical",
+          "statement": "Appendix Table 24: Effect of D estimation on coverage/tightness. Uniform with true D: coverage 99.8%, tightness 1.50x. Gaussian with 6sigma: 99.5%, 2.20x. t_3 with Winsorized 1%: 98.0%, 3.20x.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Coverage validation experiment (8 distributions × 8 sample sizes) not present in benchmark results, which tests drift detection scenarios only."
+          ]
+        },
+        {
+          "claim_id": "E47",
+          "type": "empirical",
+          "statement": "Appendix Table 25: NOBM ablation on uniform at n=1000. Naive only: 90.7% coverage. +NOBM sqrt(n): 96.5%. +Maurer-Pontil: 99.0%. Full (max of all): >= 99.8% coverage, 1.39x tightness.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Coverage validation experiment (8 distributions × 8 sample sizes) not present in benchmark results, which tests drift detection scenarios only."
+          ]
+        },
+        {
+          "claim_id": "E48",
+          "type": "empirical",
+          "statement": "Appendix Table 26: Bootstrap B sensitivity. FPR insensitive beyond B=500: B=200 -> 14.5%, B=2000 -> 12.7%, B=5000 -> 12.5%. Confirms FPR is structural (positive bias), not sampling artifact.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "References methods (Bootstrap/Permutation/Subsampling/Normal CI) not present in benchmark results. Cannot verify from real_benchmark_results.json."
+          ]
+        },
+        {
+          "claim_id": "E49",
+          "type": "empirical",
+          "statement": "Appendix Table 27: Tightness for diverse score types at n=500. Point masses: 1.20x. Near-degenerate Beta(100,100): 1.15x. Very heavy-tailed t_2: 5.50x. All maintain 100% coverage except near-degenerat",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Coverage validation experiment (8 distributions × 8 sample sizes) not present in benchmark results, which tests drift detection scenarios only."
+          ]
+        },
+        {
+          "claim_id": "E50",
+          "type": "empirical",
+          "statement": "Appendix Table 28: Window size tradeoff. n=50: MDES 0.30, cert width 0.22. n=200: MDES 0.14, cert width 0.11. n=500: MDES 0.06, cert width 0.065.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific experimental conditions not reproduced in benchmark results. Cannot independently verify."
+          ]
+        },
+        {
+          "claim_id": "E51",
+          "type": "empirical",
+          "statement": "Appendix Table 22: CLT vs empirical power at Delta=0.10. n=50: theory 8% vs empirical 5% (ratio 0.63). n=200: theory 82% vs empirical 88% (ratio 1.07). n=300: theory 96% vs empirical 99.3%.",
+          "confidence": "medium",
+          "verification": "empirically_validated",
+          "issues": [
+            "Specific experimental conditions not reproduced in benchmark results. Cannot independently verify."
+          ]
+        }
+      ],
+      "structural_issues": [],
+      "claim_confidence_distribution": {
+        "high": 61,
+        "medium": 57
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 46
+    },
+    "zk-nlp-scoring": {
+      "project": "Spectacles",
+      "total_claims": 76,
+      "flagged_claims": [
+        {
+          "claim_id": "I1",
+          "type": "implementation",
+          "statement": "The EvalSpec DSL is a typed specification language for NLP metrics, formalized in Lean 4 with syntax, typing rules (HasType), and denotational semantics (Eval).",
+          "confidence": "high",
+          "verification": "implementation_verified",
+          "issues": [
+            "Code references removed: paths do not exist on disk.",
+            "Code references pointed to non-existent paths"
+          ]
+        },
+        {
+          "claim_id": "I10",
+          "type": "implementation",
+          "statement": "Table 1 lists 7 supported metrics: Exact Match (Boolean/Tier1), Token F1 (Counting/Tier1), BLEU-4 (Counting/Tier1+G), ROUGE-1 (Counting/Tier1), ROUGE-2 (Counting/Tier1), ROUGE-L (Tropical/Tier2), chrF",
+          "confidence": "high",
+          "verification": "implementation_verified",
+          "issues": [
+            "Code references removed: paths do not exist on disk.",
+            "Code references pointed to non-existent paths"
+          ]
+        },
+        {
+          "claim_id": "E18",
+          "type": "empirical",
+          "statement": "SOTA benchmark across 20 real-world NLP scenarios shows ZK circuits achieve 26.0% accuracy with 4,056x privacy overhead, competitive with homomorphic encryption (3,100x) while uniquely providing verif",
+          "confidence": "low",
+          "verification": "simulation_only",
+          "issues": [
+            "ZK proof_time=0.001*circuit_size+random.uniform(0.1,0.5), verify_time=random.uniform(0.001,0.005). Benchmark uses simulated/random values rather than measuring real tool execution",
+            "Result was simulated, not measured"
+          ]
+        }
+      ],
+      "structural_issues": [
+        {
+          "type": "fabricated_metrics",
+          "severity": "critical",
+          "description": "Benchmark script assigns random values to 3 result metrics",
+          "lines": [
+            "L472: proof_time = 0.001 * circuit_size + random.uniform(0.1, 0.5)  # Simulate computation",
+            "L489: verify_time = random.uniform(0.001, 0.005)",
+            "L567: network_latency = random.uniform(0.05, 0.15)"
+          ]
+        },
+        {
+          "type": "heavy_simulation",
+          "severity": "medium",
+          "description": "Benchmark contains 9 'simulate' comments"
+        }
+      ],
+      "claim_confidence_distribution": {
+        "high": 56,
+        "medium": 19,
+        "low": 1
+      },
+      "benchmark_status": "has_data",
+      "flagged_count": 3
+    }
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "project": "RegSynth",
+  "version": "recovered-2026-03-17",
+  "generated": "2026-03-17",
+  "description": "Recovered grounding file for the truthful, executable story in this checkout. Every supported claim below is tied to commands rerun in this repository during recovery.",
+  "story_summary": "RegSynth is a real Rust prototype for synthetic compliance synthesis, Pareto frontier exploration, temporal trajectory reasoning, and certificate generation. The current evidence supports end-to-end synthetic demonstrations and validation harnesses, not industrial-scale runtime or benchmark-superiority claims.",
+  "strongest_executable_core": [
+    {
+      "id": "core-cli-benchmark",
+      "claim": "The compiled regsynth CLI can generate and solve small synthetic benchmark instances end to end.",
+      "evidence": [
+        "./implementation/target/release/regsynth benchmark --iterations 2 --num-obligations 10 --num-jurisdictions 2 --output-format json returned 2/2 feasible runs.",
+        "The rerun reported average 14.5 constraints, average frontier size 1.0, and all stage timings rounded to 0 ms on this tiny workload."
+      ]
+    },
+    {
+      "id": "core-sota-harness",
+      "claim": "The bundled Python benchmark harness executes synthetic multi-objective comparisons across several baseline methods.",
+      "evidence": [
+        "python3 run_benchmark.py completed and rewrote benchmarks/real_benchmark_results.json.",
+        "In that rerun, MaxSMT_Synthesis succeeded on 5/8 scenarios (62.5%) with avg hypervolume 0.3219 and avg synthesis time 10.7628 ms.",
+        "Epsilon_Constraint achieved the best average hypervolume in the same rerun: 0.4828."
+      ]
+    },
+    {
+      "id": "core-pareto-validation",
+      "claim": "The Pareto validation harness provides executable evidence for non-domination checking and trajectory-level trade-off analysis.",
+      "evidence": [
+        "python3 benchmarks/pareto_dominance_validation.py --runs 5 --bf-runs 10 --traj-runs 20 completed successfully.",
+        "The rerun summary reported dominance_correctness_pass_rate=1.0, mean_hv_ratio_vs_bruteforce=0.984, min_hv_ratio_vs_bruteforce=0.9158, trajectory_domination_rate=0.15, trajectory_hv_improvement_pct=21.84."
+      ]
+    },
+    {
+      "id": "core-rust-workspace",
+      "claim": "A substantial Rust implementation artifact exists and compiles far enough to run the release CLI and most tests.",
+      "evidence": [
+        "cd implementation && cargo test --release compiled the workspace and executed tests.",
+        "The rerun ended with 68 passed tests and 2 failed tests, both in regsynth-certificate."
+      ]
+    }
+  ],
+  "scripts_used": [
+    {
+      "command": "cd implementation && cargo test --release",
+      "exit_code": 101,
+      "status": "partial_success",
+      "results": [
+        "Workspace compiled in release mode and unit tests ran.",
+        "68 tests passed.",
+        "2 tests failed: pareto_cert::tests::generate_pareto_cert_two_points and verifier::tests::verify_pareto_cert.",
+        "These failures mean certificate generation/verification is not yet fully validated in the current checkout."
+      ]
+    },
+    {
+      "command": "./implementation/target/release/regsynth benchmark --iterations 2 --num-obligations 10 --num-jurisdictions 2 --output-format json",
+      "exit_code": 0,
+      "status": "success",
+      "results": [
+        "Iteration 1: 14 constraints, FEASIBLE, frontier size 1, total_ms 0.",
+        "Iteration 2: 15 constraints, FEASIBLE, frontier size 1, total_ms 0.",
+        "Summary: avg_constraints 14.5, avg_frontier_size 1.0, avg_total_ms 0.0."
+      ]
+    },
+    {
+      "command": "python3 run_benchmark.py",
+      "exit_code": 0,
+      "status": "success_with_caveats",
+      "results": [
+        "Rewrote benchmarks/real_benchmark_results.json using repo-relative paths.",
+        "MaxSMT_Synthesis: success_rate 0.625, avg_hypervolume 0.3219, avg_synthesis_time_ms 10.7628, avg_constraint_satisfaction_rate 1.0.",
+        "NSGA-II: success_rate 1.0, avg_hypervolume 0.3911, avg_synthesis_time_ms 37.4127.",
+        "ILP: success_rate 1.0, avg_hypervolume 0.3529, avg_synthesis_time_ms 2.6172.",
+        "Weighted_Sum: success_rate 1.0, avg_hypervolume 0.4068, avg_synthesis_time_ms 0.0222.",
+        "Epsilon_Constraint: success_rate 1.0, avg_hypervolume 0.4828, avg_synthesis_time_ms 0.0608.",
+        "MaxSMT failed on finserv_consumer_protection and environmental_multimedia because the current script tried to convert symbolic bounds to float."
+      ]
+    },
+    {
+      "command": "python3 benchmarks/pareto_dominance_validation.py --runs 5 --bf-runs 10 --traj-runs 20",
+      "exit_code": 0,
+      "status": "success",
+      "results": [
+        "Rewrote benchmarks/results/pareto_dominance_validation.json.",
+        "dominance_correctness_pass_rate = 1.0",
+        "mean_hv_ratio_vs_bruteforce = 0.984",
+        "min_hv_ratio_vs_bruteforce = 0.9158",
+        "trajectory_domination_rate = 0.15",
+        "trajectory_hv_improvement_pct = 21.84"
+      ]
+    }
+  ],
+  "artifacts_inspected": [
+    "README.md",
+    "tool_paper.tex",
+    "benchmarks/sota_benchmark.py",
+    "benchmarks/highdim_pareto_benchmark.py",
+    "benchmarks/pareto_dominance_validation.py",
+    "benchmarks/real_benchmark_results.json",
+    "benchmarks/results/highdim_pareto_results.json",
+    "benchmarks/results/pareto_dominance_validation.json",
+    "implementation/Cargo.toml",
+    "implementation/crates/regsynth-cli/Cargo.toml",
+    "implementation/crates/regsynth-cli/src/commands/analyze.rs",
+    "implementation/crates/regsynth-cli/src/commands/certify.rs",
+    "examples/pareto_frontier.rs",
+    "examples/temporal_trajectory.rs",
+    "examples/infeasibility_certificate.rs"
+  ],
+  "supported_claims": [
+    "The repository contains a real Rust implementation of a compliance-oriented DSL/encoding/solver/Pareto/planning pipeline.",
+    "Small synthetic instances can be generated and solved end to end through the regsynth CLI benchmark subcommand.",
+    "The shipped synthetic Python harness can compare multiple optimization methods on toy regulatory scenarios.",
+    "The Pareto validation harness can check non-domination properties and compare a MaxSMT-style frontier approximation against brute force on reduced instances."
+  ],
+  "unsupported_or_caveated_claims": [
+    "Do not claim industrial-scale runtime or fixed performance on 300+ obligation workloads; no such rerun evidence was produced here.",
+    "Do not claim MaxSMT wins the bundled benchmark suite overall; the rerun showed lower average hypervolume than Epsilon_Constraint, Weighted_Sum, and NSGA-II, plus only 62.5% success rate.",
+    "Do not claim full real-world regulatory fidelity; the benchmark scenarios are small synthetic abstractions with 4-6 constraints each.",
+    "Do not claim fully validated certificate generation while two regsynth-certificate tests still fail.",
+    "Do not use the historical high-dimensional recommendation text as current evidence; that script/result pair was inspected but not rerun to completion during this recovery pass."
+  ],
+  "broken_paths_repaired": [
+    {
+      "file": "run_benchmark.py",
+      "issue": "Stale absolute import/output paths pointed at another checkout under pipeline_staging.",
+      "repair": "Changed the script to resolve benchmark imports and output paths relative to the current repository root."
+    },
+    {
+      "file": "implementation/crates/regsynth-cli/Cargo.toml and src/commands/certify.rs",
+      "issue": "cargo test --release initially failed before running tests because tempfile was missing and a test import of ParetoFrontier was ambiguous.",
+      "repair": "Added tempfile as a dev-dependency and disambiguated the ParetoFrontier import so the test suite now runs far enough to expose the remaining real certificate failures."
+    }
+  ],
+  "remaining_limitations": [
+    "The high-dimensional Pareto benchmark is expensive by default and was not part of the recovered evidence set.",
+    "Top-level Rust example files are present as source artifacts but are not wired into Cargo as runnable examples in this checkout.",
+    "Certificate-related behavior still needs debugging because two release-test failures remain in regsynth-certificate."
+  ]
+}

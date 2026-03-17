@@ -1,0 +1,124 @@
+// SoniType Example: Multivariate Data Sonification
+// ==================================================
+// Sonifies a 4-variable physiological monitoring dataset with
+// simultaneous auditory streams. Demonstrates stream segregation,
+// masking avoidance, and cognitive load budgeting.
+//
+// Usage:
+//   sonitype compile multivariate.soni -o multivariate.wav
+//   sonitype check multivariate.soni --verbose
+
+// Declare multivariate data source.
+data PatientVitals {
+    timestamp: Time,
+    heart_rate: Float { min: 40.0, max: 200.0, unit: "bpm" },
+    blood_pressure_systolic: Float { min: 60.0, max: 220.0, unit: "mmHg" },
+    spo2: Float { min: 70.0, max: 100.0, unit: "%" },
+    respiration_rate: Float { min: 6.0, max: 40.0, unit: "breaths/min" },
+}
+
+// Stream 1: Heart rate → pitch (low register)
+stream heart_stream {
+    source: PatientVitals,
+
+    map heart_rate -> pitch {
+        scale: linear,
+        range: 130.0 Hz .. 520.0 Hz,     // C3 to C5 — low-mid register
+    },
+
+    map heart_rate -> rate {
+        scale: linear,
+        range: 0.67 Hz .. 3.33 Hz,       // Pulse at actual heart rate / 60
+    },
+
+    timbre: "warm_pulse",
+    envelope: { attack: 5 ms, decay: 80 ms, sustain: 0.0, release: 50 ms },
+}
+
+// Stream 2: Blood pressure → loudness + brightness
+stream bp_stream {
+    source: PatientVitals,
+
+    map blood_pressure_systolic -> pitch {
+        scale: linear,
+        range: 800.0 Hz .. 2400.0 Hz,    // Mid-high register (segregated from heart)
+    },
+
+    map blood_pressure_systolic -> loudness {
+        scale: linear,
+        range: -24 dBFS .. -8 dBFS,
+    },
+
+    timbre: "bright_saw",
+    envelope: { attack: 20 ms, decay: 200 ms, sustain: 0.5, release: 150 ms },
+    pan: -0.5,                             // Slight left panning
+}
+
+// Stream 3: SpO2 → continuous tone with brightness
+stream spo2_stream {
+    source: PatientVitals,
+
+    map spo2 -> pitch {
+        scale: linear,
+        range: 3000.0 Hz .. 5000.0 Hz,    // High register — urgent when dropping
+    },
+
+    map (100.0 - spo2) -> loudness {
+        scale: exponential,
+        range: -40 dBFS .. -6 dBFS,       // Gets louder as SpO2 drops
+    },
+
+    timbre: "pure_sine",
+    envelope: { attack: 50 ms, decay: 100 ms, sustain: 0.8, release: 200 ms },
+    pan: 0.5,                              // Slight right panning
+}
+
+// Stream 4: Respiration → rhythmic texture
+stream resp_stream {
+    source: PatientVitals,
+
+    map respiration_rate -> rate {
+        scale: linear,
+        range: 0.1 Hz .. 0.67 Hz,         // Breathing rhythm
+    },
+
+    map respiration_rate -> pitch {
+        scale: linear,
+        range: 180.0 Hz .. 400.0 Hz,      // Low register, breathy
+    },
+
+    timbre: "noise_filtered",              // Breath-like texture
+    envelope: { attack: 200 ms, decay: 300 ms, sustain: 0.3, release: 500 ms },
+    pan: 0.0,                              // Center
+}
+
+// Perceptual constraints for the composition.
+compose vitals_display {
+    streams: [heart_stream, bp_stream, spo2_stream, resp_stream],
+
+    where {
+        // All stream pairs must segregate
+        segregation(heart_stream, bp_stream) >= "strong",
+        segregation(heart_stream, spo2_stream) >= "strong",
+        segregation(bp_stream, spo2_stream) >= "moderate",
+        segregation(resp_stream, heart_stream) >= "moderate",
+
+        // Masking clearance across all Bark bands
+        masking_clearance >= 6.0 dB,
+
+        // Cognitive load within Cowan's limit
+        cognitive_load <= 4,
+
+        // JND margins
+        jnd_margin(pitch) >= 1.5,
+        jnd_margin(loudness) >= 1.5,
+    },
+}
+
+// Output configuration.
+output {
+    streams: vitals_display,
+    sample_rate: 44100 Hz,
+    buffer_size: 256,                      // Low latency for real-time monitoring
+    format: wav { bit_depth: 24 },
+}

@@ -1,0 +1,424 @@
+{
+  "project": "ConservationLint — sim-conservation-auditor",
+  "version": "0.1.0",
+  "description": "Formal conservation law auditing for physics simulations",
+  "groundings": [
+    {
+      "claim": "Every continuous symmetry of a physical system corresponds to a conserved quantity",
+      "theorem": "Noether's First Theorem (1918)",
+      "citation": {
+        "author": "E. Noether",
+        "title": "Invariante Variationsprobleme",
+        "journal": "Nachrichten von der Gesellschaft der Wissenschaften zu Göttingen, Mathematisch-Physikalische Klasse",
+        "year": 1918,
+        "pages": "235-257",
+        "doi": "10.1007/BF01457068"
+      },
+      "code_paths": [
+        "sim-laws/src/energy.rs — energy from time-translation symmetry",
+        "sim-laws/src/momentum.rs — momentum from spatial-translation symmetry",
+        "sim-laws/src/angular_momentum.rs — angular momentum from rotational symmetry",
+        "sim-laws/src/charge.rs — charge from U(1) gauge symmetry",
+        "sim-laws/src/symplectic.rs — Liouville's theorem from Hamiltonian structure",
+        "conservation-types/src/symmetry.rs — SymmetryGroup, SymmetryGenerator, LieAlgebra"
+      ]
+    },
+    {
+      "claim": "Symplectic integrators exactly preserve a modified Hamiltonian, bounding energy error for exponentially long times",
+      "theorem": "Backward Error Analysis for Symplectic Methods (Theorem IX.8.1)",
+      "citation": {
+        "author": "E. Hairer, C. Lubich, G. Wanner",
+        "title": "Geometric Numerical Integration: Structure-Preserving Algorithms for Ordinary Differential Equations",
+        "publisher": "Springer",
+        "edition": "2nd",
+        "year": 2006,
+        "isbn": "978-3-540-30663-4",
+        "doi": "10.1007/3-540-30666-8",
+        "chapters": ["IX: Backward Error Analysis", "VI: Symplectic Integration of Hamiltonian Systems"]
+      },
+      "code_paths": [
+        "sim-analysis/src/backward_error.rs — ModifiedEquation, ModifiedHamiltonian, ShadowOrbit",
+        "sim-integrator/src/verlet.rs — Störmer-Verlet (symplectic, order 2)",
+        "sim-integrator/src/yoshida.rs — Yoshida 4th/6th/8th order (symplectic)",
+        "sim-integrator/src/leapfrog.rs — Leapfrog DKD/KDK (symplectic, order 2)",
+        "sim-laws/src/symplectic.rs — SymplecticFormComputation, SymplecticMatrixCheck"
+      ]
+    },
+    {
+      "claim": "Splitting methods decompose Hamiltonian evolution into exactly solvable sub-flows",
+      "theorem": "Baker-Campbell-Hausdorff expansion for operator splitting",
+      "citation": {
+        "author": "R. I. McLachlan, G. R. W. Quispel",
+        "title": "Splitting Methods",
+        "journal": "Acta Numerica",
+        "volume": 11,
+        "year": 2002,
+        "pages": "341-434",
+        "doi": "10.1017/S0962492902000053"
+      },
+      "code_paths": [
+        "sim-integrator/src/splitting.rs — LieTrotter, StrangSplitting",
+        "sim-integrator/src/composition.rs — ABAComposition, SuzukiComposition, TripleJump"
+      ]
+    },
+    {
+      "claim": "Higher-order symplectic integrators can be constructed by symmetric composition (triple-jump technique)",
+      "theorem": "Yoshida's composition method",
+      "citation": {
+        "author": "H. Yoshida",
+        "title": "Construction of higher order symplectic integrators",
+        "journal": "Physics Letters A",
+        "volume": 150,
+        "number": "5-7",
+        "year": 1990,
+        "pages": "262-268",
+        "doi": "10.1016/0375-9601(90)90092-3"
+      },
+      "code_paths": [
+        "sim-integrator/src/yoshida.rs — Yoshida4, Yoshida6, Yoshida8 with exact coefficients",
+        "sim-integrator/src/composition.rs — TripleJump for recursive composition"
+      ]
+    },
+    {
+      "claim": "Fourth-order symplectic integrators with optimized error constants exist (Forest-Ruth, PEFRL)",
+      "citation": {
+        "author": "E. Forest, R. D. Ruth",
+        "title": "Fourth-order symplectic integration",
+        "journal": "Physica D: Nonlinear Phenomena",
+        "volume": 43,
+        "number": 1,
+        "year": 1990,
+        "pages": "105-117",
+        "doi": "10.1016/0167-2789(90)90019-L"
+      },
+      "additional_citation": {
+        "author": "I. P. Omelyan, I. M. Mryglod, R. Folk",
+        "title": "Optimized Forest-Ruth- and Suzuki-like algorithms for integration of motion in many-body systems",
+        "journal": "Computer Physics Communications",
+        "volume": 146,
+        "number": 2,
+        "year": 2002,
+        "pages": "188-199",
+        "doi": "10.1016/S0010-4655(02)00451-4"
+      },
+      "code_paths": [
+        "sim-integrator/src/forest_ruth.rs — ForestRuth, PEFRL (position-extended)"
+      ]
+    },
+    {
+      "claim": "Hamiltonian systems preserve the symplectic 2-form and phase-space volume (Liouville's theorem)",
+      "theorem": "Liouville's Theorem on phase-space volume preservation",
+      "citation": {
+        "author": "V. I. Arnold",
+        "title": "Mathematical Methods of Classical Mechanics",
+        "publisher": "Springer",
+        "edition": "2nd",
+        "year": 1989,
+        "isbn": "978-0-387-96890-2",
+        "doi": "10.1007/978-1-4757-2063-1",
+        "chapters": ["Chapter 10: Symplectic manifolds", "Appendix 3: Symplectic structures"]
+      },
+      "code_paths": [
+        "sim-laws/src/symplectic.rs — PhaseSpaceVolume, PoincareInvariant",
+        "sim-types/src/phase_space.rs — PhaseSpacePoint, SymplecticForm",
+        "sim-analysis/src/phase_portrait.rs — PhaseAreaResult, KamTorusResult"
+      ]
+    },
+    {
+      "claim": "CUSUM (Cumulative Sum) charts detect small persistent shifts in time-series data",
+      "theorem": "Page's CUSUM procedure for change-point detection",
+      "citation": {
+        "author": "E. S. Page",
+        "title": "Continuous Inspection Schemes",
+        "journal": "Biometrika",
+        "volume": 41,
+        "number": "1-2",
+        "year": 1954,
+        "pages": "100-115",
+        "doi": "10.1093/biomet/41.1-2.100"
+      },
+      "code_paths": [
+        "sim-detect/src/cusum.rs — Cusum, TwoSidedCusum, VmaskCusum"
+      ]
+    },
+    {
+      "claim": "The PELT algorithm provides exact, linear-time change-point detection",
+      "theorem": "Pruned Exact Linear Time (PELT) method",
+      "citation": {
+        "author": "R. Killick, P. Fearnhead, I. A. Eckley",
+        "title": "Optimal Detection of Changepoints with a Linear Computational Cost",
+        "journal": "Journal of the American Statistical Association",
+        "volume": 107,
+        "number": 500,
+        "year": 2012,
+        "pages": "1590-1598",
+        "doi": "10.1080/01621459.2012.737745"
+      },
+      "code_paths": [
+        "sim-detect/src/localization.rs — Pelt, CostFunction, LocalizationResult"
+      ]
+    },
+    {
+      "claim": "Discrete mechanics and variational integrators preserve discrete analogues of continuous symmetries",
+      "theorem": "Discrete Noether's Theorem",
+      "citation": {
+        "author": "J. E. Marsden, M. West",
+        "title": "Discrete Mechanics and Variational Integrators",
+        "journal": "Acta Numerica",
+        "volume": 10,
+        "year": 2001,
+        "pages": "357-514",
+        "doi": "10.1017/S096249290100006X"
+      },
+      "code_paths": [
+        "sim-integrator/src/verlet.rs — variational structure of Verlet",
+        "sim-laws/src/symplectic.rs — discrete symplectic form checks"
+      ]
+    },
+    {
+      "claim": "SHAKE and RATTLE algorithms enforce holonomic constraints while preserving symplecticity",
+      "citations": [
+        {
+          "author": "J.-P. Ryckaert, G. Ciccotti, H. J. C. Berendsen",
+          "title": "Numerical integration of the cartesian equations of motion of a system with constraints: molecular dynamics of n-alkanes",
+          "journal": "Journal of Computational Physics",
+          "volume": 23,
+          "number": 3,
+          "year": 1977,
+          "pages": "327-341",
+          "doi": "10.1016/0021-9991(77)90098-5"
+        },
+        {
+          "author": "H. C. Andersen",
+          "title": "Rattle: A 'velocity' version of the shake algorithm for molecular dynamics calculations",
+          "journal": "Journal of Computational Physics",
+          "volume": 52,
+          "number": 1,
+          "year": 1983,
+          "pages": "24-34",
+          "doi": "10.1016/0021-9991(83)90014-1"
+        }
+      ],
+      "code_paths": [
+        "sim-repair/src/manifold.rs — SHAKE/RATTLE constraint satisfaction",
+        "sim-repair/src/constraint.rs — constraint evaluation and Jacobian"
+      ]
+    },
+    {
+      "claim": "Conservation violations in climate models can corrupt radiative balance and persist undetected for years",
+      "citation": {
+        "author": "S. Wan, M. Zhang, F. Raber, P. Sabin, M. van Lier-Walqui, S. Fridlind",
+        "title": "Identifying and correcting a systematic energy conservation error in a coupled Earth system model",
+        "journal": "Journal of Advances in Modeling Earth Systems (JAMES)",
+        "volume": 11,
+        "year": 2019,
+        "doi": "10.1029/2019MS001749"
+      },
+      "code_paths": [
+        "sim-detect/src/drift_detect.rs — secular drift detection",
+        "sim-detect/src/detector.rs — multi-quantity simultaneous monitoring"
+      ]
+    },
+    {
+      "claim": "Lyapunov exponents characterize the rate of divergence of nearby trajectories in dynamical systems",
+      "citation": {
+        "author": "G. Benettin, L. Galgani, A. Giorgilli, J.-M. Strelcyn",
+        "title": "Lyapunov Characteristic Exponents for smooth dynamical systems and for hamiltonian systems; A method for computing all of them",
+        "journal": "Meccanica",
+        "volume": 15,
+        "year": 1980,
+        "pages": "9-30",
+        "doi": "10.1007/BF02128236"
+      },
+      "code_paths": [
+        "sim-analysis/src/lyapunov.rs — LyapunovResult, LyapunovSpectrum, FtleField"
+      ]
+    },
+    {
+      "claim": "KAM theory guarantees persistence of quasi-periodic orbits under small Hamiltonian perturbations",
+      "theorem": "Kolmogorov-Arnold-Moser (KAM) Theorem",
+      "citations": [
+        {
+          "author": "A. N. Kolmogorov",
+          "title": "On conservation of conditionally periodic motions for a small change in Hamilton's function",
+          "journal": "Doklady Akademii Nauk SSSR",
+          "volume": 98,
+          "year": 1954,
+          "pages": "527-530"
+        },
+        {
+          "author": "V. I. Arnold",
+          "title": "Proof of a theorem of A. N. Kolmogorov on the invariance of quasi-periodic motions under small perturbations of the Hamiltonian",
+          "journal": "Russian Mathematical Surveys",
+          "volume": 18,
+          "number": 5,
+          "year": 1963,
+          "pages": "9-36"
+        }
+      ],
+      "code_paths": [
+        "sim-analysis/src/phase_portrait.rs — KamTorusResult, phase-space area computation",
+        "sim-analysis/src/poincare.rs — PoincareSection, ReturnMap, WindingNumberResult"
+      ]
+    },
+    {
+      "claim": "Kelvin's circulation theorem states that circulation is conserved along material contours in inviscid barotropic flow",
+      "theorem": "Kelvin's Circulation Theorem (1869)",
+      "citation": {
+        "author": "Lord Kelvin (W. Thomson)",
+        "title": "On Vortex Motion",
+        "journal": "Transactions of the Royal Society of Edinburgh",
+        "volume": 25,
+        "year": 1869,
+        "pages": "217-260"
+      },
+      "code_paths": [
+        "sim-laws/src/vorticity.rs — Circulation, KelvinCirculationTheorem, Enstrophy"
+      ]
+    },
+    {
+      "claim": "The Boris algorithm preserves phase-space volume and energy in pure magnetic fields",
+      "citation": {
+        "author": "J. P. Boris",
+        "title": "Relativistic plasma simulation-optimization of a hybrid code",
+        "booktitle": "Proceedings of the Fourth Conference on Numerical Simulation of Plasmas",
+        "year": 1970,
+        "pages": "3-67",
+        "publisher": "Naval Research Laboratory"
+      },
+      "additional_citation": {
+        "author": "H. Qin, S. Zhang, J. Xiao, J. Liu, Y. Sun, W. M. Tang",
+        "title": "Why is Boris algorithm so good?",
+        "journal": "Physics of Plasmas",
+        "volume": 20,
+        "number": 8,
+        "year": 2013,
+        "pages": "084503",
+        "doi": "10.1063/1.4818428"
+      },
+      "code_paths": [
+        "examples/electromagnetic_audit.rs — Boris push implementation",
+        "sim-eval/src/charged.rs — CyclotronMotion, ExBDrift"
+      ]
+    },
+    {
+      "claim": "Gauss-Legendre Runge-Kutta methods are both symplectic and A-stable",
+      "citation": {
+        "author": "B. Leimkuhler, S. Reich",
+        "title": "Simulating Hamiltonian Dynamics",
+        "publisher": "Cambridge University Press",
+        "year": 2004,
+        "isbn": "978-0-521-77290-1",
+        "doi": "10.1017/CBO9780511614118",
+        "chapters": ["Chapter 4: The Störmer-Verlet Method", "Chapter 5: Symmetric Composition Methods"]
+      },
+      "code_paths": [
+        "sim-integrator/src/gauss_legendre.rs — GaussLegendre2, GaussLegendre4, GaussLegendre6",
+        "sim-integrator/src/implicit_midpoint.rs — ImplicitMidpoint (GL order 1)"
+      ]
+    },
+    {
+      "claim": "Lennard-Jones and Morse potentials model interatomic interactions in molecular dynamics",
+      "citations": [
+        {
+          "author": "J. E. Lennard-Jones",
+          "title": "On the Determination of Molecular Fields",
+          "journal": "Proceedings of the Royal Society of London A",
+          "volume": 106,
+          "number": 738,
+          "year": 1924,
+          "pages": "463-477",
+          "doi": "10.1098/rspa.1924.0082"
+        },
+        {
+          "author": "P. M. Morse",
+          "title": "Diatomic Molecules According to the Wave Mechanics. II. Vibrational Levels",
+          "journal": "Physical Review",
+          "volume": 34,
+          "number": 1,
+          "year": 1929,
+          "pages": "57-64",
+          "doi": "10.1103/PhysRev.34.57"
+        }
+      ],
+      "code_paths": [
+        "sim-laws/src/potentials.rs — LennardJonesPotential, MorsePotential, YukawaPotential"
+      ]
+    },
+    {
+      "claim": "Richardson extrapolation enables estimation of integrator convergence order from numerical data",
+      "citation": {
+        "author": "L. F. Richardson",
+        "title": "The Approximate Arithmetical Solution by Finite Differences of Physical Problems involving Differential Equations, with an Application to the Stresses in a Masonry Dam",
+        "journal": "Philosophical Transactions of the Royal Society of London A",
+        "volume": 210,
+        "year": 1911,
+        "pages": "307-357",
+        "doi": "10.1098/rsta.1911.0009"
+      },
+      "code_paths": [
+        "sim-analysis/src/convergence.rs — RichardsonResult, ConvergenceOrderResult"
+      ]
+    }
+  ],
+  "comparison_with_existing_tools": {
+    "GROMACS": {
+      "tool": "gmx energy",
+      "description": "Extracts energy terms from .edr files; plots total/kinetic/potential energy over time",
+      "limitations": "Single-quantity monitoring only, no statistical detection, no change-point localization, no multi-law simultaneous auditing, no repair",
+      "citation": {
+        "author": "M. J. Abraham et al.",
+        "title": "GROMACS: High performance molecular simulations through multi-level parallelism from laptops to supercomputers",
+        "journal": "SoftwareX",
+        "volume": "1-2",
+        "year": 2015,
+        "pages": "19-25",
+        "doi": "10.1016/j.softx.2015.06.001"
+      }
+    },
+    "LAMMPS": {
+      "tool": "thermo_style / fix ave/time",
+      "description": "Periodic thermodynamic output including temperature, pressure, energy; can compute per-atom and per-group quantities",
+      "limitations": "Threshold-based alerts only, no statistical analysis, no backward error analysis, limited to built-in quantities",
+      "citation": {
+        "author": "A. P. Thompson et al.",
+        "title": "LAMMPS - a flexible simulation tool for particle-based materials modeling at the atomic, meso, and continuum scales",
+        "journal": "Computer Physics Communications",
+        "volume": 271,
+        "year": 2022,
+        "pages": "108171",
+        "doi": "10.1016/j.cpc.2021.108171"
+      }
+    },
+    "MATLAB_ODE_Suite": {
+      "tool": "ode45, ode113, ode15s with event detection",
+      "description": "Adaptive ODE solvers with local error control and event detection; mass matrix support for DAEs",
+      "limitations": "Local error control only (not global conservation), no conservation-specific monitoring, no multi-law auditing, no repair strategies",
+      "citation": {
+        "author": "L. F. Shampine, M. W. Reichelt",
+        "title": "The MATLAB ODE Suite",
+        "journal": "SIAM Journal on Scientific Computing",
+        "volume": 18,
+        "number": 1,
+        "year": 1997,
+        "pages": "1-22",
+        "doi": "10.1137/S1064827594276424"
+      }
+    },
+    "ESMValTool": {
+      "tool": "ESMValTool conservation diagnostics",
+      "description": "Earth System Model evaluation tool with conservation diagnostics for climate models",
+      "limitations": "Domain-specific to climate models, no general-purpose conservation auditing, no statistical change-point detection",
+      "citation": {
+        "author": "V. Eyring et al.",
+        "title": "ESMValTool v2.0 - Technical overview",
+        "journal": "Geoscientific Model Development",
+        "volume": 13,
+        "year": 2020,
+        "pages": "3383-3438",
+        "doi": "10.5194/gmd-13-3383-2020"
+      }
+    }
+  },
+  "niche": "Formal conservation law auditing across MULTIPLE conservation quantities SIMULTANEOUSLY with statistical detection, change-point localization, backward error analysis, and automated repair — capabilities not available in any existing tool"
+}

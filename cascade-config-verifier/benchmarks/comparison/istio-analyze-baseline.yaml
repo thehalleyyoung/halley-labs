@@ -1,0 +1,427 @@
+# istioctl analyze vs CascadeVerify Comparison Baseline
+#
+# This config contains issues that `istioctl analyze` catches AND issues that
+# only CascadeVerify catches. Demonstrates complementary analysis approaches.
+#
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │ WHAT `istioctl analyze` FINDS (Istio config hygiene):                 │
+# │  • VirtualService referencing a host with no matching Service         │
+# │  • Missing DestinationRules for traffic-policy-dependent services     │
+# │  • Gateway selector not matching any pod                              │
+# │  • Conflicting VirtualService definitions                             │
+# │                                                                       │
+# │ WHAT `istioctl analyze` MISSES (cascade semantics):                   │
+# │  ✗ Retry amplification across multi-hop paths                        │
+# │  ✗ Timeout budget violations (child timeouts exceed parent)           │
+# │  ✗ Fan-in overload from convergent retry paths                       │
+# │  ✗ Cascading failure blast radius                                    │
+# │                                                                       │
+# │ WHAT CASCADE-VERIFY FINDS (that istioctl doesn't):                    │
+# │  ✓ Path amplification: frontend→orders→inventory→db = 4×3×3 = 36×   │
+# │  ✓ Timeout violation: child timeout 30s > parent's perTryTimeout 10s │
+# │  ✓ Budget overrun: worst-case 4×10s + 3×8s + 3×5s = 79s > 60s SLA  │
+# │  ✓ Inventory service fan-in from orders + recommendations            │
+# └─────────────────────────────────────────────────────────────────────────┘
+
+# ===== Services (Kubernetes) =====
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: ecommerce
+  labels:
+    app: frontend
+spec:
+  selector:
+    app: frontend
+  ports:
+  - port: 8080
+    targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders
+  namespace: ecommerce
+  labels:
+    app: orders
+spec:
+  selector:
+    app: orders
+  ports:
+  - port: 8080
+    targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: recommendations
+  namespace: ecommerce
+  labels:
+    app: recommendations
+spec:
+  selector:
+    app: recommendations
+  ports:
+  - port: 8080
+    targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory
+  namespace: ecommerce
+  labels:
+    app: inventory
+spec:
+  selector:
+    app: inventory
+  ports:
+  - port: 8080
+    targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  namespace: ecommerce
+  labels:
+    app: db
+spec:
+  selector:
+    app: db
+  ports:
+  - port: 5432
+    targetPort: 5432
+
+# NOTE: No Service for "analytics" — istioctl analyze will flag the orphaned
+# VirtualService below. CascadeVerify would also note that analytics is
+# unreachable but focuses on the retry/timeout implications.
+
+# ===== Deployments =====
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: ecommerce
+  labels:
+    app: frontend
+  annotations:
+    cascade-verify/capacity: "3000"
+    cascade-verify/baseline-load: "300"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: ecommerce/frontend:v2.1.0
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "1"
+            memory: "512Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders
+  namespace: ecommerce
+  labels:
+    app: orders
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "150"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: orders
+  template:
+    metadata:
+      labels:
+        app: orders
+    spec:
+      containers:
+      - name: orders
+        image: ecommerce/orders:v1.8.0
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recommendations
+  namespace: ecommerce
+  labels:
+    app: recommendations
+  annotations:
+    cascade-verify/capacity: "800"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: recommendations
+  template:
+    metadata:
+      labels:
+        app: recommendations
+    spec:
+      containers:
+      - name: recommendations
+        image: ecommerce/recommendations:v1.3.0
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory
+  namespace: ecommerce
+  labels:
+    app: inventory
+  annotations:
+    cascade-verify/capacity: "500"
+    cascade-verify/baseline-load: "80"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: inventory
+  template:
+    metadata:
+      labels:
+        app: inventory
+    spec:
+      containers:
+      - name: inventory
+        image: ecommerce/inventory:v2.0.0
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+  namespace: ecommerce
+  labels:
+    app: db
+  annotations:
+    cascade-verify/capacity: "200"
+    cascade-verify/baseline-load: "50"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: db
+  template:
+    metadata:
+      labels:
+        app: db
+    spec:
+      containers:
+      - name: db
+        image: postgres:15
+        ports:
+        - containerPort: 5432
+        resources:
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+
+# ===== Istio VirtualServices =====
+
+# istioctl analyze: PASS — valid VirtualService with matching Service
+# CascadeVerify: WARNING — 3 retries × 10s = 40s worst-case per hop
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: frontend-to-orders
+  namespace: ecommerce
+spec:
+  hosts:
+  - orders
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 10s
+      retryOn: 5xx,reset,connect-failure,retriable-4xx
+    timeout: 45s
+    route:
+    - destination:
+        host: orders
+        port:
+          number: 8080
+
+# istioctl analyze: PASS
+# CascadeVerify: WARNING — 2 retries, creates second fan-in path to inventory
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: frontend-to-recommendations
+  namespace: ecommerce
+spec:
+  hosts:
+  - recommendations
+  http:
+  - retries:
+      attempts: 2
+      perTryTimeout: 5s
+      retryOn: 5xx,reset
+    timeout: 20s
+    route:
+    - destination:
+        host: recommendations
+        port:
+          number: 8080
+
+# istioctl analyze: PASS
+# CascadeVerify: CRITICAL — orders→inventory with 2 retries
+# Path: frontend→orders→inventory = (1+3)×(1+2) = 12× on inventory
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: orders-to-inventory
+  namespace: ecommerce
+spec:
+  hosts:
+  - inventory
+  http:
+  - retries:
+      attempts: 2
+      perTryTimeout: 8s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 30s
+    route:
+    - destination:
+        host: inventory
+        port:
+          number: 8080
+
+# istioctl analyze: PASS
+# CascadeVerify: WARNING — recommendations→inventory creates fan-in
+# Fan-in on inventory: 12× from orders path + 3×(1+2)=9× from recs path = 21×
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: recommendations-to-inventory
+  namespace: ecommerce
+spec:
+  hosts:
+  - inventory
+  http:
+  - retries:
+      attempts: 2
+      perTryTimeout: 5s
+      retryOn: 5xx,reset
+    timeout: 20s
+    route:
+    - destination:
+        host: inventory
+        port:
+          number: 8080
+
+# istioctl analyze: PASS
+# CascadeVerify: CRITICAL — inventory→db with 2 retries
+# Full path: frontend→orders→inventory→db = (1+3)×(1+2)×(1+2) = 36× on db
+# CascadeVerify: CRITICAL — timeout violation: child timeout 15s > parent
+#   perTryTimeout of 8s on orders→inventory edge (timeout inversion)
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: inventory-to-db
+  namespace: ecommerce
+spec:
+  hosts:
+  - db
+  http:
+  - retries:
+      attempts: 2
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 15s
+    route:
+    - destination:
+        host: db
+        port:
+          number: 5432
+
+# istioctl analyze: WARNING — VirtualService references host "analytics"
+#   which has no matching Service in namespace "ecommerce"
+# CascadeVerify: INFO — analytics is unreachable (no Service), but this is
+#   also a dangling retry configuration that wastes client resources
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: frontend-to-analytics
+  namespace: ecommerce
+spec:
+  hosts:
+  - analytics
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset
+    timeout: 20s
+    route:
+    - destination:
+        host: analytics
+        port:
+          number: 8080
+
+# istioctl analyze: WARNING — DestinationRule references host "payments"
+#   which has no matching Service
+# CascadeVerify: N/A — no retry/timeout policy to analyze, but notes
+#   the orphaned config
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: payments-circuit-breaker
+  namespace: ecommerce
+spec:
+  host: payments
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        h2UpgradePolicy: DEFAULT
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 1000
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50

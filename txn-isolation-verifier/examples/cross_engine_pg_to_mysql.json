@@ -1,0 +1,72 @@
+{
+  "name": "cross_engine_portability_pg_to_mysql",
+  "description": "Cross-engine portability analysis: a transaction workload that is safe under PostgreSQL Serializable (SSI) but may exhibit anomalies under MySQL REPEATABLE READ due to different concurrency control mechanisms. IsoSpec detects this portability violation.",
+  "source_engine": "postgresql-16",
+  "source_isolation": "serializable",
+  "target_engine": "mysql-8.0",
+  "target_isolation": "repeatable_read",
+  "anomaly_class": "G2-item",
+  "references": [
+    "Adya. Weak Consistency: A Generalized Theory and Optimistic Implementations. PhD thesis, MIT, 1999",
+    "Kleppmann. Hermitage: Testing the 'I' in ACID. 2014"
+  ],
+  "schema": {
+    "inventory": {
+      "columns": [
+        { "name": "item_id", "type": "integer", "nullable": false },
+        { "name": "warehouse", "type": "varchar", "nullable": false },
+        { "name": "quantity", "type": "integer", "nullable": false }
+      ],
+      "primary_key": "item_id"
+    }
+  },
+  "setup_sql": [
+    "CREATE TABLE inventory (item_id INT PRIMARY KEY, warehouse VARCHAR(32) NOT NULL, quantity INT NOT NULL)",
+    "INSERT INTO inventory VALUES (1, 'east', 10), (2, 'west', 10)"
+  ],
+  "workload": {
+    "description": "Transfer between warehouses with availability check. T1 transfers from east to west, T2 transfers from west to east. Both check total availability first.",
+    "transactions": [
+      {
+        "id": "T1",
+        "label": "Transfer east→west",
+        "operations": [
+          { "type": "begin" },
+          { "type": "read", "table": "inventory", "predicate": "item_id IN (1, 2)", "note": "Check total availability" },
+          { "type": "write", "table": "inventory", "predicate": "item_id = 1", "set": { "quantity": "quantity - 5" } },
+          { "type": "write", "table": "inventory", "predicate": "item_id = 2", "set": { "quantity": "quantity + 5" } },
+          { "type": "commit" }
+        ]
+      },
+      {
+        "id": "T2",
+        "label": "Transfer west→east",
+        "operations": [
+          { "type": "begin" },
+          { "type": "read", "table": "inventory", "predicate": "item_id IN (1, 2)", "note": "Check total availability" },
+          { "type": "write", "table": "inventory", "predicate": "item_id = 2", "set": { "quantity": "quantity - 8" } },
+          { "type": "write", "table": "inventory", "predicate": "item_id = 1", "set": { "quantity": "quantity + 8" } },
+          { "type": "commit" }
+        ]
+      }
+    ]
+  },
+  "portability_analysis": {
+    "postgresql_serializable": {
+      "outcome": "SAFE — SSI detects rw-dependency cycle and aborts one transaction",
+      "mechanism": "SIREAD lock tracking detects T1 rw→ T2 rw→ T1 dangerous structure",
+      "final_state": "Consistent: one transfer completes, other retries"
+    },
+    "mysql_repeatable_read": {
+      "outcome": "UNSAFE — write skew possible under snapshot isolation without SSI",
+      "mechanism": "MySQL RR uses snapshot reads; no rw-dependency tracking",
+      "final_state": "Both transfers succeed on stale snapshots. East: 10-5+8=13, West: 10+5-8=7 OR East: 10+8-5=13, West: 10-8+5=7 — depending on commit order, but both saw total=20 when only 20 exists",
+      "note": "The write-skew anomaly is not prevented because MySQL RR does not implement SSI"
+    },
+    "isospec_verdict": {
+      "portable": false,
+      "violation_type": "G2-item (write skew)",
+      "recommendation": "Use MySQL SERIALIZABLE (full 2PL) or add SELECT ... FOR UPDATE to enforce locking reads"
+    }
+  }
+}

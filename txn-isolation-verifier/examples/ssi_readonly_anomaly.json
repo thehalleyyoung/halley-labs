@@ -1,0 +1,53 @@
+{
+  "name": "ssi_readonly_anomaly",
+  "description": "PostgreSQL SSI read-only anomaly: a read-only transaction observes an inconsistent state due to snapshot timing with concurrent write transactions.",
+  "engine": "postgresql-16",
+  "isolation_level": "serializable",
+  "schema": {
+    "receipts": {
+      "columns": [
+        { "name": "id", "type": "varchar", "nullable": false },
+        { "name": "batch", "type": "integer", "nullable": false },
+        { "name": "amount", "type": "integer", "nullable": false }
+      ],
+      "primary_key": "id"
+    },
+    "control": {
+      "columns": [
+        { "name": "key", "type": "varchar", "nullable": false },
+        { "name": "value", "type": "boolean", "nullable": false }
+      ],
+      "primary_key": "key"
+    }
+  },
+  "transactions": [
+    {
+      "id": "T1",
+      "operations": [
+        { "type": "begin", "isolation": "serializable" },
+        { "type": "insert", "table": "receipts", "values": { "id": "r1", "batch": 1, "amount": 100 } },
+        { "type": "commit" }
+      ]
+    },
+    {
+      "id": "T2",
+      "operations": [
+        { "type": "begin", "isolation": "serializable" },
+        { "type": "predicate_read", "table": "receipts", "predicate": "batch = 1", "result_count": 1 },
+        { "type": "write", "table": "control", "key": "batch1_closed", "value": true },
+        { "type": "commit" }
+      ]
+    },
+    {
+      "id": "T3",
+      "read_only": true,
+      "operations": [
+        { "type": "begin", "isolation": "serializable", "read_only": true },
+        { "type": "read", "table": "control", "key": "batch1_closed", "value": true },
+        { "type": "predicate_read", "table": "receipts", "predicate": "batch = 1", "result_count": 0 },
+        { "type": "commit" }
+      ]
+    }
+  ],
+  "expected_anomaly": "G2 (predicate anti-dependency cycle involving read-only transaction)"
+}

@@ -1,0 +1,116 @@
+{
+  "benchmark": "Guava",
+  "version": "33.0.0",
+  "description": "Ground-truth contracts for Guava Preconditions and math functions used in MutSpec benchmarks.",
+  "functions": [
+    {
+      "name": "checkArgument",
+      "signature": "checkArgument(expression: bool) -> void",
+      "preconditions": [
+        { "formula": "true", "provenance": "checkArgument is total; throws on false" }
+      ],
+      "postconditions": [
+        { "formula": "expression == true", "provenance": "guard: only returns normally when expression holds" }
+      ],
+      "mutation_operators": ["ROR"],
+      "expected_tier": 1
+    },
+    {
+      "name": "checkNotNull",
+      "signature": "checkNotNull(reference: T) -> T",
+      "preconditions": [
+        { "formula": "true", "provenance": "total; throws NullPointerException if null" }
+      ],
+      "postconditions": [
+        { "formula": "ret == reference",   "provenance": "identity: returns the non-null reference unchanged" },
+        { "formula": "ret != null",        "provenance": "non-null guarantee on normal return" }
+      ],
+      "mutation_operators": ["ROR"],
+      "expected_tier": 1
+    },
+    {
+      "name": "checkState",
+      "signature": "checkState(expression: bool) -> void",
+      "preconditions": [
+        { "formula": "true", "provenance": "total; throws IllegalStateException on false" }
+      ],
+      "postconditions": [
+        { "formula": "expression == true", "provenance": "guard: only returns normally when state holds" }
+      ],
+      "mutation_operators": ["ROR"],
+      "expected_tier": 1
+    },
+    {
+      "name": "checkElementIndex",
+      "signature": "checkElementIndex(index: int, size: int) -> int",
+      "preconditions": [
+        { "formula": "size >= 0", "provenance": "size must be non-negative" }
+      ],
+      "postconditions": [
+        { "formula": "ret == index",   "provenance": "identity: returns the validated index" },
+        { "formula": "ret >= 0",       "provenance": "non-negative index" },
+        { "formula": "ret < size",     "provenance": "strictly less than size for element access" }
+      ],
+      "mutation_operators": ["ROR", "AOR"],
+      "expected_tier": 1
+    },
+    {
+      "name": "checkPositionIndex",
+      "signature": "checkPositionIndex(index: int, size: int) -> int",
+      "preconditions": [
+        { "formula": "size >= 0", "provenance": "size must be non-negative" }
+      ],
+      "postconditions": [
+        { "formula": "ret == index",   "provenance": "identity: returns the validated index" },
+        { "formula": "ret >= 0",       "provenance": "non-negative index" },
+        { "formula": "ret <= size",    "provenance": "at most size for position access (inclusive)" }
+      ],
+      "mutation_operators": ["ROR", "AOR"],
+      "expected_tier": 1
+    },
+    {
+      "name": "constrainToRange",
+      "signature": "constrainToRange(value: int, min: int, max: int) -> int",
+      "preconditions": [
+        { "formula": "min <= max", "provenance": "range must be non-empty" }
+      ],
+      "postconditions": [
+        { "formula": "ret >= min",                             "provenance": "lower bound" },
+        { "formula": "ret <= max",                             "provenance": "upper bound" },
+        { "formula": "ret == value || ret == min || ret == max", "provenance": "result is input or boundary" },
+        { "formula": "(value >= min && value <= max) -> ret == value", "provenance": "in-range identity" }
+      ],
+      "mutation_operators": ["ROR", "AOR"],
+      "expected_tier": 1
+    },
+    {
+      "name": "saturatedAdd",
+      "signature": "saturatedAdd(a: long, b: long) -> long",
+      "preconditions": [
+        { "formula": "true", "provenance": "saturated arithmetic is total" }
+      ],
+      "postconditions": [
+        { "formula": "ret >= -9223372036854775808", "provenance": "result within long range" },
+        { "formula": "ret <= 9223372036854775807",  "provenance": "result within long range" },
+        { "formula": "(a >= 0 && b >= 0) -> ret >= a",        "provenance": "monotonicity for positive operands" },
+        { "formula": "(a <= 0 && b <= 0) -> ret <= a",        "provenance": "monotonicity for negative operands" }
+      ],
+      "mutation_operators": ["ROR", "AOR"],
+      "expected_tier": 2
+    },
+    {
+      "name": "saturatedMultiply",
+      "signature": "saturatedMultiply(a: long, b: long) -> long",
+      "preconditions": [
+        { "formula": "true", "provenance": "saturated arithmetic is total" }
+      ],
+      "postconditions": [
+        { "formula": "(a == 0 || b == 0) -> ret == 0",               "provenance": "zero annihilation" },
+        { "formula": "(a > 0 && b > 0) -> ret > 0",                  "provenance": "positive * positive = positive" },
+        { "formula": "(a > 0 && b < 0) -> ret < 0 || ret == -9223372036854775808", "provenance": "positive * negative = negative or saturated" }
+      ],
+      "mutation_operators": ["ROR", "AOR", "UOI"],
+      "expected_tier": 2
+    }
+  ]
+}

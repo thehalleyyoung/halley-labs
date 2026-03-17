@@ -31,11 +31,15 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from causalcert.data.synthetic import generate_linear_gaussian
-from causalcert.evaluation.published_dags import get_published_dag, list_published_dags
-from causalcert.fragility.ranking import EdgeSeverity
+from causalcert.evaluation.published_dags import (
+    get_all_published_dags,
+    get_published_dag,
+    get_small_dags,
+    list_published_dags,
+)
 from causalcert.pipeline.config import PipelineRunConfig
 from causalcert.pipeline.orchestrator import CausalCertPipeline
-from causalcert.types import AuditReport, FragilityScore, RobustnessRadius
+from causalcert.types import SolverStrategy
 
 
 # =====================================================================
@@ -77,16 +81,15 @@ def _generate_data_for_dag(
     seed: int,
 ) -> pd.DataFrame:
     """Generate linear-Gaussian data from a DAG."""
-    rng = np.random.default_rng(seed)
-    weights = adj.astype(np.float64) * rng.uniform(0.3, 0.9, size=adj.shape)
-    data = generate_linear_gaussian(
-        adj_matrix=adj,
-        weights=weights,
-        n_samples=n_samples,
+    data, _weights = generate_linear_gaussian(
+        adj,
+        n=n_samples,
         noise_scale=1.0,
+        edge_weight_range=(0.3, 0.9),
         seed=seed,
     )
-    return pd.DataFrame(data, columns=node_names)
+    data.columns = node_names
+    return data
 
 
 def _run_single_dag(
@@ -96,7 +99,7 @@ def _run_single_dag(
 ) -> DAGResult:
     """Run CausalCert on one published DAG and return results."""
     dag_info = get_published_dag(dag_name)
-    adj = dag_info.adj_matrix
+    adj = dag_info.adj
     names = dag_info.node_names
     treatment = dag_info.default_treatment
     outcome = dag_info.default_outcome
@@ -107,7 +110,7 @@ def _run_single_dag(
         treatment=treatment,
         outcome=outcome,
         alpha=0.05,
-        solver_strategy="auto",
+        solver_strategy=SolverStrategy.AUTO,
     )
     pipeline = CausalCertPipeline(config)
     t0 = time.perf_counter()
@@ -115,16 +118,16 @@ def _run_single_dag(
     elapsed = time.perf_counter() - t0
 
     top_edges = [
-        (names[fs.edge[0]], names[fs.edge[1]], fs.score)
+        (names[fs.edge[0]], names[fs.edge[1]], fs.total_score)
         for fs in report.fragility_ranking[:5]
     ]
-    n_load = sum(1 for fs in report.fragility_ranking if fs.score >= 0.4)
+    n_load = sum(1 for fs in report.fragility_ranking if fs.total_score >= 0.4)
 
     ate = None
     ate_se = None
-    if report.estimation_result is not None:
-        ate = report.estimation_result.estimate
-        ate_se = report.estimation_result.std_error
+    if report.baseline_estimate is not None:
+        ate = report.baseline_estimate.ate
+        ate_se = report.baseline_estimate.se
 
     return DAGResult(
         name=dag_name,
@@ -147,9 +150,14 @@ def _run_single_dag(
 def analyse_all_dags(
     n_samples: int = 1000,
     seed: int = 42,
+    max_nodes: int | None = None,
 ) -> CrossDAGSummary:
     """Run CausalCert on every published DAG and build a cross-DAG summary."""
-    dag_names = list_published_dags()
+    dag_names = (
+        [dag.name for dag in get_small_dags(max_nodes)]
+        if max_nodes is not None
+        else [dag.name for dag in get_all_published_dags()]
+    )
     summary = CrossDAGSummary()
 
     print(f"Analysing {len(dag_names)} published DAGs …\n")
@@ -312,6 +320,10 @@ def parse_args() -> argparse.Namespace:
         "--top-k", type=int, default=20,
         help="Number of most-fragile edges to display (default: 20).",
     )
+    parser.add_argument(
+        "--max-nodes", type=int, default=None,
+        help="Restrict to DAGs with at most this many nodes.",
+    )
     return parser.parse_args()
 
 
@@ -324,7 +336,11 @@ def main() -> None:
     ╚══════════════════════════════════════════════════════════╝
     """))
 
-    summary = analyse_all_dags(n_samples=args.samples, seed=args.seed)
+    summary = analyse_all_dags(
+        n_samples=args.samples,
+        seed=args.seed,
+        max_nodes=args.max_nodes,
+    )
 
     print_summary_table(summary)
     print_most_fragile_edges(summary, top_k=args.top_k)

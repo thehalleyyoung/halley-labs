@@ -332,7 +332,7 @@ result = PipelineRunner().run(source_a=tree_a, source_b=tree_b)
 ### From pip
 
 ```bash
-pip install usability-oracle
+pip3.11 install usability-oracle
 ```
 
 ### From source
@@ -340,7 +340,7 @@ pip install usability-oracle
 ```bash
 git clone https://github.com/halley-labs/bounded-rational-usability-oracle.git
 cd bounded-rational-usability-oracle/implementation
-pip install -e ".[dev]"
+pip3.11 install -e ".[dev]"
 ```
 
 ### Requirements
@@ -357,34 +357,22 @@ pip install -e ".[dev]"
 ### 1. CLI: Compare Two HTML Files
 
 ```bash
-usability-oracle diff before.html after.html --output-format json
+usability-oracle diff \
+  tests/fixtures/sample_html/simple_form.html \
+  tests/fixtures/sample_html/navigation_menu.html \
+  --output-format json
 ```
 
-Output:
-```json
-{
-  "verdict": "REGRESSION",
-  "severity": "HIGH",
-  "cost_delta": {
-    "mu": 2.34,
-    "sigma_sq": 0.89
-  },
-  "confidence_interval": [1.12, 3.56],
-  "bottlenecks": [
-    {
-      "type": "choice_paralysis",
-      "severity_score": 0.82,
-      "description": "Navigation menu expanded from 6 to 18 items, exceeding Hick-Hyman capacity threshold",
-      "repair_hint": "Group items into ≤7 categories or add search"
-    }
-  ]
-}
-```
+Audit note: in the current checkout, `--output-format json` still prints
+banner/summary text around the JSON payload, so stdout is not yet clean
+machine-only JSON. The fixture-based smoke run also returned a wrapper object
+(`success`, `stages`, `timing`, ...) rather than the flat
+`{verdict,severity,cost_delta,...}` structure shown in older README versions.
 
 ### 2. CLI: Analyze a Single UI
 
 ```bash
-usability-oracle analyze page.html --verbose
+usability-oracle analyze tests/fixtures/sample_html/simple_form.html --verbose
 ```
 
 ### 3. Python API: Full Pipeline
@@ -394,8 +382,8 @@ from usability_oracle.pipeline.runner import PipelineRunner
 from usability_oracle.accessibility import HTMLAccessibilityParser
 
 parser = HTMLAccessibilityParser()
-tree_a = parser.parse(open("before.html").read())
-tree_b = parser.parse(open("after.html").read())
+tree_a = parser.parse(open("tests/fixtures/sample_html/simple_form.html").read())
+tree_b = parser.parse(open("tests/fixtures/sample_html/navigation_menu.html").read())
 
 runner = PipelineRunner()
 result = runner.run(source_a=tree_a, source_b=tree_b)
@@ -403,7 +391,7 @@ result = runner.run(source_a=tree_a, source_b=tree_b)
 if result.success:
     cr = result.final_result
     print(f"Verdict: {cr['verdict']}")       # regression / neutral / inconclusive
-    print(f"Details: {cr['details']}")
+    print(f"Details: {cr.get('details', {})}")
 
     # Access per-stage outputs for deeper inspection
     bottlenecks = result.stages["bottleneck"].output  # list of bottleneck dicts
@@ -416,6 +404,10 @@ if result.success:
         print(f"  Feasible repairs: {repair.n_feasible}")
 ```
 
+In the audited fixture run, the Python API path returned `success=True` with
+`verdict='inconclusive'`, so treat this snippet as an integration example rather
+than a guaranteed regression verdict on the bundled HTML files.
+
 ### 4. Python API: Individual Components
 
 ```python
@@ -425,7 +417,7 @@ from usability_oracle.algebra import CostElement, SequentialComposer
 
 # Fitts' law: time to click a 50px button 300px away
 mt = FittsLaw.predict(distance=300, width=50)
-print(f"Motor time: {mt:.3f}s")  # ~0.44s
+print(f"Motor time: {mt:.3f}s")  # ~0.47s in the audited run
 
 # Hick-Hyman: choice time for 8-item menu
 rt = HickHymanLaw.predict(8)
@@ -435,7 +427,7 @@ print(f"Choice time: {rt:.3f}s")  # ~0.67s
 motor = CostElement(mu=mt, sigma_sq=0.01, kappa=0.4, lambda_=0.2)
 choice = CostElement(mu=rt, sigma_sq=0.02, kappa=0.6, lambda_=0.3)
 total = SequentialComposer().compose(motor, choice)
-print(f"Total: {total.mu:.3f}s")  # > mt + rt due to coupling
+print(f"Total: {total.mu:.3f}s")  # equals mt + rt when coupling uses the default 0.0
 ```
 
 ### 5. Playwright Integration (End-to-End)

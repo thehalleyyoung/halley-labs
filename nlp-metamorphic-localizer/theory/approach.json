@@ -1,0 +1,400 @@
+{
+  "title": "Where in the Pipeline Did It Break? Causal Fault Localization for Multi-Stage NLP Systems",
+  "slug": "nlp-metamorphic-localizer",
+  "version": "1.0",
+  "date": "2026-03-08",
+  "venue_target": "ISSTA / ASE (primary), ICSE tools track (secondary)",
+
+  "core_thesis": "Causal-differential fault localization across multi-stage NLP inference pipelines, distinguishing fault introduction from fault amplification via interventional replay on typed intermediate representations, with grammar-constrained shrinking to minimal counterexamples.",
+
+  "mathematical_foundations": {
+    "summary": "Two genuinely new contributions (M4, N4), one new formalization (N1), one structural formalization (N3-simplified). M3 and M7 are formal specifications, not novel math. N2 (information-theoretic bounds) is conditional on proof completion.",
+
+    "M4_causal_differential_localization": {
+      "status": "NEW, CORE, LOAD-BEARING",
+      "role": "Crown jewel. Enables the introduction-vs-amplification distinction that no existing tool provides.",
+      "formal_statement": {
+        "pipeline_model": "P = s_1 ∘ s_2 ∘ ... ∘ s_n where s_k: IR_{k-1} → IR_k maps typed intermediate representations. IR_0 = raw text, IR_n = task output.",
+        "per_stage_differential": "Δ_k(x, τ) = d_k(s_k(prefix_k(x)), s_k(prefix_k(τ(x)))) where prefix_k = s_{k-1} ∘ ... ∘ s_1 and d_k is a type-specific distance function.",
+        "localization_rule": "k* = argmax_k [Δ_k(x, τ) - E_{x' ~ calibration}[Δ_k(x', τ) | MR(τ, task) holds for x']]",
+        "causal_refinement": {
+          "intervention": "Replace s_{k*}'s input with prefix_{k*}(x) (original execution's IR) and re-execute stages k* through n.",
+          "introduction": "If violation disappears after intervention at k*, then k* introduced the fault: DCE_{k*}(τ) > 0.",
+          "amplification": "If violation persists but attenuates, k* amplified a pre-existing fault: IE_{k*}(τ) > 0, DCE_{k*}(τ) ≈ 0.",
+          "multi_fault_peeling": "After identifying k_1*, replace k_1*'s output, re-run localization on residual. Converges in ≤ n iterations."
+        }
+      },
+      "complexity": {
+        "spectrum_phase": "O(N · n · C_pipeline) where N = test count, n = stage count, C_pipeline = single pipeline execution cost",
+        "refinement_phase": "O(k · n · C_pipeline) per violation where k = number of suspect stages (typically 1-3)",
+        "total": "O(N · n · C_pipeline + V · k · n · C_pipeline) where V = violation count"
+      },
+      "assumptions": [
+        "Near-deterministic pipeline execution (fixed model weights → deterministic output for fixed input)",
+        "Observable intermediate representations at each stage boundary",
+        "Well-defined type-specific distance functions d_k for each IR type",
+        "Calibration corpus provides unbiased estimate of E[Δ_k | MR holds]"
+      ],
+      "novelty_argument": "SBFL is standard (Ochiai, DStar, Barinel). Causal intervention is standard (Pearl's do-calculus). Their synthesis for NLP pipeline stages — where 'coverage' means linguistic feature processing and intervention operates on typed heterogeneous IRs (token sequences, POS tags, dependency trees, entity spans) — is novel. The introduction-vs-amplification distinction via DCE/IE decomposition does not exist in the SBFL literature because classical statement-level FL has no notion of typed intermediate outputs.",
+      "closest_prior_art": [
+        "Wong et al. 2016 — SBFL for Java programs (statement coverage, not pipeline-stage IR distances)",
+        "Abreu et al. 2009 — Barinel (Bayesian FL, still statement-level)",
+        "Pearl 2009 — SCM + do-calculus (general framework, not instantiated for NLP pipelines)"
+      ]
+    },
+
+    "N1_stage_discriminability_matrix": {
+      "status": "NEW, LOAD-BEARING",
+      "role": "Pre-test diagnostic. Prevents wasting CPU budget on tests that cannot distinguish stages.",
+      "formal_statement": {
+        "definition": "M ∈ R^{n×m} where M_{k,j} = E_{x~G}[Δ_k(x, τ_j)] for n stages, m transformations.",
+        "theorem_a": "The transformation set T can localize faults to a unique stage if and only if rank(M) = n.",
+        "theorem_b": "If rank(M) = r < n, the best achievable localization partitions stages into n - r + 1 equivalence classes of indistinguishable stages.",
+        "practical_estimation": "Estimate M from B ≈ 100-200 calibration samples. Use condition number threshold (κ(M) < 10^4) rather than numerical rank for robustness."
+      },
+      "proof_sketch": {
+        "part_a": "Localization requires distinguishing all n stages. Stage k is distinguishable from stage k' iff there exists τ_j such that M_{k,j} ≠ M_{k',j}, i.e., rows k and k' differ. This holds for all pairs iff the rows are linearly independent, i.e., rank(M) = n. (Standard column-space argument.)",
+        "part_b": "When rank(M) = r < n, the null space of M^T has dimension n-r. Stages whose row-difference lies in this null space are indistinguishable. The equivalence classes are the cosets of the row space, yielding at most n-r+1 classes."
+      },
+      "complexity": "O(B · m · n · C_pipeline) for calibration, where B ≈ 100-200",
+      "assumptions": [
+        "Stage differentials are estimable from finite calibration data",
+        "Linear independence of expected differential vectors implies practical distinguishability (true when sample variance is bounded)"
+      ]
+    },
+
+    "N4_grammar_constrained_shrinking": {
+      "status": "NEW, LOAD-BEARING",
+      "role": "Justifies 1-minimality target, provides convergence guarantee for the shrinker, sets user expectations for counterexample size.",
+      "formal_statement": {
+        "part_a_hardness": {
+          "theorem": "Finding the globally shortest grammatical counterexample that preserves both transformation applicability and metamorphic violation is NP-hard.",
+          "proof_method": "Reduction from Minimum Grammar-Consistent String (MGCS). Given a context-free grammar G and string w ∈ L(G), finding the shortest w' ∈ L(G) with w' a subsequence of w is NP-hard (Jiang & Ravikumar 1991). We reduce MGCS to our problem by encoding the grammar constraint as the validity oracle, the subsequence constraint as the violation preservation, and the shortness objective as the minimization target."
+        },
+        "part_b_convergence": {
+          "theorem": "GCHDD (Grammar-Constrained Hierarchical Delta Debugging) produces a 1-minimal counterexample in at most O(|T_x|^2 · |R|) feature-checker invocations, each costing O(|F|) for feature unification.",
+          "definition_1_minimal": "A counterexample x' is 1-minimal if no single grammar-valid subtree replacement on x' produces a shorter sentence that (i) passes the validity oracle, (ii) remains transformation-applicable, and (iii) preserves the metamorphic violation.",
+          "proof_sketch": "GCHDD iterates over the parse tree T_x in a top-down traversal. At each node, it attempts subtree replacements (deletion, minimal-subtree substitution). Each round reduces the tree by at least one node or marks the node as critical. With |T_x| nodes, at most |T_x| rounds of at most |T_x| replacement attempts per round, with |R| validity checks per attempt. Monotonic decrease in tree size ensures termination.",
+          "conditional_improvement": "If the monotonicity lemma holds (subtree criticality is monotone in a depth-first ordering), binary search reduces to O(|T_x| · log|T_x| · |R|). The monotonicity lemma is empirically observed but not yet proved; the base O(|T_x|^2 · |R|) bound holds unconditionally."
+        },
+        "part_d_expected_ratio": {
+          "theorem": "For grammars with bounded ambiguity α and average branching factor b, the expected counterexample size satisfies E[|x'|] ≤ |x|/b + O(α · log|x|).",
+          "interpretation": "For typical NLP parse trees (b ≈ 3, α ≤ 5): 40-word input → 8-13 word counterexample (3-5× reduction). The '10 Bugs, 10 Words' target is achievable for typical inputs."
+        }
+      },
+      "assumptions": [
+        "Grammar validity oracle V is deterministic and correct (satisfied by Rust feature-unification checker)",
+        "Transformation applicability predicate A is decidable in polynomial time",
+        "Violation predicate B is decidable (requires one pipeline execution per check)",
+        "Bounded ambiguity: each sentence has at most α parse trees under the grammar"
+      ]
+    },
+
+    "N3_simplified_causal_introduction_amplification": {
+      "status": "FORMALIZATION, LOAD-BEARING",
+      "role": "Makes the introduction/amplification distinction precise. Not a deep theorem — a structural definition with one observation.",
+      "formal_statement": {
+        "scm_model": "Pipeline as SCM: S_k = f_k(S_{k-1}, ε_k) where S_0 = input, ε_k captures any stochasticity in stage k.",
+        "direct_causal_effect": "DCE_k(τ) = E[Δ_k | do(S^τ_{k-1} := S_{k-1})] — the divergence at stage k when its input is replaced with the original (untransformed) execution's output.",
+        "indirect_effect": "IE_k(τ) = E[Δ_k] - DCE_k(τ) — the portion of stage k's divergence due to upstream fault propagation.",
+        "interventional_sufficiency": "DCE_k is always identifiable from a single interventional replay at stage k. Cost: O(n · C_pipeline) per violation (replay from stage k through stage n)."
+      },
+      "key_insight": "DCE_k > 0 and IE_k ≈ 0 means stage k introduced the fault. DCE_k ≈ 0 and IE_k > 0 means stage k amplified an upstream fault. Both positive means stage k both introduced new faults and amplified upstream ones. The engine reports both quantities."
+    },
+
+    "M3_composition_theorem": {
+      "status": "FORMAL SPECIFICATION (not novel math)",
+      "role": "Enables coverage optimization. Mentioned in 2-3 sentences, not a contribution.",
+      "statement": "If transformations τ_1, τ_2 modify disjoint syntactic positions and satisfy task-parameterized meaning preservation independently, then their composition preserves meaning with probability ≥ 1-δ, where δ is bounded via Clopper-Pearson exact binomial confidence intervals from empirical validation.",
+      "practical_impact": "Reduces required test count from O(|T|^2) to O(|T| · log|R|) for pairwise coverage. Applies to ~40-60% of transformation pairs (those with truly disjoint syntactic positions)."
+    },
+
+    "M7_behavioral_fragility_index": {
+      "status": "FORMAL SPECIFICATION (metric definition, not novel math)",
+      "role": "Interpretable per-stage amplification metric for the behavioral atlas.",
+      "definition": "BFI_k(P, τ) = E_x[d_k(s_k(prefix_k(x)), s_k(prefix_k(τ(x))))] / E_x[d_{k-1}(prefix_k(x), prefix_k(τ(x)))]",
+      "regularization": "When denominator < ε (near-identity transformation at stage k-1), report BFI as undefined rather than allowing division-by-near-zero artifacts.",
+      "interpretation": "BFI >> 1: stage k amplifies perturbation. BFI ≈ 1: stage k propagates. BFI << 1: stage k absorbs. Only meaningful relative to the task-specific MR — a parser should produce different trees for active/passive (correct sensitivity, not a fault)."
+    },
+
+    "N2_information_theoretic_bounds": {
+      "status": "CONDITIONAL — attempt proof in 4-week checkpoint",
+      "role": "If proved with non-vacuous constants, elevates paper from tools-track to research-track.",
+      "statement": {
+        "lower_bound": "m ≥ (ln(n-1) + ln(1/δ)) / C(T) where C(T) is the localization capacity of transformation set T",
+        "upper_bound": "m ≤ (2 ln n + ln(1/δ)) / C(T) + O(n)",
+        "capacity": "C(T) = max_w min_{i≠j} Σ_j w_j · D_KL(P(Δ|τ_j, h_i) || P(Δ|τ_j, h_j))"
+      },
+      "risk": "~40% proof failure probability. KL factorization lemma may not hold for shared-encoder pipelines. Constants may be vacuous for n ≤ 7. Relegated to future work if not proved by checkpoint.",
+      "fallback": "ADAPTIVE-LOCATE is built as Thompson-sampling heuristic regardless. Works without tight bounds."
+    }
+  },
+
+  "algorithms": {
+    "CAUSAL_LOCALIZE": {
+      "description": "Core fault localization algorithm implementing M4.",
+      "phases": [
+        {
+          "name": "Spectrum Collection",
+          "input": "Pipeline P, test corpus X = {(x_i, τ_i)}_{i=1}^N",
+          "output": "Per-stage differential matrix D ∈ R^{N×n} where D_{i,k} = Δ_k(x_i, τ_i)",
+          "method": "For each test (x, τ): execute P(x) and P(τ(x)), record per-stage IRs, compute type-specific distances",
+          "complexity": "O(N · n · C_pipeline)"
+        },
+        {
+          "name": "Statistical Localization",
+          "input": "Differential matrix D, violation indicators v ∈ {0,1}^N",
+          "output": "Suspiciousness scores S ∈ R^n, one per stage",
+          "method": "Adapted Ochiai coefficient: S_k = Σ_{i: v_i=1} D_{i,k} / sqrt(Σ_i D_{i,k} · Σ_{i: v_i=1} 1). Subtract calibration baseline E[Δ_k | MR holds] to normalize across stages.",
+          "complexity": "O(N · n)"
+        },
+        {
+          "name": "Causal Refinement",
+          "input": "Top-k suspect stages, violation-triggering test cases",
+          "output": "For each violation: (stage, type ∈ {introduction, amplification, both}, DCE, IE)",
+          "method": "For each violation and each suspect stage k: (1) Replace s_k's input with original IR, (2) Re-execute stages k..n, (3) Check if violation disappears/attenuates. DCE_k = Δ_k(with intervention) vs Δ_k(without). IE_k = total Δ_k - DCE_k.",
+          "complexity": "O(V · k · n · C_pipeline) where V = violations, k = suspects per violation"
+        },
+        {
+          "name": "Multi-Fault Peeling",
+          "input": "Localization result with possible multiple faults",
+          "output": "Ordered list of faulty stages with fault types",
+          "method": "After identifying k_1*, replace k_1*'s output in all test cases. Re-run statistical localization on residual differentials. Repeat until no significant suspects remain. Converges in ≤ n steps.",
+          "complexity": "O(n · V · k · n · C_pipeline) worst case, O(V · k · n · C_pipeline) typical (1-2 peeling rounds)"
+        }
+      ],
+      "implementation": {
+        "language": "Python",
+        "module": "localizer/causal_localize.py",
+        "estimated_loc": 6000,
+        "key_data_structures": [
+          "DifferentialMatrix: numpy array N × n with type-specific distance values",
+          "ViolationRecord: (test_input, transformation, violated_MR, per_stage_IRs, per_stage_deltas)",
+          "LocalizationResult: (stage_id, fault_type, DCE_value, IE_value, confidence, minimal_counterexample)"
+        ]
+      }
+    },
+
+    "GCHDD": {
+      "description": "Grammar-Constrained Hierarchical Delta Debugging implementing M5/N4(b).",
+      "input": "Fault-exposing sentence x (parse tree T_x), validity oracle V, applicability predicate A, violation predicate B",
+      "output": "1-minimal counterexample x' satisfying V(x')=1, A(x')=1, B(x')=1",
+      "method": {
+        "step_1": "Build candidate replacement set: for each internal node v in T_x, generate all valid minimal subtrees from the grammar that can replace the subtree rooted at v while maintaining agreement/subcategorization constraints.",
+        "step_2": "Top-down traversal of T_x. For each node v, attempt subtree replacements in order of decreasing size reduction.",
+        "step_3": "For each replacement candidate: (a) Check V(x') via feature-unification checker — O(|F|). (b) If valid, check A(x') — O(1) lookup. (c) If applicable, check B(x') — one pipeline execution.",
+        "step_4": "If replacement found that preserves V, A, B: apply it, restart traversal on reduced tree.",
+        "step_5": "If no replacement found for node v: mark v as critical, continue to children.",
+        "step_6": "Terminate when all nodes are critical or leaf-level. Output is 1-minimal."
+      },
+      "convergence": "Each successful replacement strictly reduces |T_x|. Each unsuccessful attempt marks a node as critical. Total attempts bounded by |T_x|^2 · |R| validity checks. Feature unification cost O(|F|) per check.",
+      "implementation": {
+        "language": "Rust (PyO3 bridge to Python)",
+        "modules": ["shrinker/gchdd.rs", "shrinker/feature_checker.rs", "shrinker/bridge.rs"],
+        "estimated_loc": "7000 Rust + 1500 PyO3 bridge",
+        "performance_requirement": "≥1M validity checks/second on CPU (Rust achieves this; Python cannot)"
+      }
+    },
+
+    "CALIBRATE_DISCRIMINABILITY": {
+      "description": "Pre-test diagnostic implementing N1.",
+      "input": "Pipeline P, transformation set T = {τ_1, ..., τ_m}, calibration budget B",
+      "output": "Discriminability matrix M, effective rank, indistinguishable stage pairs, recommended additions",
+      "method": {
+        "step_1": "Sample B inputs from seed corpus (B ≈ 100-200).",
+        "step_2": "For each input x and each transformation τ_j: execute pipeline, record per-stage differentials.",
+        "step_3": "Compute M_{k,j} = (1/B) · Σ_i Δ_k(x_i, τ_j) for all (k,j).",
+        "step_4": "Compute SVD of M. Effective rank = number of singular values > σ_1 / κ_threshold where κ_threshold = 10^4.",
+        "step_5": "If effective rank < n: identify indistinguishable stage pairs from the null space. Report: 'Stages k and k' cannot be distinguished by the current transformation set. Suggested additions: morphological transformations (if missing), structural transformations (if missing).'"
+      },
+      "complexity": "O(B · m · n · C_pipeline) — typically <2 minutes for statistical pipelines",
+      "implementation": {
+        "language": "Python",
+        "module": "localizer/discriminability.py",
+        "estimated_loc": 800
+      }
+    },
+
+    "ADAPTIVE_LOCATE": {
+      "description": "Thompson-sampling-based adaptive test selection.",
+      "input": "Pipeline P, transformation set T, prior belief π_0 over faulty stages, budget",
+      "output": "Posterior distribution over faulty stages, localization result",
+      "method": {
+        "step_1": "Initialize Beta priors: π_k ~ Beta(1, 1) for each stage k.",
+        "step_2": "For each test round: sample θ_k ~ π_k for each stage, select transformation τ* that maximizes expected information gain about argmax_k θ_k.",
+        "step_3": "Execute test, observe per-stage differentials, update posteriors via Bayesian update.",
+        "step_4": "Stop when max_k π_k(faulty) > confidence_threshold (default 0.95) or budget exhausted.",
+        "connection_to_N2": "If N2 bounds are proved, the stopping criterion can use C(T) to guarantee that the posterior is δ-correct with the minimum number of tests."
+      },
+      "complexity": "O(budget · m · n · C_pipeline) per localization task",
+      "implementation": {
+        "language": "Python",
+        "module": "localizer/adaptive.py",
+        "estimated_loc": 1200
+      }
+    },
+
+    "GENERATE_AND_TRANSFORM": {
+      "description": "Corpus-based test input generation with transformation coverage.",
+      "input": "Seed corpus (Penn Treebank + 300 hand-crafted), transformation set T, coverage target",
+      "output": "Test corpus with coverage guarantees",
+      "method": {
+        "step_1": "Parse seed sentences via spaCy. Annotate each with applicable transformations.",
+        "step_2": "Build coverage matrix: (seed_category × transformation) pairs.",
+        "step_3": "Use covering-array-based selection (Colbourn 2004) for pairwise coverage target.",
+        "step_4": "Apply transformations as tree transductions. Validate via feature-checker.",
+        "step_5": "Apply statistical composition theorem for pair coverage: test individual transforms, bound composition failure probability via Clopper-Pearson intervals."
+      },
+      "coverage_guarantee": "≥90% pairwise coverage with ≤5,000 test cases (vs ≥50,000 for uniform random)",
+      "implementation": {
+        "language": "Python",
+        "module": "generator/corpus_gen.py",
+        "estimated_loc": 3000
+      }
+    }
+  },
+
+  "complexity_summary": {
+    "table": [
+      {"algorithm": "CAUSAL-LOCALIZE (full)", "time": "O(N·n·C + V·k·n·C)", "space": "O(N·n + n·|IR|)", "dominant_cost": "Pipeline executions in spectrum phase"},
+      {"algorithm": "GCHDD", "time": "O(|T|²·|R|·|F| + |T|·C)", "space": "O(|T|·|R|)", "dominant_cost": "Validity checks (Rust: fast) + pipeline executions (slower)"},
+      {"algorithm": "CALIBRATE-DISCRIMINABILITY", "time": "O(B·m·n·C)", "space": "O(n·m)", "dominant_cost": "B calibration pipeline executions"},
+      {"algorithm": "ADAPTIVE-LOCATE", "time": "O(budget·m·n·C)", "space": "O(n·m)", "dominant_cost": "Per-round pipeline execution"},
+      {"algorithm": "GENERATE-AND-TRANSFORM", "time": "O(|corpus|·m·C_transform)", "space": "O(|corpus|·m)", "dominant_cost": "Transformation application"}
+    ],
+    "notes": "C = C_pipeline = single pipeline execution cost. For spaCy en_core_web_sm: ~2ms. For HuggingFace BERT: ~200ms. N = test count (typically 5000). n = stage count (typically 3-7). V = violation count. k = suspects per violation (typically 1-3)."
+  },
+
+  "implementation_strategy": {
+    "architecture": {
+      "language_split": {
+        "python": "~24K LoC — localizer, pipeline adapters, transformations, evaluation",
+        "rust": "~11.5K LoC — shrinker (GCHDD), feature-unification checker, PyO3 bridge"
+      },
+      "justification": "NLP pipelines (spaCy, HuggingFace) are Python-native — instrumentation must be Python. Grammar-constrained shrinking requires millions of validity checks per second — Rust is essential. PyO3 bridge connects them."
+    },
+
+    "module_to_theorem_mapping": {
+      "localizer/causal_localize.py": "M4 (causal-differential localization)",
+      "localizer/discriminability.py": "N1 (stage discriminability matrix)",
+      "localizer/adaptive.py": "ADAPTIVE-LOCATE (Thompson sampling, connected to N2 if proved)",
+      "shrinker/gchdd.rs": "N4(b) (GCHDD convergence), M5 (1-minimality)",
+      "shrinker/feature_checker.rs": "Validity oracle for N4 (deterministic grammaticality check)",
+      "generator/corpus_gen.py": "M3 (composition theorem for coverage optimization)",
+      "transformations/*.py": "15 tree transductions, each with task-parameterized MR predicates",
+      "adapters/spacy_adapter.py": "Pipeline instrumentation for M4's per-stage IR capture",
+      "adapters/hf_adapter.py": "Pipeline instrumentation for M4's per-stage IR capture",
+      "metrics/bfi.py": "M7 (Behavioral Fragility Index computation)"
+    },
+
+    "staged_development": [
+      {
+        "milestone": "M0: Minimum Viable Localization (Month 1-2)",
+        "deliverable": "M4 on spaCy + 8 transformations + Tier 2 evaluation",
+        "loc": "~18K Python",
+        "go_no_go": "≥75% top-1 localization accuracy on 20 fault-injected configs"
+      },
+      {
+        "milestone": "M1: Grammar-Constrained Shrinking (Month 2-3)",
+        "deliverable": "GCHDD in Rust + feature-checker + N4 proof",
+        "loc": "+11.5K Rust",
+        "go_no_go": "≥3× shrink ratio, 100% grammaticality, <60s per counterexample"
+      },
+      {
+        "milestone": "M2: Full System (Month 3-4)",
+        "deliverable": "All 15 transforms + HuggingFace adapter + Tier 1-4 evaluation",
+        "loc": "+11K Python",
+        "go_no_go": "≥10 real actionable inconsistencies found"
+      },
+      {
+        "milestone": "M3: Paper Submission (Month 4-5)",
+        "deliverable": "Complete evaluation + behavioral atlas + paper draft",
+        "loc": "+5K evaluation harness",
+        "go_no_go": "Paper passes internal review"
+      }
+    ],
+
+    "key_data_structures": {
+      "IntermediateRepresentation": {
+        "description": "Union type for pipeline stage outputs",
+        "variants": [
+          "TokenSequence: List[str] — tokenizer output",
+          "POSTagSequence: List[(str, str)] — (token, tag) pairs",
+          "DependencyTree: List[(int, str, int)] — (child, label, head) triples",
+          "EntitySpanList: List[(int, int, str)] — (start, end, label) triples",
+          "ClassificationResult: (str, float) — (label, confidence)"
+        ]
+      },
+      "TypeSpecificDistance": {
+        "description": "Distance functions d_k for each IR type",
+        "functions": {
+          "token_distance": "Levenshtein edit distance on token sequences, normalized by max length",
+          "pos_distance": "Hamming distance on aligned POS tag sequences, normalized",
+          "tree_distance": "Labeled tree edit distance (Zhang-Shasha algorithm, O(n^2) for n nodes)",
+          "entity_distance": "1 - span-level F1 between entity sets (standard NER metric)",
+          "classification_distance": "0 if labels match, 1 otherwise (+ |confidence_diff| as tiebreaker)"
+        }
+      }
+    },
+
+    "cpu_feasibility": {
+      "statistical_pipelines": {
+        "timing": "~75 minutes for full test-localize-shrink cycle",
+        "breakdown": "Test execution: ~20s (5K tests × 4ms). Localization: ~2min (100 violations × 6 replays). Shrinking: ~20min (top-20 violations × 60s each).",
+        "verdict": "Interactive debugging during development"
+      },
+      "transformer_pipelines": {
+        "timing": "~3-4 hours for full cycle",
+        "breakdown": "Test execution: ~80min (5K tests × 1s). Shrinking: ~100min (20 violations × 5min each).",
+        "verdict": "Nightly CI run"
+      },
+      "memory": "Peak ~4GB (IR snapshots with delta compression). Fits in 8GB laptop RAM."
+    }
+  },
+
+  "evaluation_plan_summary": {
+    "tier_1_real_bugs": {
+      "target": "≥10 actionable inconsistencies in production pipelines",
+      "pipelines": ["spaCy en_core_web_sm", "spaCy en_core_web_trf", "HuggingFace dslim/bert-base-NER + textattack/bert-base-uncased-SST-2"],
+      "definition": "Actionable = MR-defined invariant violated + severity threshold exceeded + reproducible across ≥3 inputs"
+    },
+    "tier_2_localization_accuracy": {
+      "target": "≥85% top-1, ≥95% top-2 on 50 fault-injected configurations",
+      "baselines": ["Random (1/n)", "Last-stage", "Ochiai", "DStar", "Barinel", "GPT-4-as-debugger (best of 5 prompts)"],
+      "key_comparison": "≥20 pct-point improvement over best vanilla SBFL on cascading faults"
+    },
+    "tier_3_shrinking": {
+      "target": "≥5× reduction, <60s per counterexample, 100% grammaticality"
+    },
+    "tier_4_coverage": {
+      "target": "≥10× test reduction for 90% pairwise coverage vs random"
+    },
+    "tier_5_atlas": {
+      "target": "Public database with ≥3 cross-system findings"
+    }
+  },
+
+  "risk_analysis": {
+    "top_risks": [
+      {
+        "risk": "Real bug yield too low (<5 actionable bugs in Tier 1)",
+        "probability": "30%",
+        "impact": "High",
+        "mitigation": "Pre-screen week 1; expand to older model versions; fallback paper focused on Tier 2+3+GPT-4 baseline"
+      },
+      {
+        "risk": "Interventional replay alignment fails for >20% of test cases",
+        "probability": "25%",
+        "impact": "Medium",
+        "mitigation": "Restrict causal refinement to 11 lemma-aligned transformations; statistical fallback for 4 others"
+      },
+      {
+        "risk": "Feature-checker too restrictive (rejects valid shrinkings)",
+        "probability": "20%",
+        "impact": "Medium",
+        "mitigation": "Calibrate against 10K spaCy-parsed sentences; add fallback to parser proxy for edge cases"
+      }
+    ],
+    "minimum_viable_paper": "~18K LoC Python. M4 + spaCy + 8 transforms + Tier 2 evaluation. Publishable as tool contribution."
+  }
+}

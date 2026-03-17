@@ -1,0 +1,594 @@
+# =============================================================================
+# SafeStep Example: Kubernetes Rolling Upgrade — Multi-Service Platform
+# =============================================================================
+#
+# This manifest defines a coordinated rolling upgrade across five microservices
+# that form a typical e-commerce backend. SafeStep reads the
+# "safestep.io/current-version" and "safestep.io/target-version" annotations
+# to build a dependency-aware upgrade plan, validates compatibility constraints,
+# and generates a safe execution order.
+#
+# SafeStep analysis workflow for this file:
+#   1. Parse every Deployment and extract version annotations.
+#   2. Build a service dependency graph from "safestep.io/depends-on".
+#   3. Topologically sort the graph to determine upgrade order.
+#   4. Validate that every target version satisfies the compatibility
+#      constraints declared by its dependents.
+#   5. Generate a step-by-step plan with rollback checkpoints.
+#
+# Usage:
+#   safestep plan --file kubernetes-rolling-upgrade.yaml
+#   safestep plan --file kubernetes-rolling-upgrade.yaml --dry-run
+#   safestep apply --file kubernetes-rolling-upgrade.yaml --confirm
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# 1. api-gateway — the edge proxy that routes traffic to downstream services
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: production
+  labels:
+    app.kubernetes.io/name: api-gateway
+    app.kubernetes.io/part-of: ecommerce-platform
+    app.kubernetes.io/managed-by: safestep
+    tier: edge
+  annotations:
+    # SafeStep reads these to determine what needs upgrading
+    safestep.io/current-version: "2.3.1"
+    safestep.io/target-version: "2.4.0"
+    safestep.io/depends-on: "auth-service,user-service,order-service"
+    safestep.io/upgrade-strategy: "rolling"
+    safestep.io/rollback-on-failure: "true"
+    # Compatibility: api-gateway 2.4.0 requires auth-service >=1.8.0
+    safestep.io/compatibility: "auth-service>=1.8.0,user-service>=3.1.0,order-service>=2.0.0"
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api-gateway
+        app.kubernetes.io/part-of: ecommerce-platform
+        tier: edge
+    spec:
+      terminationGracePeriodSeconds: 60
+      serviceAccountName: api-gateway
+      containers:
+        - name: api-gateway
+          image: registry.example.com/platform/api-gateway:2.3.1
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: AUTH_SERVICE_URL
+              value: "http://auth-service.production.svc.cluster.local:8080"
+            - name: USER_SERVICE_URL
+              value: "http://user-service.production.svc.cluster.local:8080"
+            - name: ORDER_SERVICE_URL
+              value: "http://order-service.production.svc.cluster.local:8080"
+            - name: LOG_LEVEL
+              value: "info"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            successThreshold: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz/live
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 5
+          startupProbe:
+            httpGet:
+              path: /healthz/startup
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 3
+            failureThreshold: 20
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-gateway-pdb
+  namespace: production
+  labels:
+    app.kubernetes.io/name: api-gateway
+spec:
+  # SafeStep verifies PDB constraints are respected during each upgrade step
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api-gateway
+
+# ---------------------------------------------------------------------------
+# 2. auth-service — handles authentication, token issuance and validation
+# ---------------------------------------------------------------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: production
+  labels:
+    app.kubernetes.io/name: auth-service
+    app.kubernetes.io/part-of: ecommerce-platform
+    app.kubernetes.io/managed-by: safestep
+    tier: core
+  annotations:
+    safestep.io/current-version: "1.7.2"
+    safestep.io/target-version: "1.9.0"
+    safestep.io/depends-on: "user-service"
+    safestep.io/upgrade-strategy: "rolling"
+    safestep.io/rollback-on-failure: "true"
+    safestep.io/compatibility: "user-service>=3.0.0"
+    # SafeStep note: auth-service should be upgraded BEFORE api-gateway
+    # because api-gateway 2.4.0 requires auth-service >=1.8.0
+    safestep.io/upgrade-priority: "high"
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: auth-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: auth-service
+        app.kubernetes.io/part-of: ecommerce-platform
+        tier: core
+    spec:
+      terminationGracePeriodSeconds: 45
+      serviceAccountName: auth-service
+      containers:
+        - name: auth-service
+          image: registry.example.com/platform/auth-service:1.7.2
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: grpc
+              containerPort: 9000
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: USER_SERVICE_URL
+              value: "http://user-service.production.svc.cluster.local:8080"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: jwt-signing-key
+            - name: TOKEN_EXPIRY_SECONDS
+              value: "3600"
+            - name: REFRESH_TOKEN_EXPIRY_SECONDS
+              value: "604800"
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 400m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: http
+            initialDelaySeconds: 8
+            periodSeconds: 5
+            successThreshold: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz/live
+              port: http
+            initialDelaySeconds: 12
+            periodSeconds: 10
+            failureThreshold: 5
+          startupProbe:
+            httpGet:
+              path: /healthz/startup
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 3
+            failureThreshold: 15
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: auth-service-pdb
+  namespace: production
+  labels:
+    app.kubernetes.io/name: auth-service
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: auth-service
+
+# ---------------------------------------------------------------------------
+# 3. user-service — user profiles, preferences, and account management
+# ---------------------------------------------------------------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  namespace: production
+  labels:
+    app.kubernetes.io/name: user-service
+    app.kubernetes.io/part-of: ecommerce-platform
+    app.kubernetes.io/managed-by: safestep
+    tier: core
+  annotations:
+    safestep.io/current-version: "3.1.4"
+    safestep.io/target-version: "3.2.0"
+    safestep.io/depends-on: ""
+    safestep.io/upgrade-strategy: "rolling"
+    safestep.io/rollback-on-failure: "true"
+    safestep.io/compatibility: ""
+    # SafeStep note: user-service has no upstream dependencies and is
+    # depended upon by auth-service and api-gateway, so it upgrades first.
+    safestep.io/upgrade-priority: "critical"
+spec:
+  replicas: 4
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: user-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: user-service
+        app.kubernetes.io/part-of: ecommerce-platform
+        tier: core
+    spec:
+      terminationGracePeriodSeconds: 45
+      serviceAccountName: user-service
+      containers:
+        - name: user-service
+          image: registry.example.com/platform/user-service:3.1.4
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: user-db-credentials
+                  key: connection-string
+            - name: CACHE_URL
+              value: "redis://redis.production.svc.cluster.local:6379/0"
+            - name: MAX_CONNECTIONS
+              value: "50"
+          resources:
+            requests:
+              cpu: 300m
+              memory: 384Mi
+            limits:
+              cpu: 600m
+              memory: 768Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: http
+            initialDelaySeconds: 12
+            periodSeconds: 5
+            successThreshold: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz/live
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 5
+          startupProbe:
+            httpGet:
+              path: /healthz/startup
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 3
+            failureThreshold: 20
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: user-service-pdb
+  namespace: production
+  labels:
+    app.kubernetes.io/name: user-service
+spec:
+  minAvailable: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: user-service
+
+# ---------------------------------------------------------------------------
+# 4. order-service — order lifecycle, cart management, fulfillment
+# ---------------------------------------------------------------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  namespace: production
+  labels:
+    app.kubernetes.io/name: order-service
+    app.kubernetes.io/part-of: ecommerce-platform
+    app.kubernetes.io/managed-by: safestep
+    tier: core
+  annotations:
+    safestep.io/current-version: "2.0.3"
+    safestep.io/target-version: "2.1.0"
+    safestep.io/depends-on: "user-service,payment-service"
+    safestep.io/upgrade-strategy: "rolling"
+    safestep.io/rollback-on-failure: "true"
+    safestep.io/compatibility: "user-service>=3.0.0,payment-service>=1.5.0"
+    # SafeStep note: order-service depends on payment-service,
+    # so payment-service must be upgraded first.
+    safestep.io/upgrade-priority: "medium"
+spec:
+  replicas: 4
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: order-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: order-service
+        app.kubernetes.io/part-of: ecommerce-platform
+        tier: core
+    spec:
+      terminationGracePeriodSeconds: 60
+      serviceAccountName: order-service
+      containers:
+        - name: order-service
+          image: registry.example.com/platform/order-service:2.0.3
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: grpc
+              containerPort: 9000
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: order-db-credentials
+                  key: connection-string
+            - name: PAYMENT_SERVICE_URL
+              value: "http://payment-service.production.svc.cluster.local:8080"
+            - name: USER_SERVICE_URL
+              value: "http://user-service.production.svc.cluster.local:8080"
+            - name: KAFKA_BROKERS
+              value: "kafka-0.kafka.production.svc.cluster.local:9092,kafka-1.kafka.production.svc.cluster.local:9092"
+            - name: ORDER_EVENTS_TOPIC
+              value: "order-events"
+          resources:
+            requests:
+              cpu: 350m
+              memory: 512Mi
+            limits:
+              cpu: 700m
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            successThreshold: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz/live
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 5
+          startupProbe:
+            httpGet:
+              path: /healthz/startup
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 3
+            failureThreshold: 25
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: order-service-pdb
+  namespace: production
+  labels:
+    app.kubernetes.io/name: order-service
+spec:
+  minAvailable: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: order-service
+
+# ---------------------------------------------------------------------------
+# 5. payment-service — payment processing, refunds, transaction ledger
+# ---------------------------------------------------------------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  namespace: production
+  labels:
+    app.kubernetes.io/name: payment-service
+    app.kubernetes.io/part-of: ecommerce-platform
+    app.kubernetes.io/managed-by: safestep
+    tier: core
+  annotations:
+    safestep.io/current-version: "1.5.7"
+    safestep.io/target-version: "1.6.0"
+    safestep.io/depends-on: ""
+    safestep.io/upgrade-strategy: "rolling"
+    safestep.io/rollback-on-failure: "true"
+    safestep.io/compatibility: ""
+    # SafeStep note: payment-service is a leaf dependency (no upstreams).
+    # It is depended upon by order-service, so it upgrades early.
+    safestep.io/upgrade-priority: "critical"
+    # Extra caution: financial service gets a longer stabilization window
+    safestep.io/stabilization-window: "120s"
+spec:
+  replicas: 3
+  revisionHistoryLimit: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: payment-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: payment-service
+        app.kubernetes.io/part-of: ecommerce-platform
+        tier: core
+    spec:
+      terminationGracePeriodSeconds: 90
+      serviceAccountName: payment-service
+      containers:
+        - name: payment-service
+          image: registry.example.com/platform/payment-service:1.5.7
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: payment-db-credentials
+                  key: connection-string
+            - name: STRIPE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: payment-provider-keys
+                  key: stripe-secret
+            - name: IDEMPOTENCY_STORE_URL
+              value: "redis://redis.production.svc.cluster.local:6379/1"
+            - name: KAFKA_BROKERS
+              value: "kafka-0.kafka.production.svc.cluster.local:9092,kafka-1.kafka.production.svc.cluster.local:9092"
+            - name: PAYMENT_EVENTS_TOPIC
+              value: "payment-events"
+          resources:
+            requests:
+              cpu: 300m
+              memory: 384Mi
+            limits:
+              cpu: 600m
+              memory: 768Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            successThreshold: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz/live
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 5
+          startupProbe:
+            httpGet:
+              path: /healthz/startup
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 3
+            failureThreshold: 20
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: payment-service-pdb
+  namespace: production
+  labels:
+    app.kubernetes.io/name: payment-service
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: payment-service
+
+# =============================================================================
+# SafeStep Computed Upgrade Order (generated by `safestep plan`):
+#
+#   Step 1 — user-service      3.1.4 → 3.2.0  (leaf, no dependencies)
+#   Step 2 — payment-service   1.5.7 → 1.6.0  (leaf, no dependencies)
+#            [checkpoint: verify user-service & payment-service healthy]
+#   Step 3 — auth-service      1.7.2 → 1.9.0  (depends on user-service)
+#            [checkpoint: verify auth-service healthy, token issuance OK]
+#   Step 4 — order-service     2.0.3 → 2.1.0  (depends on user & payment)
+#            [checkpoint: verify order-service healthy, payment flow OK]
+#   Step 5 — api-gateway       2.3.1 → 2.4.0  (depends on auth, user, order)
+#            [checkpoint: end-to-end smoke test via gateway]
+#
+# Estimated total rollout time: ~25 minutes (with stabilization windows)
+# Rollback: automatic per-step; full rollback via `safestep rollback --plan <id>`
+# =============================================================================

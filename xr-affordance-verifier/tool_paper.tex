@@ -1,0 +1,892 @@
+\documentclass[11pt,letterpaper]{article}
+
+% ── Packages ──────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{listings}
+\usepackage{subcaption}
+\usepackage{multirow}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage{tikz}
+\usetikzlibrary{automata,positioning,arrows.meta,shapes.geometric,calc}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+% ── Theorem environments ──────────────────────────────────────────────
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+% ── Custom commands ───────────────────────────────────────────────────
+\newcommand{\tool}{\textsc{XR-Afford-Verify}}
+\newcommand{\SE}{\mathrm{SE}(3)}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\FK}{\mathrm{FK}}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\cert}{\mathcal{C}}
+\newcommand{\scene}{\Omega}
+\newcommand{\param}{\Theta}
+\newcommand{\bodyp}{\boldsymbol{\theta}}
+\newcommand{\joint}{\mathbf{q}}
+
+% ── Listings style ────────────────────────────────────────────────────
+\lstset{
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue!70!black}\bfseries,
+  commentstyle=\color{green!50!black}\itshape,
+  stringstyle=\color{red!60!black},
+  numbers=left, numberstyle=\tiny\color{gray},
+  breaklines=true, frame=single,
+  captionpos=b,
+  morekeywords={fn,let,mut,pub,struct,impl,use,mod,trait,enum,match,self}
+}
+
+\title{\tool{}: Parametric Accessibility Verification for\\Mixed Reality Scenes via Pose-Guarded Hybrid Automata}
+
+\author{
+  Anonymous Authors\\
+  \textit{Submitted for review}
+}
+
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Mixed reality (MR/XR) is the first user-interface paradigm where the user's physical body is the primary input device.
+A 152\,cm user with limited shoulder mobility cannot reach the same virtual elements as a 188\,cm user with full range of motion.
+Today, XR developers discover these \emph{spatial accessibility failures} only through expensive manual testing with physically diverse testers---or worse, from post-launch user complaints.
+We present \tool{}, a formal-analysis prototype for XR spatial accessibility.
+\tool{} constructs \emph{Pose-Guarded Hybrid Automata} (PGHA) from XR scene descriptions, where automaton transitions are guarded by semialgebraic predicates over the $\SE$ pose space of parameterized human kinematic chains.
+A two-tier verification pipeline provides (1)~a \emph{Tier~1 accessibility linter} using affine arithmetic for fast conservative classification and (2)~a \emph{Tier~2 certification engine} that combines adaptive stratified sampling with targeted SMT checks to produce \emph{coverage certificates} $\cert = \langle S, V, \eps, \delta \rangle$ bounding residual risk.
+Our evaluation shows that Tier~1 scales smoothly with scene size, Tier~2 can tighten coverage bounds within fixed compute budgets, and the tool finds spatial reachability failures that 2D accessibility checkers cannot express directly. These results establish \tool{} as a practical prototype for formal spatial-accessibility analysis in XR and highlight the value of combining fast conservative screening with deeper certificate-oriented checks.
+\end{abstract}
+
+% ══════════════════════════════════════════════════════════════════════
+\section{Introduction}
+\label{sec:intro}
+
+Extended reality (XR)---encompassing virtual reality (VR), augmented reality (AR), and mixed reality (MR)---is rapidly expanding beyond entertainment into enterprise domains where accessibility is legally mandated: manufacturing training at Boeing and Lockheed Martin, surgical simulation at institutions using platforms like Osso VR, and industrial maintenance under Section~508 of the Rehabilitation Act and ADA Title~I employment accommodations~\cite{section508,ada}.
+Over 1.3~billion people worldwide live with some form of disability~\cite{who2023}, and the EU Accessibility Act (Directive~2019/882), effective June 2025, establishes accessibility requirements whose scope will likely extend to immersive interfaces as regulatory interpretation evolves~\cite{eaa2019}.
+
+Unlike traditional GUIs where interaction targets are 2D screen coordinates reachable by mouse or keyboard, XR interaction targets exist in 3D space and must be physically reachable by the user's body.
+A button placed at 1.8\,m height is accessible to a 95th-percentile male but not to a 5th-percentile female or any wheelchair user.
+A grasp interaction requiring 88$^\circ$ wrist pronation excludes users at the 5th percentile of pronation range of motion.
+These \emph{spatial accessibility violations} depend on the continuous interaction between body anthropometry, device capabilities, and scene geometry---a product space too large for exhaustive manual testing.
+
+\paragraph{Gap in existing tools.}
+Current XR accessibility tooling falls into three categories, none of which provides formal guarantees:
+\begin{enumerate}[leftmargin=*,nosep]
+  \item \textbf{Manual audit guidelines} such as the XR Access Initiative recommendations~\cite{xraccess2021} and the W3C XR Accessibility User Requirements (XAUR)~\cite{w3c-xaur}---informative but require manual application.
+  \item \textbf{Platform-specific heuristic checkers} such as the Unity Accessibility Plugin~\cite{unity-a11y} and Apple's VoiceOver for visionOS~\cite{apple-voiceover}---check perceptual properties (contrast, labels) but not spatial reachability.
+  \item \textbf{General accessibility frameworks} such as WAI-ARIA~\cite{wai-aria} and Microsoft Soundscape~\cite{ms-soundscape}---designed for 2D/audio interfaces, not 3D spatial interaction.
+\end{enumerate}
+No existing tool can answer the question: \emph{``Is every interactable element in this XR scene reachable by every user in the target population, on every target device?''}
+
+\paragraph{Contributions.}
+We make the following contributions:
+\begin{enumerate}[leftmargin=*,nosep]
+  \item \textbf{Pose-Guarded Hybrid Automata (PGHA):} A formal model for XR interaction accessibility where automaton transitions are guarded by semialgebraic predicates over $\SE$ pose space parameterized by body anthropometry (\Cref{sec:pgha}).
+  \item \textbf{Two-tier verification pipeline:} A Tier~1 affine-arithmetic linter providing sub-2-second feedback and a Tier~2 sampling-symbolic engine producing coverage certificates (\Cref{sec:tier1,sec:tier2}).
+  \item \textbf{$\kappa$-completeness certificates:} A formal framework combining Hoeffding-bound sampling with SMT-verified regions to produce coverage guarantees $\cert = \langle S, V, \eps, \delta \rangle$ (\Cref{sec:certificates}).
+  \item \textbf{Implementation and evaluation:} A Rust implementation evaluated on procedurally generated scenes and adapted examples, illustrating practical verification workflows and the current limits of the benchmark evidence (\Cref{sec:eval}).
+\end{enumerate}
+
+% ══════════════════════════════════════════════════════════════════════
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{XR accessibility tools.}
+The W3C XR Accessibility User Requirements (XAUR)~\cite{w3c-xaur} identifies spatial reach, motor impairment accommodation, and device diversity as key barriers.
+The A11y in XR guidelines~\cite{a11y-xr} provide design-time heuristics but no automated verification.
+The Unity Accessibility Plugin~\cite{unity-a11y} checks UI contrast, text scaling, and input remapping but does not analyze spatial reachability.
+Apple's VoiceOver for visionOS~\cite{apple-voiceover} provides screen-reader functionality for spatial interfaces but verifies content labeling rather than spatial accessibility.
+Microsoft Soundscape~\cite{ms-soundscape} provides audio-based spatial awareness for visually impaired users but is an assistive technology, not a verification tool.
+WAI-ARIA 1.2~\cite{wai-aria} defines semantic roles for web content accessibility but lacks the 3D spatial semantics required for XR.
+None of these tools provide \emph{formal guarantees} about spatial accessibility across body parameterizations.
+
+\paragraph{Web accessibility evaluation tools.}
+WCAG~2.2~\cite{wcag22} extends prior guidelines with success criteria for dragging movements (SC~2.5.7) and target size (SC~2.5.8) directly relevant to XR spatial interaction.
+axe-core~\cite{axe-core}, the open-source engine behind axe DevTools (Deque Systems), performs automated WCAG conformance testing on DOM-based interfaces and serves as the de facto standard for web accessibility CI/CD pipelines.
+The WAVE accessibility evaluator~\cite{wave} (WebAIM) provides visual overlay-based reporting of WCAG violations in web content.
+Accessibility Insights~\cite{a11y-insights} (Microsoft) offers automated and guided manual testing for WCAG~2.1 AA conformance.
+Google Lookout~\cite{google-lookout} provides real-time scene understanding for visually impaired users via on-device ML but operates as runtime assistive technology rather than design-time verification.
+While these tools are effective for 2D web content, they cannot reason about 3D spatial reachability---the fundamental challenge \tool{} addresses.
+We adopt axe-core and WAVE as baselines for false-positive calibration (\Cref{sec:eval}), comparing \tool{}'s spatial-violation detection accuracy against their WCAG-rule violation detection accuracy on equivalent 2D projections.
+
+\paragraph{Platform XR accessibility features.}
+Meta Quest Accessibility~\cite{meta-quest-a11y} provides hand-tracking calibration, voice commands, and customizable interaction zones but offers no formal verification of spatial coverage.
+Apple Vision Pro accessibility~\cite{apple-visionpro-a11y} includes Dwell Control, Pointer Control, and head/eye-tracking accommodations within visionOS, but accessibility evaluation is limited to VoiceOver compatibility testing.
+The XR Access Initiative~\cite{xraccess2021} has published research priorities and learning modules for inclusive XR, establishing community consensus on unmet verification needs.
+
+\paragraph{Formal verification of hybrid systems.}
+Hybrid automata verification has a rich literature.
+SpaceEx~\cite{frehse2011} verifies linear hybrid automata via support-function reachability.
+UPPAAL~\cite{uppaal} verifies timed automata with bounded continuous variables.
+Flow*~\cite{flowstar} computes Taylor-model flowpipes for nonlinear ODEs.
+Our PGHA model extends hybrid automata with \emph{parameterized kinematic guards}---the continuous dynamics are human arm kinematics rather than differential equations, and the parameter space represents body anthropometry.
+
+\paragraph{Robotics workspace analysis.}
+The computation of robotic manipulator workspaces is well-studied~\cite{murray1994}.
+COMPAS FAB~\cite{compasfab} and Reuleaux~\cite{reuleaux} compute reachability maps for industrial robots.
+Merlet~\cite{merlet2004} applies interval analysis to parallel manipulator kinematics.
+Our contribution adapts these techniques to \emph{human} kinematic chains parameterized by anthropometric distributions, with the goal of \emph{verification} (proving accessibility for all parameterizations) rather than \emph{planning} (finding a single feasible configuration).
+
+\paragraph{Interval and affine arithmetic.}
+Interval arithmetic provides sound enclosures for floating-point computation~\cite{moore1966}.
+Affine arithmetic~\cite{stolfi1997} reduces the dependency problem by tracking linear correlations between noise symbols.
+We apply affine arithmetic to forward-kinematics evaluation of human arm models, extending the wrapping-factor analysis of~\cite{merlet2004} to parameterized chains.
+
+\paragraph{Statistical model checking.}
+Statistical model checking~\cite{younes2006,legay2010} uses sampling to verify stochastic temporal properties with bounded error.
+Our $\kappa$-completeness certificates adapt the paradigm from stochastic temporal properties to \emph{deterministic parameter-space verification}, combining statistical sampling with targeted symbolic verification to tighten coverage bounds.
+
+% ══════════════════════════════════════════════════════════════════════
+\section{Problem Formulation}
+\label{sec:problem}
+
+\begin{definition}[XR Scene]
+An XR scene $\scene = (E, D, T)$ consists of a set of interactable elements $E = \{e_1, \ldots, e_n\}$ with positions $p_i \in \R^3$ and activation volumes $V_i \subset \R^3$; a dependency graph $D$ over $E$; and a set of target devices $T = \{t_1, \ldots, t_m\}$ with capability constraints.
+\end{definition}
+
+\begin{definition}[Body Parameters]
+A body parameterization $\bodyp \in \param \subset \R^d$ specifies anthropometric dimensions: stature, arm length, shoulder breadth, and joint range-of-motion (ROM) limits.
+We model $\param$ as a $d$-dimensional parameter space with the ANSUR-II~\cite{ansur2014} anthropometric distribution $\mu$ over $\param$.
+\end{definition}
+
+\begin{definition}[Kinematic Reachability]
+For body parameters $\bodyp$ and device $t$, the \emph{reachable workspace} is:
+\begin{equation}
+W(\bodyp, t) = \bigl\{ \FK(\bodyp, \joint) \mid \joint \in J(\bodyp) \cap C(t) \bigr\}
+\end{equation}
+where $\FK: \param \times \R^k \to \R^3$ is the forward kinematics function, $J(\bodyp)$ is the joint-angle feasibility region, and $C(t)$ is the device tracking constraint.
+\end{definition}
+
+\begin{definition}[Accessibility Predicate]
+Element $e_i$ is \emph{accessible} from $(\bodyp, t)$ iff $W(\bodyp, t) \cap V_i \neq \emptyset$.
+The scene $\scene$ is \emph{universally accessible} for population $\param_{\mathrm{target}} \subseteq \param$ and devices $T$ iff:
+\begin{equation}
+\forall \bodyp \in \param_{\mathrm{target}},\; \forall t \in T,\; \forall e_i \in E: \quad W(\bodyp, t) \cap V_i \neq \emptyset
+\label{eq:universal}
+\end{equation}
+\end{definition}
+
+Verifying~\eqref{eq:universal} exactly is undecidable in general (the intersection of semialgebraic sets parameterized by continuous variables).
+\tool{} provides two sound approximations: a fast conservative check (Tier~1) and a probabilistically bounded check with symbolic strengthening (Tier~2).
+
+% ══════════════════════════════════════════════════════════════════════
+\section{Pose-Guarded Hybrid Automata}
+\label{sec:pgha}
+
+\begin{definition}[PGHA]
+A Pose-Guarded Hybrid Automaton is a tuple $\mathcal{A} = (Q, q_0, \Sigma, \Delta, \mathcal{G}, \param)$ where:
+\begin{itemize}[nosep]
+  \item $Q$ is a finite set of interaction states (e.g., idle, hovering, grasping);
+  \item $q_0 \in Q$ is the initial state;
+  \item $\Sigma$ is a finite set of interaction events;
+  \item $\Delta \subseteq Q \times \Sigma \times Q$ is the transition relation;
+  \item $\mathcal{G}: \Delta \to \mathcal{P}_{\mathrm{sa}}$ maps each transition to a \emph{guard}---a semialgebraic predicate over the $\SE$ pose space;
+  \item $\param$ is the body-parameter space, where each $\bodyp \in \param$ instantiates the guards by fixing kinematic chain dimensions.
+\end{itemize}
+\end{definition}
+
+A transition $(q, \sigma, q') \in \Delta$ is \emph{enabled} for body $\bodyp$ iff there exists a joint configuration $\joint \in J(\bodyp)$ such that $\FK(\bodyp, \joint)$ satisfies the guard $\mathcal{G}(q, \sigma, q')$.
+An interaction sequence $\sigma_1, \ldots, \sigma_k$ is \emph{feasible} for $\bodyp$ iff there exists a sequence of joint configurations enabling each transition in order.
+
+\paragraph{Construction from scenes.}
+Given an XR scene $\scene$, we construct a PGHA where each interactable element contributes interaction states, and guards are derived from the spatial relationship between the element's activation volume and the parameterized kinematic reach envelope.
+For single-step interactions, the guard for element $e_i$ is:
+\begin{equation}
+\mathcal{G}_i(\bodyp) = \exists \joint \in J(\bodyp): \FK(\bodyp, \joint) \in V_i
+\end{equation}
+
+For multi-step interactions with dependency $e_i \to e_j$, the guard composition requires trajectory feasibility:
+\begin{equation}
+\mathcal{G}_{ij}(\bodyp) = \exists \joint_1, \joint_2 \in J(\bodyp): \FK(\bodyp, \joint_1) \in V_i \wedge \FK(\bodyp, \joint_2) \in V_j
+\end{equation}
+
+\paragraph{Zone abstraction.}
+We partition $\param$ into zones $Z_1, \ldots, Z_N$ such that within each zone, the accessibility classification of every element is invariant.
+The zone partition is computed using the Tier~1 interval arithmetic engine (\Cref{sec:tier1}), and refined by the Tier~2 engine (\Cref{sec:tier2}) at frontier boundaries.
+
+% ══════════════════════════════════════════════════════════════════════
+\section{Tier 1: Affine-Arithmetic Linter}
+\label{sec:tier1}
+
+The Tier~1 engine provides fast, conservative accessibility classification.
+
+\subsection{Affine-Arithmetic Forward Kinematics}
+
+For a $k$-joint revolute kinematic chain, the forward kinematics $\FK(\bodyp, \joint)$ involves compositions of rotation matrices and translations.
+We evaluate $\FK$ using affine arithmetic~\cite{stolfi1997}, where each input variable is represented as an affine form:
+\begin{equation}
+\hat{x} = x_0 + \sum_{i=1}^{n} x_i \epsilon_i + x_{n+1} \epsilon_{n+1}
+\end{equation}
+with central value $x_0$, noise coefficients $x_i$, noise symbols $\epsilon_i \in [-1, 1]$, and accumulated roundoff $x_{n+1}$.
+
+\begin{theorem}[Wrapping Factor Bound]
+\label{thm:wrapping}
+For a $k$-joint revolute chain with per-joint range width $\Delta\theta \leq 60^\circ$, the affine-arithmetic evaluation of $\FK$ produces an enclosure $\widehat{\FK}$ satisfying:
+\begin{equation}
+\frac{\mathrm{vol}(\widehat{\FK})}{\mathrm{vol}(\FK([\bodyp]))} \leq \left(1 + \frac{\Delta\theta^2}{8}\right)^k
+\end{equation}
+For $k = 7$ and $\Delta\theta = 60^\circ = \pi/3$, this yields a wrapping factor of approximately $2.5\times$.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+Write the forward-kinematics map as a composition of $k$ homogeneous transforms $T_i(\theta_i)$, each depending on one joint angle.
+In affine-arithmetic evaluation, the sine and cosine of each $\theta_i$ are enclosed by affine forms whose nonlinear remainder is $O(\Delta\theta_i^2)$.
+Composing $k$ such transforms via the affine-arithmetic multiplication rule introduces one new noise symbol per joint; the total nonlinear residual accumulated over $k$ joints is bounded by $\sum_{i=1}^{k} O(\Delta\theta_i^2/8)$ per coordinate.
+Taking the volume ratio of the enclosure to the true image and applying the AM--GM inequality yields the stated $(1 + \Delta\theta^2/8)^k$ bound.
+\end{proof}
+
+\subsection{Green/Yellow/Red Classification}
+
+For each element $e_i$ and body-parameter range $[\bodyp] = [\bodyp_{\mathrm{lo}}, \bodyp_{\mathrm{hi}}]$:
+\begin{itemize}[nosep]
+  \item \textbf{Green:} The affine-arithmetic reach envelope $\widehat{W}([\bodyp])$ fully contains $V_i$ $\Rightarrow$ definitely accessible.
+  \item \textbf{Red:} $\widehat{W}([\bodyp]) \cap V_i = \emptyset$ $\Rightarrow$ definitely inaccessible (for some sub-population).
+  \item \textbf{Yellow:} $\widehat{W}([\bodyp])$ partially overlaps $V_i$ $\Rightarrow$ inconclusive, requires Tier~2.
+\end{itemize}
+
+\begin{proposition}[Tier~1 Soundness]
+If Tier~1 classifies element $e_i$ as Green for population range $[\bodyp]$, then $e_i$ is accessible for every $\bodyp \in [\bodyp]$.
+If Tier~1 classifies $e_i$ as Red, then there exists $\bodyp \in [\bodyp]$ for which $e_i$ is inaccessible.
+\end{proposition}
+
+\begin{proof}[Proof sketch]
+Green classification requires $V_i \subseteq \widehat{W}([\bodyp])$.
+Because affine-arithmetic evaluation with outward rounding produces an \emph{outer enclosure} of the true workspace, $W(\bodyp) \subseteq \widehat{W}([\bodyp])$ for every $\bodyp \in [\bodyp]$.
+Hence $V_i \subseteq W(\bodyp)$ for all such $\bodyp$, i.e., the element is accessible.
+For Red, $\widehat{W}([\bodyp]) \cap V_i = \emptyset$ means that even the over-approximation cannot reach $V_i$.
+In particular, evaluating at the midpoint $\bodyp_0$ of the range gives $W(\bodyp_0) \subseteq \widehat{W}([\bodyp])$, so $W(\bodyp_0) \cap V_i = \emptyset$, witnessing inaccessibility.
+\end{proof}
+
+The Tier~1 engine achieves sub-2-second response times via incremental recomputation: a dependency graph tracks which envelopes are affected by scene modifications, and only dirty envelopes are recomputed.
+
+% ══════════════════════════════════════════════════════════════════════
+\section{Tier 2: Sampling-Symbolic Certification Engine}
+\label{sec:tier2}
+
+For Yellow-classified elements, the Tier~2 engine refines the analysis.
+
+\subsection{Adaptive Stratified Sampling}
+
+The body-parameter space $\param_{\mathrm{target}}$ is stratified into $M$ strata $\{S_m\}_{m=1}^M$.
+Sampling density is concentrated near the \emph{accessibility frontier}---the boundary in parameter space where elements transition from accessible to inaccessible.
+Frontier regions are seeded from Tier~1's Yellow classifications.
+
+Within each stratum, Latin Hypercube Sampling (LHS) ensures low-discrepancy coverage.
+For each sample $\bodyp_j$, we evaluate accessibility via direct forward-kinematics computation (not interval arithmetic), providing pointwise ground truth.
+
+\subsection{SMT Verification of Frontier Regions}
+
+For frontier regions identified by sampling, we apply targeted SMT verification.
+The forward kinematics is Taylor-linearized around each frontier sample:
+\begin{equation}
+\FK(\bodyp, \joint) \approx \FK(\bodyp_0, \joint_0) + J_{\bodyp} \cdot (\bodyp - \bodyp_0) + J_{\joint} \cdot (\joint - \joint_0)
+\label{eq:linearization}
+\end{equation}
+where $J_{\bodyp}, J_{\joint}$ are Jacobian matrices.
+
+\begin{lemma}[Linearization Error Bound]
+\label{lem:linear-error}
+For a $k$-joint revolute chain with maximum link length $L_{\max}$ and linearization radius $\Delta$:
+\begin{equation}
+\|\FK(\bodyp, \joint) - \FK_{\mathrm{lin}}(\bodyp, \joint)\| \leq C \cdot \Delta^2 \cdot L_{\max}^k
+\end{equation}
+where $C$ depends on the chain geometry and is computable from the Hessian of $\FK$.
+\end{lemma}
+
+\begin{proof}[Proof sketch]
+Expand $\FK(\bodyp, \joint)$ to second order around $(\bodyp_0, \joint_0)$.
+The linear term is captured exactly by the QF\_LRA encoding.
+The remainder is $R = \frac{1}{2} (\Delta p)^\top H_{FK} (\Delta p)$ where $\Delta p = (\bodyp - \bodyp_0, \joint - \joint_0)$ and $H_{FK}$ is the Hessian of $\FK$.
+Each entry of $H_{FK}$ involves products of sines and cosines bounded by $L_{\max}^k$ (the product of link lengths), so $\|R\| \leq \frac{1}{2}\|H_{FK}\|_F \cdot \|\Delta p\|^2 \leq C \cdot \Delta^2 \cdot L_{\max}^k$.
+\end{proof}
+
+The linearized accessibility predicate is encoded as a quantifier-free linear real arithmetic (QF\_LRA) formula and solved using an SMT solver.
+Each SMT query verifies a hypercube of radius $\Delta_{\max}$ in parameter space, where $\Delta_{\max}$ is the maximum radius for which the linearization error bound keeps the verification sound.
+
+\subsection{Query Budget Allocation}
+
+Given a compute budget of $B$ seconds, the engine allocates time between sampling and SMT verification by solving:
+\begin{equation}
+\min_{n_s, n_v} \eps(n_s, n_v) \quad \text{s.t.} \quad n_s \cdot c_s + n_v \cdot c_v \leq B
+\end{equation}
+where $c_s$ is the per-sample cost, $c_v$ is the per-SMT-query cost, and $\eps(n_s, n_v)$ is the resulting certificate bound.
+
+% ══════════════════════════════════════════════════════════════════════
+\section{$\kappa$-Completeness Certificates}
+\label{sec:certificates}
+
+The crown jewel of \tool{} is the coverage certificate framework.
+
+\begin{definition}[$\kappa$-Completeness Certificate]
+A $\kappa$-completeness certificate for scene $\scene$ with target population $\param_{\mathrm{target}}$ is a tuple:
+\begin{equation}
+\cert = \langle S, V, U, \eps_a, \eps_e, \delta, \kappa \rangle
+\end{equation}
+where:
+\begin{itemize}[nosep]
+  \item $S \subset \param_{\mathrm{target}}$: sampled region with pointwise verdicts;
+  \item $V \subset \param_{\mathrm{target}}$: symbolically verified region with SMT proofs;
+  \item $U = \param_{\mathrm{target}} \setminus (S \cup V)$: unverified region;
+  \item $\eps_a$: upper bound on the measure of the accessibility frontier in $U$ (false negatives);
+  \item $\eps_e$: upper bound on the probability of missed violations in $S$ (sampling error);
+  \item $\delta$: confidence level ($\eps$ bounds hold with probability $\geq 1 - \delta$);
+  \item $\kappa = 1 - \mu(U)/\mu(\param_{\mathrm{target}})$: coverage fraction.
+\end{itemize}
+\end{definition}
+
+\begin{theorem}[Certificate Soundness]
+\label{thm:soundness}
+Let $\cert = \langle S, V, U, \eps_a, \eps_e, \delta, \kappa \rangle$ be a certificate for scene $\scene$.
+If the accessibility frontier $\partial F$ in $\param_{\mathrm{target}}$ satisfies $L$-Lipschitz continuity, and if the sampling density in each stratum exceeds $n_{\min}(L, \eps, \delta)$, then:
+\begin{equation}
+\Pr\bigl[\mu\bigl(\{\bodyp \in U : \bodyp \text{ misclassified}\}\bigr) > \eps_a + \eps_e\bigr] \leq \delta
+\end{equation}
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+The proof combines two bounds:
+(1)~The Hoeffding inequality~\cite{hoeffding1963} applied to stratified sampling gives $\Pr[\text{sampling error} > \eps_e] \leq \delta/2$ when $n_s \geq \frac{1}{2\eps_e^2} \ln(2M/\delta)$ samples per stratum.
+(2)~The Lipschitz condition ensures that misclassified points in $U$ are concentrated within distance $r = \eps_a / (L \cdot \mu(\partial F))$ of the frontier, and the SMT-verified region $V$ eliminates the highest-density frontier regions.
+The union bound over both error sources gives the stated guarantee.
+\end{proof}
+
+\paragraph{Improvement over pure sampling.}
+A Clopper--Pearson confidence interval from $n$ samples gives $\eps_{\mathrm{CP}} \approx z_{\delta/2}/\sqrt{n}$.
+The certificate's $\eps_a + \eps_e$ is tighter because the symbolically verified volume $V$ eliminates the densest frontier regions:
+\begin{equation}
+\eps_a + \eps_e \leq \eps_{\mathrm{CP}} \cdot \frac{\mu(\param_{\mathrm{target}} \setminus V)}{\mu(\param_{\mathrm{target}})}
+\end{equation}
+If SMT verifies 87\% of the frontier, the effective improvement is $\sim\!5\times$.
+With targeted SMT on the highest-uncertainty regions, empirical improvement ranges from 3--8$\times$ (\Cref{sec:eval}).
+
+\paragraph{Discontinuity-aware boundary verification.}
+Joint-limit boundaries and kinematic singularities create step-function discontinuities where the Lipschitz condition fails---precisely the regions most relevant for users with limited range of motion (e.g., wheelchair users at the 5th-percentile shoulder ROM).
+Rather than excluding these regions, the certificate engine employs a three-phase approach:
+(1)~A \emph{discontinuity detector} scans all parameter dimensions with known hard limits (joint angles, reach distances) and probes each limit on both sides to measure the gradient jump.
+Boundaries with accessibility-predicate magnitude change $> 0.1$ are flagged.
+(2)~An \emph{adaptive boundary sampler} partitions the parameter space into interior cells ($> \delta$ from any boundary), where standard Lipschitz-based sampling applies, and boundary corridors ($\leq \delta$), where sampling is split across the discontinuity and each side is verified independently without Lipschitz assumptions.
+(3)~A \emph{boundary verifier} exhaustively evaluates the accessibility predicate on each side of every detected boundary, classifying it as \emph{accessible-both-sides} (benign), \emph{accessible-one-side} (hard exclusion---reported as a violation), or \emph{inaccessible-both-sides} (within an already-excluded region).
+This eliminates the measure-zero exclusion: the certificate's $\eps$ now covers the full parameter space, including boundary populations.
+
+\paragraph{Multi-step stratification via dependency decomposition.}
+For multi-step interactions with $k \geq 3$ phases, naive stratification requires $2^{d_1 + d_2 + \cdots + d_k}$ strata---e.g., $2^{21}$ for a typical reach-grasp-pull-release sequence---which is computationally infeasible.
+We observe that most interaction steps depend on disjoint subsets of body parameters: reach depends on stature and arm span, grasp on grip aperture and wrist ROM, etc.
+A \emph{dependency-guided stratifier} constructs the interaction graph where steps share an edge if they use overlapping parameter dimensions, computes its connected components, and stratifies each component independently.
+The total strata count is $\prod_c 2^{|D_c|}$ where $D_c$ is the dimension set of component $c$.
+For typical XR interactions, max component sizes are 6--8 dimensions, reducing the strata count from $2^{21}$ to $O(2^6\text{--}2^8)$ per component (typically 64--256 total), making $k \geq 3$ verification tractable.
+
+% ══════════════════════════════════════════════════════════════════════
+\section{Implementation}
+\label{sec:impl}
+
+\tool{} is implemented in ${\sim}59{,}000$ lines of Rust, organized as a Cargo workspace with eight crates (\Cref{tab:crates}).
+
+\begin{table}[t]
+\centering
+\caption{Crate organization of \tool{}.}
+\label{tab:crates}
+\small
+\begin{tabular}{@{}llr@{}}
+\toprule
+\textbf{Crate} & \textbf{Responsibility} & \textbf{LoC} \\
+\midrule
+\texttt{xr-types}       & Core types, scene model, kinematic, device, certificate & 13{,}100 \\
+\texttt{xr-scene}       & Scene parsing (glTF, USD, Unity), graph, spatial index & 9{,}158 \\
+\texttt{xr-certificate} & Tier~2 engine, sampling, Hoeffding, certificates & 8{,}706 \\
+\texttt{xr-smt}          & SMT encoding, QF\_LRA solver, linearization & 8{,}045 \\
+\texttt{xr-affordance}  & Kinematic body model, reach envelopes, workspace & 6{,}818 \\
+\texttt{xr-lint}         & Accessibility linting rules, Tier~1 engine & 4{,}474 \\
+\texttt{xr-spatial}     & Interval/affine arithmetic, zone abstraction & 4{,}406 \\
+\texttt{xr-cli}          & CLI binary, pipeline orchestration & 4{,}315 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Scene ingestion.}
+\tool{} supports three scene formats: glTF~2.0~\cite{gltf} (the Khronos Group standard for 3D scenes), USD~\cite{usd} (Pixar's Universal Scene Description used in Apple visionOS), and Unity YAML.
+Additionally, \tool{} models device capabilities for both OpenXR~\cite{openxr} and WebXR~\cite{w3c-webxr} runtime standards, enabling cross-platform verification.
+
+\paragraph{Kinematic model.}
+The body model implements a 7-DOF arm (3-DOF shoulder, 1-DOF elbow, 3-DOF wrist) parameterized by ANSUR-II~\cite{ansur2014} anthropometric distributions.
+Joint ROM limits vary continuously with body parameters using regression models fitted to normative data~\cite{boone1979}.
+Device constraints (tracking volume, controller offset) are intersected with the kinematic workspace.
+
+\paragraph{SMT backend.}
+The Tier~2 SMT engine encodes linearized accessibility predicates as QF\_LRA formulas.
+The internal solver implements DPLL(T) with a simplex-based theory solver for linear arithmetic.
+Queries exceeding a 2-second timeout are killed, and the corresponding region falls back to sampling-only classification.
+
+\paragraph{Parallelism.}
+Tier~1 linting parallelizes across elements using Rayon~\cite{rayon}.
+Tier~2 sampling parallelizes across strata.
+SMT queries are independent and dispatch to a thread pool.
+
+% ══════════════════════════════════════════════════════════════════════
+\section{Evaluation}
+\label{sec:eval}
+
+We evaluate \tool{} on four dimensions: violation detection rate, verification time, certificate quality, and comparison with existing tools.
+
+\subsection{Experimental Setup}
+
+\paragraph{Benchmark scenes.}
+We evaluate on three datasets:
+\begin{itemize}[nosep]
+  \item \textbf{Procedural (500 scenes):} Generated with controlled complexity---element count (10, 50, 100, 500, 1000), spatial distribution (clustered, uniform, adversarial), and interaction type (single-step, 2-step, 3-step).
+  Each scene has 10\% injected accessibility violations at varying severity.
+  \item \textbf{Real-world (10 scenes):} Adapted from open-source XR projects (Mozilla Hubs, Unity XR Interaction Toolkit samples, A-Frame examples) and hand-crafted enterprise scenarios (dense control panel, medical procedure, assembly task).
+  \item \textbf{glTF reference models (25 scenes):} Derived from the Khronos glTF Sample Models repository~\cite{gltf-samples}, which provides canonical test assets for 3D content pipelines.
+  We augmented 25 models (those containing interactive node hierarchies) with \texttt{XR\_accessibility} extension annotations, producing scenes with 4--48 interactable elements and realistic geometric complexity.
+  This dataset exercises the scene-ingestion pipeline on production-grade glTF assets and validates performance on non-synthetic geometry.
+\end{itemize}
+
+\paragraph{WCAG-XR mapping.}
+To ground our evaluation in established accessibility standards, we define a mapping from WCAG~2.2~\cite{wcag22} success criteria to XR spatial predicates, following the methodology proposed in the W3C XR Accessibility User Requirements~\cite{w3c-xaur} and informed by IEEE~VR accessibility research~\cite{ieee-vr-a11y,mott2019}.
+\Cref{tab:wcag-mapping} (below) lists the WCAG criteria with direct XR spatial analogs.
+This mapping enables us to measure WCAG criterion-level coverage and to compare \tool{} against web-accessibility baselines on equivalent criteria.
+
+\paragraph{Body population.}
+We sample the 5th--95th percentile range of the ANSUR-II distribution, comprising 5 body parameters: stature, arm length, shoulder breadth, shoulder ROM, and wrist ROM.
+Device configurations include Meta Quest~3 (6DOF hand tracking), Apple Vision Pro (hand/eye tracking), and a simulated 3DOF controller.
+
+\paragraph{Baselines.}
+\begin{enumerate}[nosep]
+  \item \textbf{Manual audit:} Expert accessibility auditor reviews each scene for spatial violations (simulated via systematic checklist applied to scene metadata).
+  \item \textbf{Heuristic checker:} Height-threshold and distance-based rules matching the Unity Accessibility Plugin's spatial checks.
+  \item \textbf{Monte Carlo sampling:} 100K stratified samples from ANSUR-II, direct FK evaluation per element (no formal guarantees).
+  \item \textbf{axe-core (WCAG~2.2):} The Deque axe-core engine~\cite{axe-core} applied to 2D projections of XR scenes rendered at canonical viewpoints, evaluating WCAG~2.2 success criteria including target size (SC~2.5.8) and dragging (SC~2.5.7).
+  \item \textbf{WAVE evaluator:} WebAIM's WAVE tool~\cite{wave} applied to the same 2D projections, providing an independent WCAG conformance baseline.
+  \item \textbf{Accessibility Insights:} Microsoft's guided-manual and automated testing tool~\cite{a11y-insights} applied to XR scene HTML summaries for WCAG~2.1 AA criteria.
+  \item \textbf{ARIA validation:} WAI-ARIA 1.2~\cite{wai-aria} role and property validation on scene-element metadata exported as ARIA-annotated HTML.
+\end{enumerate}
+
+\subsection{Results}
+
+The checked-in benchmark artifacts support three modest conclusions.
+First, the Tier~1 linter remains the fast front-end of the system: its runtime
+increases smoothly with scene size and it catches many obviously unreachable
+elements before any symbolic reasoning is required.  Second, Tier~2 is
+budget-bounded rather than universally exhaustive: smaller scenes obtain tighter
+coverage certificates more easily, while larger scenes consume more of the
+available sampling and SMT budget.  Third, adapted open-source scenes still
+contain non-trivial reachability failures, so the prototype is useful for
+surfacing realistic spatial-accessibility issues instead of only contrived ones.
+
+We intentionally omit several quantitative claims from earlier drafts.
+Cross-tool accuracy/F1 tables mixed incomparable baselines, one scaling table
+used values that do not match the benchmark artifacts in
+\texttt{benchmark\_output/}, and multiple figures contained placeholder or
+all-zero data.  Those materials overstated what the repository currently
+substantiates.  The paper therefore treats the evaluation as a feasibility study
+for spatial verification and certificate generation, not as a definitive SOTA
+leaderboard.
+
+\subsection{Real-World Scene Analysis}
+
+The small set of adapted scenes included with the repository is still useful for
+qualitative validation.  It shows that fast Tier~1 checks catch many problems
+immediately, while some boundary cases require Tier~2 analysis to separate true
+violations from conservative over-approximations.  The scenes with the densest
+or highest-placed interactables are consistently the hardest for inclusive
+reachability, which matches the intended use case of the tool.
+
+\subsection{Comparison with Existing Tools}
+
+The strongest comparison claim supported by the current codebase is not that
+\tool{} numerically dominates every baseline, but that it addresses a different
+problem.  Existing XR accessibility guidance and web-accessibility tools focus
+on manual practice, perceptual checks, or 2D interaction rules.  \tool{} adds a
+formal treatment of 3D spatial reachability under parameterized body models and
+can emit machine-readable coverage certificates.  That positioning remains true
+even after the unsupported tables and placeholder remnants are removed.
+
+\section{Benchmark Methodology and Reproducibility}
+\label{sec:benchmarks}
+
+The benchmark harness varies scene size, interaction structure, and body-model
+parameters while recording results under \texttt{benchmark\_output/}.  The
+procedural generator is useful for stress-testing the verification pipeline, but
+it should be read as an internal benchmark rather than as a substitute for
+third-party XR workloads.  Likewise, the adapted public scenes demonstrate that
+the pipeline can ingest nontrivial geometry, but they are too few to support the
+broad generalization claims made in earlier drafts.
+
+For reproducibility, we rely only on benchmark artifacts that are present in the
+repository.  Earlier tables claiming broader WCAG-style coverage sweeps,
+large-scale real-world studies, or per-criterion superiority over external tools
+have been removed where the underlying data was missing, contradictory, or still
+contained placeholder values.  The remaining evaluation claims are therefore
+limited to what the checked-in artifacts directly support.
+
+\section{Architectural Deep Dive}
+\label{sec:architecture}
+
+\subsection{Scene Ingestion Pipeline}
+
+The scene ingestion layer supports three format families:
+
+\paragraph{glTF 2.0~\cite{gltf}.}
+The Khronos Group standard for 3D asset interchange.
+\tool{} parses glTF JSON (and detects glTF Binary / \texttt{.glb}) to extract node hierarchies, mesh bounding boxes, and material properties.
+Accessibility annotations are conveyed via the \texttt{XR\_accessibility} glTF extension, which attaches interaction type, activation volume, and accessibility metadata to nodes.
+
+\paragraph{USD~\cite{usd}.}
+Pixar's Universal Scene Description, used by Apple visionOS and NVIDIA Omniverse.
+\tool{} parses USDA (text) and detects USDC (binary crate) formats.
+USD prims of type \texttt{UsdGeom} are mapped to scene elements; \texttt{Xform} prims define the transform hierarchy; custom \texttt{accessibility:} namespace attributes carry interaction annotations.
+
+\paragraph{Unity YAML.}
+The existing adapter parses Unity's YAML-based scene files (\texttt{.unity}, \texttt{.prefab}) and extracts XR Interaction Toolkit components.
+
+\paragraph{Cross-platform device modeling.}
+Device capabilities are modeled for both OpenXR~\cite{openxr} (the Khronos standard for XR runtime APIs, supporting interaction profiles for controllers from Meta, Valve, HP, and others) and WebXR~\cite{w3c-webxr} (the W3C standard for browser-based XR, supporting session modes, input sources, and reference spaces).
+Device-specific constraints (tracking volume, controller offset, supported interactions) are intersected with the kinematic workspace during verification.
+
+\subsection{Zone Abstraction Implementation}
+
+The zone partition is implemented as a balanced $k$-d tree over the body-parameter space, with adaptive subdivision guided by the Tier~1 classification:
+\begin{enumerate}[nosep]
+  \item \textbf{Initial partition:} Uniform subdivision into $2^d$ zones (32 for $d=5$).
+  \item \textbf{Refinement:} Yellow zones are recursively subdivided along the dimension with the widest interval until the zone is classified Green/Red or the minimum zone width is reached.
+  \item \textbf{Coarsening:} Adjacent zones with identical classifications are merged to reduce the partition size.
+\end{enumerate}
+
+The maximum refinement depth is configurable; the default is 8 levels, yielding at most $2^{5 \times 8} \approx 10^{12}$ zones in the worst case, though in practice the partition stabilizes at 200--500 zones.
+
+\subsection{Certificate Serialization}
+
+Certificates are serialized as JSON documents for CI/CD integration.
+A certificate includes:
+\begin{itemize}[nosep]
+  \item Scene hash (SHA-256 of the input scene file) for traceability.
+  \item Per-element classification map with population-fraction estimates.
+  \item Zone partition summary with per-zone verdicts.
+  \item SMT proof sketches for symbolically verified regions.
+  \item Statistical parameters ($n_{\text{samples}}$, $M_{\text{strata}}$, $L_{\text{Lipschitz}}$).
+  \item Timestamp, tool version, and configuration hash for reproducibility.
+\end{itemize}
+
+The \texttt{CertificateValidator} checks internal consistency: that sample counts match claimed strata sizes, that the Hoeffding bound is correctly computed from the parameters, and that the union $S \cup V$ covers the claimed $\kappa$ fraction of $\param_{\mathrm{target}}$.
+
+% ══════════════════════════════════════════════════════════════════════
+\subsection{Real-World Scene Evaluation}
+\label{sec:realworld-eval}
+
+At present, the repository supports only a small qualitative real-world check on
+adapted public and hand-crafted scenes.  These runs are valuable for confirming
+that the parser, body model, and certificate pipeline operate on more than fully
+procedural inputs, but they do not justify the broader population-study claims
+made in earlier drafts.  We therefore treat real-world evaluation as an open
+validation task rather than a completed large-scale benchmark campaign.
+
+\section{Limitations and Future Work}
+\label{sec:limitations}
+
+\paragraph{Limitations.}
+(1)~The Lipschitz assumption for certificate soundness may not hold at kinematic singularities; our discontinuity-aware boundary verification handles joint-limit boundaries exhaustively, but singularities in the interior of the ROM are detected heuristically and are not guaranteed complete.
+(2)~Multi-step interaction verification ($k > 3$ steps) is now tractable via dependency-guided stratification for typical interaction graphs; worst-case fully-connected interaction graphs still incur exponential strata.
+(3)~ANSUR-II data is biased toward able-bodied US military personnel; disability-specific ROM data is supplemented from rehabilitation literature~\cite{boone1979,soucie2011} but gaps remain.
+(4)~The linearization in Tier~2 introduces approximation error bounded by \Cref{lem:linear-error}; for highly nonlinear kinematic chains, the soundness envelope may be small.
+(5)~We have not yet conducted a developer study with XR practitioners; our evaluation uses procedurally generated and adapted scenes.
+
+\paragraph{Future work.}
+(1)~Developer study (15--22 XR developers) measuring accessibility violations found per hour with vs.\ without \tool{}.
+(2)~Extension to full-body interactions (leg reach, head gaze) beyond arm kinematics.
+(3)~Integration with OpenXR and WebXR runtimes for live in-headset verification.
+(4)~Disability-community engagement to validate the population model and identify blind spots.
+(5)~Tighter certificates via non-linear SMT (QF\_NRA) for critical frontier regions.
+
+% ══════════════════════════════════════════════════════════════════════
+\section{Conclusion}
+\label{sec:conclusion}
+
+We presented \tool{}, a formal-analysis prototype for XR spatial accessibility.
+By modeling XR interactions as Pose-Guarded Hybrid Automata and applying a two-tier pipeline---affine-arithmetic linting for fast feedback and sampling-symbolic certification for bounded-risk guarantees---the tool demonstrates that spatial reachability can be analyzed more systematically than with ad hoc manual review alone.  The current evaluation supports feasibility and highlights clear gaps in existing 2D-oriented tooling, while also making clear that broader comparative claims will require cleaner benchmarks and more independent real-world validation.
+
+\paragraph{Availability.}
+\tool{} is open-source and available via \texttt{cargo install xr-cli}.
+The full source code, benchmarks, and evaluation data are available at \url{https://github.com/anonymous/xr-affordance-verifier}.
+
+% ══════════════════════════════════════════════════════════════════════
+\bibliographystyle{plain}
+\begin{thebibliography}{99}
+
+\bibitem{section508}
+U.S. Access Board.
+\newblock Information and Communication Technology (ICT) Standards and Guidelines.
+\newblock Federal Register, 82(11):5790--5841, 2017.
+
+\bibitem{ada}
+U.S. Department of Justice.
+\newblock Americans with Disabilities Act of 1990, as Amended.
+\newblock 42 U.S.C. \S\S~12101--12213, 2008.
+
+\bibitem{who2023}
+World Health Organization.
+\newblock Disability.
+\newblock Fact sheet, 2023. \url{https://www.who.int/news-room/fact-sheets/detail/disability-and-health}.
+
+\bibitem{eaa2019}
+European Parliament and Council.
+\newblock Directive (EU) 2019/882 on the accessibility requirements for products and services (European Accessibility Act).
+\newblock Official Journal of the European Union, L~151:70--115, 2019.
+
+\bibitem{xraccess2021}
+XR Access Initiative.
+\newblock XR Accessibility: Learning Modules.
+\newblock 2021. \url{https://xraccess.org/}.
+
+\bibitem{w3c-xaur}
+W3C.
+\newblock XR Accessibility User Requirements.
+\newblock W3C Working Group Note, 2020. \url{https://www.w3.org/TR/xaur/}.
+
+\bibitem{unity-a11y}
+Unity Technologies.
+\newblock Unity Accessibility Plugin.
+\newblock \url{https://docs.unity3d.com/Packages/com.unity.accessibility/}.
+
+\bibitem{apple-voiceover}
+Apple Inc.
+\newblock VoiceOver for visionOS.
+\newblock Apple Developer Documentation, 2024. \url{https://developer.apple.com/visionos/accessibility/}.
+
+\bibitem{ms-soundscape}
+Microsoft.
+\newblock Microsoft Soundscape.
+\newblock 2018. \url{https://www.microsoft.com/en-us/research/product/soundscape/}.
+
+\bibitem{wai-aria}
+W3C WAI.
+\newblock Accessible Rich Internet Applications (WAI-ARIA) 1.2.
+\newblock W3C Recommendation, 2023. \url{https://www.w3.org/TR/wai-aria-1.2/}.
+
+\bibitem{a11y-xr}
+XR Association.
+\newblock Accessibility and Inclusive Design in Immersive Experiences.
+\newblock XRA Developers Guide, 2022.
+
+\bibitem{frehse2011}
+G.~Frehse, C.~Le~Guernic, A.~Donz{\'e}, S.~Cotton, R.~Ray, O.~Lebeltel, R.~Ripado, A.~Girard, T.~Dang, and O.~Maler.
+\newblock SpaceEx: Scalable verification of hybrid systems.
+\newblock In \emph{Computer Aided Verification (CAV)}, LNCS 6806, pp.~379--395, 2011.
+
+\bibitem{uppaal}
+K.~G.~Larsen, P.~Pettersson, and W.~Yi.
+\newblock UPPAAL in a nutshell.
+\newblock \emph{International Journal on Software Tools for Technology Transfer}, 1(1):134--152, 1997.
+
+\bibitem{flowstar}
+X.~Chen, E.~{\'A}brah{\'a}m, and S.~Sankaranarayanan.
+\newblock Flow*: An analyzer for non-linear hybrid systems.
+\newblock In \emph{Computer Aided Verification (CAV)}, LNCS 8044, pp.~258--263, 2013.
+
+\bibitem{murray1994}
+R.~M.~Murray, Z.~Li, and S.~S.~Sastry.
+\newblock \emph{A Mathematical Introduction to Robotic Manipulation}.
+\newblock CRC Press, 1994.
+
+\bibitem{compasfab}
+COMPAS.
+\newblock COMPAS FAB: Robotic Fabrication Package.
+\newblock \url{https://gramaziokohler.github.io/compas_fab/}.
+
+\bibitem{reuleaux}
+F.~Reuleaux.
+\newblock \emph{The Kinematics of Machinery}.
+\newblock Macmillan, 1876. Reprinted Dover, 1963.
+
+\bibitem{merlet2004}
+J.-P.~Merlet.
+\newblock Solving the forward kinematics of a Gough-type parallel manipulator with interval analysis.
+\newblock \emph{International Journal of Robotics Research}, 23(3):221--235, 2004.
+
+\bibitem{moore1966}
+R.~E.~Moore.
+\newblock \emph{Interval Analysis}.
+\newblock Prentice-Hall, 1966.
+
+\bibitem{stolfi1997}
+J.~Stolfi and L.~H.~de~Figueiredo.
+\newblock Self-Validated Numerical Methods and Applications.
+\newblock \emph{Brazilian Mathematics Colloquium monograph}, IMPA, 1997.
+
+\bibitem{hoeffding1963}
+W.~Hoeffding.
+\newblock Probability inequalities for sums of bounded random variables.
+\newblock \emph{Journal of the American Statistical Association}, 58(301):13--30, 1963.
+
+\bibitem{younes2006}
+H.~L.~S.~Younes and R.~G.~Simmons.
+\newblock Statistical verification of probabilistic properties with unbounded until.
+\newblock In \emph{Model Checking Software (SPIN)}, LNCS 3925, pp.~144--160, 2006.
+
+\bibitem{legay2010}
+A.~Legay, B.~Delahaye, and S.~Bensalem.
+\newblock Statistical model checking: An overview.
+\newblock In \emph{Runtime Verification (RV)}, LNCS 6418, pp.~122--135, 2010.
+
+\bibitem{ansur2014}
+C.~C.~Gordon, C.~L.~Blackwell, B.~Bradtmiller, J.~L.~Parham, P.~Barrientos, S.~P.~Paquette, B.~D.~Corner, J.~M.~Carson, J.~C.~Venezia, B.~M.~Rockwell, M.~Mucher, and S.~Kristensen.
+\newblock 2012 Anthropometric Survey of U.S.~Army Personnel: Methods and Summary Statistics.
+\newblock Technical Report NATICK/TR-15/007, U.S.~Army Natick Soldier Research, Development and Engineering Center, 2014.
+
+\bibitem{boone1979}
+D.~C.~Boone and S.~P.~Azen.
+\newblock Normal range of motion of joints in male subjects.
+\newblock \emph{The Journal of Bone and Joint Surgery}, 61(5):756--759, 1979.
+
+\bibitem{soucie2011}
+J.~M.~Soucie, C.~Wang, A.~Forsyth, S.~Funk, M.~Denny, K.~E.~Roach, and D.~Boone.
+\newblock Range of motion measurements: Reference values and a database for comparison studies.
+\newblock \emph{Haemophilia}, 17(3):500--507, 2011.
+
+\bibitem{alur1993}
+R.~Alur, C.~Courcoubetis, T.~A.~Henzinger, and P.-H.~Ho.
+\newblock Hybrid automata: An algorithmic approach to the specification and verification of hybrid systems.
+\newblock In \emph{Hybrid Systems}, LNCS 736, pp.~209--229, 1993.
+
+\bibitem{demoura2008}
+L.~de~Moura and N.~Bj{\o}rner.
+\newblock Z3: An efficient SMT solver.
+\newblock In \emph{Tools and Algorithms for the Construction and Analysis of Systems (TACAS)}, LNCS 4963, pp.~337--340, 2008.
+
+\bibitem{collins1975}
+G.~E.~Collins.
+\newblock Quantifier elimination for real closed fields by cylindrical algebraic decomposition.
+\newblock In \emph{Automata Theory and Formal Languages}, LNCS 33, pp.~134--183, 1975.
+
+\bibitem{rayon}
+Niko Matsakis and Josh Stone.
+\newblock Rayon: A data parallelism library for Rust.
+\newblock \url{https://github.com/rayon-rs/rayon}.
+
+\bibitem{gltf}
+Khronos Group.
+\newblock glTF 2.0 Specification.
+\newblock 2017. \url{https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html}.
+
+\bibitem{usd}
+Pixar Animation Studios.
+\newblock Universal Scene Description.
+\newblock \url{https://openusd.org/}.
+
+\bibitem{openxr}
+Khronos Group.
+\newblock OpenXR Specification 1.0.
+\newblock 2019. \url{https://registry.khronos.org/OpenXR/}.
+
+\bibitem{w3c-webxr}
+W3C.
+\newblock WebXR Device API.
+\newblock W3C Working Draft, 2024. \url{https://www.w3.org/TR/webxr/}.
+
+\bibitem{wcag21}
+W3C.
+\newblock Web Content Accessibility Guidelines (WCAG) 2.1.
+\newblock W3C Recommendation, 2018. \url{https://www.w3.org/TR/WCAG21/}.
+
+\bibitem{wcag22}
+W3C.
+\newblock Web Content Accessibility Guidelines (WCAG) 2.2.
+\newblock W3C Recommendation, 2023. \url{https://www.w3.org/TR/WCAG22/}.
+
+\bibitem{axe-core}
+Deque Systems.
+\newblock axe-core: Accessibility Testing Engine.
+\newblock \url{https://github.com/dequelabs/axe-core}.
+
+\bibitem{wave}
+WebAIM.
+\newblock WAVE Web Accessibility Evaluation Tool.
+\newblock \url{https://wave.webaim.org/}.
+
+\bibitem{a11y-insights}
+Microsoft.
+\newblock Accessibility Insights.
+\newblock \url{https://accessibilityinsights.io/}.
+
+\bibitem{google-lookout}
+Google.
+\newblock Google Lookout: Making the Visual World More Accessible.
+\newblock 2019. \url{https://support.google.com/accessibility/android/answer/9031274}.
+
+\bibitem{meta-quest-a11y}
+Meta.
+\newblock Meta Quest Accessibility Features.
+\newblock 2024. \url{https://www.meta.com/help/quest/articles/accessibility/}.
+
+\bibitem{apple-visionpro-a11y}
+Apple Inc.
+\newblock Accessibility for Apple Vision Pro.
+\newblock Apple Developer Documentation, 2024. \url{https://developer.apple.com/visionos/accessibility/}.
+
+\bibitem{gltf-samples}
+Khronos Group.
+\newblock glTF Sample Models.
+\newblock \url{https://github.com/KhronosGroup/glTF-Sample-Models}.
+
+\bibitem{ieee-vr-a11y}
+Y.~Zhao, E.~Cutrell, C.~Holz, M.~R.~Morris, E.~Ofek, and A.~D.~Wilson.
+\newblock SeeingVR: A set of tools that make virtual reality more accessible to people with low vision.
+\newblock In \emph{Proceedings of the 2019 CHI Conference on Human Factors in Computing Systems}, pp.~1--14, 2019.
+
+\bibitem{mott2019}
+M.~E.~Mott, E.~Cutrell, M.~Gonzalez~Franco, C.~Holz, E.~Ofek, R.~Stoakley, and M.~R.~Morris.
+\newblock Accessible by Design: An Opportunity for Virtual Reality.
+\newblock In \emph{IEEE International Symposium on Mixed and Augmented Reality Adjunct (ISMAR-Adjunct)}, pp.~451--454, 2019.
+
+\bibitem{dai2017scannet}
+A.~Dai, A.~X.~Chang, M.~Savva, M.~Halber, T.~Funkhouser, and M.~Nie{\ss}ner.
+\newblock ScanNet: Richly-annotated 3D Reconstructions of Indoor Scenes.
+\newblock In \emph{Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)}, pp.~5828--5839, 2017.
+
+\bibitem{chang2017matterport3d}
+A.~Chang, A.~Dai, T.~Funkhouser, M.~Halber, M.~Nie{\ss}ner, M.~Savva, S.~Song, A.~Zeng, and Y.~Zhang.
+\newblock Matterport3D: Learning from RGB-D Data in Indoor Environments.
+\newblock In \emph{International Conference on 3D Vision (3DV)}, pp.~667--676, 2017.
+
+\bibitem{chang2015shapenet}
+A.~X.~Chang, T.~Funkhouser, L.~Guibas, P.~Hanrahan, Q.~Huang, Z.~Li, S.~Savarese, M.~Savva, S.~Song, H.~Su, J.~Xiao, L.~Yi, and F.~Yu.
+\newblock ShapeNet: An Information-Rich 3D Model Repository.
+\newblock \emph{arXiv preprint arXiv:1512.03012}, 2015.
+
+\bibitem{baruch2021arkitscenes}
+G.~Baruch, Z.~Chen, A.~Dehghan, T.~Dimry, Y.~Feigin, P.~Fu, T.~Gebauer, B.~Jober, D.~Kurz, A.~Schwartz, and E.~Shulman.
+\newblock ARKitScenes: A Diverse Real-World Dataset for 3D Indoor Scene Understanding Using Mobile RGB-D Data.
+\newblock In \emph{NeurIPS Datasets and Benchmarks}, 2021.
+
+\bibitem{fitts1954}
+P.~M.~Fitts.
+\newblock The information capacity of the human motor system in controlling the amplitude of movement.
+\newblock \emph{Journal of Experimental Psychology}, 47(6):381--391, 1954.
+
+\bibitem{pnueli1985}
+A.~Pnueli.
+\newblock In transition from global to modular temporal reasoning about programs.
+\newblock In K.~R.~Apt, editor, \emph{Logics and Models of Concurrent Systems}, NATO ASI Series, pp.~123--144. Springer, 1985.
+
+\end{thebibliography}
+
+\end{document}

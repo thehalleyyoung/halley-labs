@@ -1,0 +1,129 @@
+// accessibility.choreo
+// Accessible XR interaction: multiple input modalities let the user
+// choose whichever works best for them.  A door can be opened via
+// gaze-dwell, hand reach, or controller button.  If no input is
+// detected within a timeout, a hint is displayed.
+// Demonstrates choice, multiple input modalities, and timeout fallbacks.
+
+// ---------------------------------------------------------------------------
+// Regions
+// ---------------------------------------------------------------------------
+
+// The door panel the user needs to interact with.
+region door_panel = box(vec3(2.0, 1.2, -3.0), vec3(0.5, 1.0, 0.05));
+
+// A wider activation zone for proximity-based triggers.
+region door_approach = sphere(vec3(2.0, 1.2, -3.0), 1.5m);
+
+// The hint tooltip region, floating above the door handle.
+region hint_area = box(vec3(2.0, 2.0, -3.0), vec3(0.3, 0.1, 0.01));
+
+// ---------------------------------------------------------------------------
+// Entities
+// ---------------------------------------------------------------------------
+
+entity user : User {}
+
+entity head : Head {
+    position: vec3(0.0, 1.7, 0.0);
+}
+
+entity right_hand : Hand(Right) {
+    position: vec3(0.3, 1.1, -0.3);
+}
+
+entity left_controller : Controller(Left) {
+    position: vec3(-0.3, 1.0, -0.3);
+}
+
+entity door : Object {
+    position: vec3(2.0, 1.2, -3.0);
+    bounds: box(vec3(0.0, 0.0, 0.0), vec3(0.5, 1.0, 0.05));
+    state: "closed";
+}
+
+entity door_handle : Object {
+    position: vec3(1.7, 1.0, -2.96);
+    bounds: sphere(vec3(0.0, 0.0, 0.0), 5cm);
+}
+
+entity hint_tooltip : Object {
+    position: vec3(2.0, 2.0, -3.0);
+    visible: false;
+}
+
+// ---------------------------------------------------------------------------
+// Interactions — alternative input paths (choice)
+// ---------------------------------------------------------------------------
+
+// When the user is near the door, offer three ways to open it.
+interaction open_door {
+    choice {
+        // Option A: Gaze-dwell — look at the handle for 1.2 s.
+        when gaze(head, door_handle, 5deg) and timeout(1200ms) => {
+            emit(door_open, "gaze");
+            activate(door);
+        }
+        |
+        // Option B: Hand reach — extend hand to grab the handle.
+        when reach(right_hand, door_handle, 12cm) => seq {
+            when grab(door_handle) => {
+                emit(door_open, "hand");
+                activate(door);
+            };
+        }
+        |
+        // Option C: Controller button — press trigger while pointing.
+        when gaze(head, door_handle, 10deg) and proximity(left_controller, door_handle, 2m) => {
+            emit(door_open, "controller");
+            activate(door);
+        }
+    }
+}
+
+// If the user is near the door but hasn't interacted within 4 s,
+// show a hint tooltip explaining the available interactions.
+interaction show_hint {
+    when proximity(head, door, 2m) and timeout(4s) then {
+        activate(hint_tooltip);
+        emit(hint_shown, "door");
+    }
+}
+
+// Dismiss the hint once any interaction begins.
+interaction dismiss_hint {
+    when gaze(head, door_handle, 10deg) or reach(right_hand, door_handle, 30cm) then {
+        deactivate(hint_tooltip);
+    }
+}
+
+// Extended dwell for users who need more time (accessibility override).
+let extended_dwell: Duration = 3s;
+
+interaction open_door_extended {
+    when gaze(head, door_handle, 8deg) and timeout(3s) then {
+        emit(door_open, "gaze_extended");
+        activate(door);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Scene
+// ---------------------------------------------------------------------------
+
+scene accessibility_demo {
+    entity user;
+    entity head;
+    entity right_hand;
+    entity left_controller;
+    entity door;
+    entity door_handle;
+    entity hint_tooltip;
+    region door_panel;
+    region door_approach;
+    region hint_area;
+    interaction open_door;
+    interaction show_hint;
+    interaction dismiss_hint;
+    interaction open_door_extended;
+}

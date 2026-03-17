@@ -1,0 +1,114 @@
+# Timeout Chain Violation Example
+#
+# Call chain where per-hop timeouts (expanded by retries) exceed the
+# end-to-end deadline.
+#
+# frontend (deadline=30s) → backend (3 retries × 8s = 32s) → cache (2 retries × 5s = 15s)
+# Total worst-case: 32s + 15s = 47s > 30s frontend deadline
+#
+# Run: cascade-verify check examples/timeout-chain/
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: demo
+  annotations:
+    cascade-verify/capacity: "2000"
+    cascade-verify/deadline-ms: "30000"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: frontend:latest
+        ports:
+        - containerPort: 3000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: demo
+  annotations:
+    cascade-verify/capacity: "1000"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: backend:latest
+        ports:
+        - containerPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cache
+  namespace: demo
+  annotations:
+    cascade-verify/capacity: "5000"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cache
+  template:
+    metadata:
+      labels:
+        app: cache
+    spec:
+      containers:
+      - name: cache
+        image: redis:7
+        ports:
+        - containerPort: 6379
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: frontend-to-backend
+  namespace: demo
+spec:
+  hosts:
+  - backend
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 8s
+    timeout: 30s
+    route:
+    - destination:
+        host: backend
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: backend-to-cache
+  namespace: demo
+spec:
+  hosts:
+  - cache
+  http:
+  - retries:
+      attempts: 2
+      perTryTimeout: 5s
+    timeout: 20s
+    route:
+    - destination:
+        host: cache

@@ -1,0 +1,476 @@
+{
+  "title": "Spectral Features for MIP Decomposition Selection: A Computational Study with the First Complete MIPLIB 2017 Decomposition Census",
+  "slug": "spectral-decomposition-oracle",
+  "target_venue": "INFORMS Journal on Computing",
+  "secondary_venues": [
+    "Computers & Operations Research",
+    "CPAIOR"
+  ],
+  "framing": "computational_study",
+  "paper_type": "census + feature engineering + theoretical motivation",
+  "contributions": {
+    "primary": [
+      {
+        "id": "P1",
+        "name": "Spectral Feature Family",
+        "description": "Eight spectral features from the constraint hypergraph Laplacian for MIP instance characterization. Continuous, geometry-aware, with formal permutation-invariance (F1) and scaling-sensitivity analysis (F2). Validated via feature-count-controlled ablation.",
+        "load_bearing": true,
+        "novelty": "Spectral features for decomposition selection are new. Graph Laplacian features exist in ML4CO but not hypergraph Laplacian features specifically designed for block-structure detection with theoretical connection to decomposition bounds via L3."
+      },
+      {
+        "id": "P2",
+        "name": "MIPLIB 2017 Decomposition Census",
+        "description": "Spectral structural annotations for all 1,065 instances. Decomposition evaluation (Benders via SCIP-native, DW via GCG) on 500 stratified instances at cutoffs {60s, 300s, 900s, 3600s}. Released as open Parquet dataset.",
+        "load_bearing": true,
+        "novelty": "First systematic cross-method decomposition evaluation on the standard MIP benchmark. Prior work (Bergner et al. 2015, Kruber et al. 2017) covers DW-only via GCG."
+      },
+      {
+        "id": "P3",
+        "name": "Lemma L3 and Specializations (Partition-to-Bound Bridge)",
+        "description": "Formal bound on LP-vs-decomposed-dual gap in terms of crossing hyperedge weight. Method-specific specializations L3-C for Benders (reduced-cost weighting) and DW (linking-constraint dual weighting). Standalone value as partition quality metric.",
+        "load_bearing": true,
+        "novelty": "The core bound formalizes known Lagrangian duality principles (Fisher 1981, Geoffrion 1974) in hypergraph language with (n_e-1) multi-block factor. The L3-C specializations are the most novel math items. The universal partition quality metric framing is new."
+      }
+    ],
+    "secondary": [
+      {
+        "id": "S1",
+        "name": "Spectral Futility Predictor",
+        "description": "Empirically calibrated binary classifier predicting when no k-block decomposition improves dual bound beyond tolerance epsilon. NOT a formal certificate.",
+        "load_bearing": false
+      },
+      {
+        "id": "S2",
+        "name": "Reformulation Selection Framing",
+        "description": "Formal distinction between algorithm selection (which solver?) and reformulation selection (which mathematical object?). Extends Kruber et al. 2017 from DW-only to cross-method.",
+        "load_bearing": false
+      }
+    ],
+    "conditional": [
+      {
+        "id": "C1",
+        "name": "Lightweight 2-Method Oracle (C-lite)",
+        "description": "Binary classifiers for Benders/DW-amenability with spectral partition injection into GCG (.dec) and SCIP Benders. Activated only if G3 passes strongly (>=8pp).",
+        "load_bearing": false,
+        "gate": "G3_strong"
+      }
+    ],
+    "motivational": [
+      {
+        "id": "M1",
+        "name": "Proposition T2 (Spectral Scaling Law)",
+        "description": "z_LP - z_D(pi_hat) <= C * delta^2/gamma^2 where C = O(k * kappa^4 * ||c||_inf). Vacuous on 60-70% of MIPLIB. Motivational only (<=2 pages).",
+        "load_bearing": false
+      }
+    ]
+  },
+  "mathematical_foundations": {
+    "definitions": {
+      "constraint_hypergraph": {
+        "symbol": "H(A)",
+        "definition": "Given A in R^{m x n}, H(A) = (V, E, w) with V = {1,...,n} (variables), E = {e_1,...,e_m} where e_i = {j : A_{ij} != 0}, w_i = ||A_tilde_{i,:}||_2^2 / d_i after equilibration.",
+        "notes": "Constraints = hyperedges. Empty constraints removed post-presolve."
+      },
+      "clique_expansion_laplacian": {
+        "symbol": "L_CE",
+        "definition": "L_CE = D - W, W_{jj'} = sum_{i: j,j' in e_i} w_i/(d_i-1), D = diag(W*1_n). Each hyperedge induces weighted clique.",
+        "complexity": "O(nnz * d_max) time/space",
+        "regime": "d_max <= 200 (~85% of MIPLIB)"
+      },
+      "incidence_matrix_laplacian": {
+        "symbol": "L_I",
+        "definition": "L_I = D_v - H*W_e*D_e^{-1}*H^T (Bolla 1993, Zhou et al. 2006). H is n x m binary incidence matrix.",
+        "complexity": "O(nnz) time/space",
+        "regime": "d_max > 200 (~15% of MIPLIB)",
+        "validation": "Spearman rho > 0.85 with clique-expansion on overlap instances"
+      },
+      "normalized_laplacian": {
+        "symbol": "L_norm = D_v^{-1/2} * L * D_v^{-1/2}",
+        "note": "Symmetric normalization pinned consistently across all results."
+      },
+      "spectral_gap": {
+        "symbol": "gamma_2 = lambda_2(L_norm)",
+        "k_way_note": "For k-way partitioning, relevant gap is gamma_k = lambda_{k+1} - lambda_k. Feature SF2 uses gamma_2 as conservative proxy."
+      },
+      "coupling_energy": {
+        "symbol": "delta^2 = ||L_H - L_block||_F^2",
+        "note": "Depends on chosen partition. Computed after spectral clustering."
+      },
+      "spectral_ratio": {
+        "symbol": "delta^2 / gamma_2^2",
+        "guard": "gamma_2 < 1e-10 => NaN sentinel"
+      },
+      "crossing_weight": {
+        "symbol": "W_cross(P) = sum_{e in E_cross} |y*_e| * (n_e - 1)",
+        "note": "RETROSPECTIVE metric requiring LP dual y*. For prospective use: approximate duals from limited simplex iterations."
+      },
+      "dual_bound_gap": {
+        "symbol": "z_LP - z_D",
+        "clarification": "LP gap (not IP gap). z_D is the decomposed dual bound with finite columns/cuts, not the converged value."
+      }
+    },
+    "spectral_features": [
+      {
+        "id": "SF1",
+        "name": "Spectral gap",
+        "symbol": "gamma_2",
+        "depends_on_k": false
+      },
+      {
+        "id": "SF2",
+        "name": "Spectral gap ratio",
+        "symbol": "delta^2/gamma_2^2",
+        "depends_on_k": true,
+        "inconsistency_note": "Uses gamma_2; T2 needs gamma_k for k>2. Conservative proxy."
+      },
+      {
+        "id": "SF3",
+        "name": "Eigenvalue decay rate",
+        "symbol": "beta",
+        "depends_on_k": true
+      },
+      {
+        "id": "SF4",
+        "name": "Fiedler vector localization entropy",
+        "symbol": "H_F",
+        "edge_case": "Not unique when lambda_2 has multiplicity > 1. Average over degenerate eigenspace.",
+        "depends_on_k": false
+      },
+      {
+        "id": "SF5",
+        "name": "Algebraic connectivity ratio",
+        "symbol": "gamma_2/gamma_k",
+        "depends_on_k": true
+      },
+      {
+        "id": "SF6",
+        "name": "Coupling energy",
+        "symbol": "delta^2",
+        "depends_on_k": true
+      },
+      {
+        "id": "SF7",
+        "name": "Block separability index",
+        "symbol": "s_k",
+        "note": "Silhouette on VV^T rows. k-means++ seed=42, 10 restarts.",
+        "depends_on_k": true
+      },
+      {
+        "id": "SF8",
+        "name": "Effective spectral dimension",
+        "symbol": "d_eff",
+        "depends_on_k": false
+      }
+    ],
+    "k_selection": {
+      "method": "eigengap_heuristic: k = argmax_{i=2,...,k_max} (lambda_{i+1} - lambda_i)",
+      "k_max": "min(20, n/10)",
+      "fallbacks": [
+        "No clear gap (max < 0.1): k = 2",
+        "Multiple equal gaps: smallest k"
+      ],
+      "sensitivity": "Report features at k in {2, 5, 10, 20} as robustness check"
+    }
+  },
+  "theorems": {
+    "L3": {
+      "name": "Partition-to-Bound Bridge",
+      "type": "lemma",
+      "status": "main_contribution",
+      "statement": "For any partition P = {B_1,...,B_k} of variables, z_LP - z_D(P) <= sum_{e in E_cross(P)} |y*_e| * (n_e(P) - 1)",
+      "assumptions": [
+        "A1: LP relaxation has finite optimal solution",
+        "A2: Partition covers all variables",
+        "A3: Dual y* exists and is finite",
+        "A4: No empty rows post-presolve"
+      ],
+      "proof_technique": "LP duality -> constraint partition -> coupling relaxation -> weak duality gap bounded by dual multiplier magnitudes on crossing constraints",
+      "proof_effort_days": "3-5",
+      "risk": "low",
+      "honest_novelty": "Formalizes Fisher/Geoffrion Lagrangian duality in hypergraph language. (n_e-1) factor and universal partition metric framing are new.",
+      "known_issues": [
+        "Retrospective: requires y* (LP dual)",
+        "Well-known core principle: relationship to standard Lagrangian bounds",
+        "Bounds LP gap, not IP gap"
+      ]
+    },
+    "L3_sp": {
+      "name": "Spectral Partition Bound",
+      "type": "lemma",
+      "status": "supporting",
+      "statement": "For spectral partition P*: W_cross(P*) <= O(delta^2 * d_max / gamma_k^2) * max_e |y*_e|",
+      "proof_technique": "Davis-Kahan sin Theta -> eigenspace angle O(delta/gamma_k) -> NJW rounding -> misclassification O(delta^2/gamma_k^2) -> crossing weight",
+      "proof_effort_days": "7-10",
+      "risk": "medium-high",
+      "known_issues": [
+        "d_max factor vacuous on dense constraints",
+        "Different forms for clique-expansion vs incidence Laplacian",
+        "gamma_k vs gamma_2 inconsistency with Feature SF2",
+        "NJW rounding assumes well-separated blocks"
+      ]
+    },
+    "L3_C_benders": {
+      "name": "L3-C Benders Specialization",
+      "type": "lemma",
+      "status": "novel_supporting",
+      "statement": "z_LP - z_Benders^(t) <= sum_{j coupling} |r_j^(t)| * |blocks(j)| (reduced-cost weighting at iteration t)",
+      "proof_effort_days": "2-3",
+      "risk": "low-medium",
+      "note": "Most novel: bridges variable partition (Benders) with constraint partition (L3)"
+    },
+    "L3_C_dw": {
+      "name": "L3-C DW Specialization",
+      "type": "lemma",
+      "status": "novel_supporting",
+      "statement": "z_LP - z_DW^(t) <= sum_{i linking} |mu_i^(t)| * (|blocks(i)| - 1) (DW master duals)",
+      "proof_effort_days": "2-3",
+      "risk": "low",
+      "note": "(|blocks(i)|-1) tightens generic (k-1) factor. Directly evaluates GCG partitions."
+    },
+    "T2": {
+      "name": "Spectral Scaling Law (Motivational)",
+      "type": "proposition",
+      "status": "motivational_only",
+      "statement": "z_LP - z_D(pi_hat) <= C * delta^2/gamma^2, C = O(k * kappa^4 * ||c||_inf)",
+      "proof_chain": "Davis-Kahan -> O(delta/gamma) eigenspace angle -> O(delta^2/gamma^2) misclassification -> L3 -> bound degradation",
+      "kappa4_origin": "kappa^2 from Hoffman bound + kappa^2 from constraint magnitude conversion",
+      "vacuousness": "C vacuous for kappa > 10^3 (60-70% of MIPLIB)",
+      "proof_effort_days": "5-7",
+      "presentation": "<=2 pages, honest about vacuousness"
+    },
+    "F1": {
+      "name": "Permutation Invariance",
+      "type": "proposition",
+      "status": "correctness",
+      "statement": "All 8 spectral features invariant under simultaneous row/column permutation of A",
+      "proof_effort_days": "0.5",
+      "caveat": "SF4 not unique when lambda_2 has multiplicity > 1; SF7 requires fixed k-means seed"
+    },
+    "F2": {
+      "name": "Scaling Sensitivity (Corrected)",
+      "type": "proposition",
+      "status": "correctness",
+      "statement": "gamma_2(L_A)/kappa(D) <= gamma_2(L_{DA}) <= gamma_2(L_A)*kappa(D)",
+      "proof_effort_days": "2-3",
+      "limitation": "Only bounds SF1 (gamma_2), not all 8 features. Others validated empirically."
+    }
+  },
+  "proof_dependency_dag": {
+    "edges": [
+      {
+        "from": "L3",
+        "to": "L3_sp"
+      },
+      {
+        "from": "L3",
+        "to": "L3_C_benders"
+      },
+      {
+        "from": "L3",
+        "to": "L3_C_dw"
+      },
+      {
+        "from": "L3_sp",
+        "to": "T2"
+      },
+      {
+        "from": "L3",
+        "to": "F3_refinement"
+      }
+    ],
+    "independence": "F1, F2 independent of L3/T2. If T2 fails, everything else survives. If L3 fails, theoretical contribution collapses."
+  },
+  "algorithms": {
+    "alg1_laplacian": {
+      "name": "Hypergraph Laplacian Construction",
+      "input": "Sparse A in R^{m x n} (post-presolve)",
+      "output": "Sparse symmetric PSD L_H",
+      "steps": [
+        "Equilibrate (Ruiz, T_max=20)",
+        "Compute hyperedge weights",
+        "Dispatch: clique (d_max<=200) or incidence (d_max>200)",
+        "Regularize zero-degree vertices"
+      ],
+      "complexity": {
+        "clique": "O(nnz * d_max)",
+        "incidence": "O(nnz)"
+      }
+    },
+    "alg2_features": {
+      "name": "Spectral Feature Extraction",
+      "input": "Laplacian L_H, target k",
+      "output": "Feature vector f in R^8",
+      "steps": [
+        "k via eigengap",
+        "Eigensolve: ARPACK shift-invert -> LOBPCG fallback",
+        "Compute all 8 features",
+        "NaN guards for edge cases"
+      ],
+      "complexity": "O(nnz * k * lanczos_iters). Typical 10-30s."
+    },
+    "alg3_partition": {
+      "name": "Spectral Partition Recovery",
+      "steps": [
+        "Normalize eigenvector rows",
+        "k-means++ (seed=42, 10 restarts)",
+        "Identify crossing hyperedges",
+        "Compute L3 crossing weight"
+      ],
+      "complexity": "O(n*k*kmeans_iters + nnz)"
+    },
+    "alg4_refinement": {
+      "name": "Method-Aware Partition Refinement (C-lite)",
+      "steps": [
+        "Greedy local search: move variables to minimize L3 bound",
+        "Cap at 10 iterations"
+      ],
+      "complexity": "O(m * d_max) per iteration"
+    },
+    "alg5_oracle": {
+      "name": "Decomposition Selection Oracle",
+      "steps": [
+        "Load + presolve",
+        "Construct Laplacian",
+        "Extract features",
+        "Futility check",
+        "Classify",
+        "Optional: partition + serialize"
+      ],
+      "complexity": "Dominated by eigensolve: < 30s"
+    },
+    "alg6_census": {
+      "name": "Census Pipeline",
+      "tiers": {
+        "pilot": 50,
+        "dev": 200,
+        "paper": 500,
+        "artifact": 1065
+      }
+    }
+  },
+  "evaluation": {
+    "core_experiment": "Feature ablation: 6 configs x 3 top-k x 3 classifiers with nested 5x3 CV",
+    "configurations": [
+      "SPEC-8",
+      "SYNT-25",
+      "GRAPH-10",
+      "KRUBER-21",
+      "COMB-ALL",
+      "RANDOM"
+    ],
+    "feature_selection": "mRMR (minimum redundancy, maximum relevance)",
+    "statistical_tests": "McNemar with Holm-Bonferroni, 95% CIs",
+    "labels": "{Benders, DW, neither} from external baselines at wall-clock parity",
+    "baselines": [
+      "Monolithic SCIP",
+      "GCG (DW)",
+      "SCIP Benders",
+      "Random",
+      "Trivial (always-none)",
+      "Syntactic-only",
+      "Kruber et al."
+    ],
+    "hypotheses": [
+      "H1: rho(delta^2/gamma^2, degradation) >= 0.4",
+      "H2: spectral >= syntactic + 5pp",
+      "H3: L3 corr >= 0.4",
+      "H4: futility precision >= 80%",
+      "H5: cross-scaling rho > 0.9",
+      "H6: R^2(gamma_2~syntactic) < 0.70",
+      "H7: improvement on non-trivial classes"
+    ]
+  },
+  "kill_gates": [
+    {
+      "gate": "G0",
+      "week": 0,
+      "test": "Spectral redundancy (RF R^2)",
+      "kill_threshold": "R^2 >= 0.70 linear OR >= 0.80 RF"
+    },
+    {
+      "gate": "G1",
+      "week": 2,
+      "test": "Spectral-decomposition correlation",
+      "kill_threshold": "rho < 0.3 (hard kill)"
+    },
+    {
+      "gate": "G2",
+      "week": 4,
+      "test": "Solver wrappers operational",
+      "kill_threshold": "< 80% valid bounds"
+    },
+    {
+      "gate": "G3",
+      "week": 8,
+      "test": "Spectral vs syntactic on 200 dev",
+      "kill_threshold": "spectral <= syntactic"
+    },
+    {
+      "gate": "G4",
+      "week": 14,
+      "test": "Combined evaluation on 500",
+      "kill_threshold": "All of rho<0.5, acc<65%, precision<80% fail"
+    },
+    {
+      "gate": "G5",
+      "week": 18,
+      "test": "Internal review",
+      "kill_threshold": "Fundamental problems"
+    }
+  ],
+  "red_team_findings": {
+    "critical_addressed": [
+      "L3 retrospective nature: acknowledged, framed as quality metric, approximate duals for prospective use",
+      "SF2/T2 gamma_2 vs gamma_k inconsistency: acknowledged, gamma_2 as conservative proxy, report both",
+      "k-selection circularity: eigengap heuristic with sensitivity analysis at k in {2,5,10,20}",
+      "Feature discontinuity at d_max=200: include d_max as control, consider uniform incidence Laplacian",
+      "T2 perturbation model circularity: already motivational only, delta^2/gamma^2 validated empirically",
+      "L3 novelty vs LP duality: honest framing with specific new elements identified",
+      "Near-zero gamma_2: NaN sentinel, disconnected-instance detection",
+      "Spectral=proxy for density: G0 with nonlinear RF regression, mRMR feature selection"
+    ],
+    "killer_questions_prepared": [
+      "Q1: How is L3 different from standard Lagrangian relaxation gap? A: Hypergraph formalization + (n_e-1) + universal metric + L3-C specializations",
+      "Q2: Are spectral features just expensive proxies for density? A: G0 gate + controlled ablation + mRMR",
+      "Q3: Why not GNNs? A: Interpretability + theoretical grounding + O(nnz*k) vs O(nnz*d) + L3 connection",
+      "Q4: How is k selected? A: Eigengap heuristic + sensitivity analysis + reported per instance",
+      "Q5: Is the census useful if 75%+ is none? A: The 25% IS the finding; futility predictor covers the rest"
+    ]
+  },
+  "scores": {
+    "value": 5,
+    "difficulty": 4,
+    "best_paper": 3,
+    "feasibility": 6,
+    "composite": 4.5,
+    "source": "depth_check_binding_consensus",
+    "P_JoC": 0.55,
+    "P_best_paper": 0.03,
+    "P_abandon": 0.25
+  },
+  "loc_budget": {
+    "total": 26500,
+    "cap": 30000,
+    "breakdown": {
+      "spectral_engine": 6500,
+      "baseline_features": 2500,
+      "census": 4500,
+      "ml_pipeline": 2500,
+      "partition_clite": 2000,
+      "eval_harness": 3000,
+      "theory_verification": 1500,
+      "tests": 3500
+    }
+  },
+  "implementation_mapping": {
+    "L3": "theory/l3_verification.py",
+    "L3_C": "theory/l3c_verification.py",
+    "T2": "theory/t2_correlation.py",
+    "F1": "tests/test_features.py",
+    "F2": "experiments/scaling_robustness.py",
+    "Alg1": "spectral/hypergraph/",
+    "Alg2": "spectral/eigensolve/ + spectral/features/",
+    "Alg5": "prediction/",
+    "Alg6": "census/pipeline/"
+  }
+}

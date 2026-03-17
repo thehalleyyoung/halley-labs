@@ -1,0 +1,321 @@
+{
+  "title": "MutSpec: Finding Latent Bugs via Formally Grounded Mutation-Specification Duality",
+  "slug": "mutation-contract-synth",
+  "venue_target": "PLDI",
+  "theory_version": "1.0",
+  "core_insight": "The partition of a function's mutants into killed and survived sets implicitly defines a specification: killed mutants witness what tests enforce, survived mutants witness what tests permit. This duality is made constructive via WP differencing and lattice-walk synthesis.",
+  "mathematical_foundations": {
+    "program_model": {
+      "language": "Loop-free first-order imperative programs over QF-LIA",
+      "syntax": {
+        "types": [
+          "int",
+          "long",
+          "boolean",
+          "int[]"
+        ],
+        "expressions": {
+          "arithmetic": "a ::= n | x | a + a | a - a | a * c | -a",
+          "relational": "r ::= a < a | a <= a | a = a | a != a | a >= a | a > a",
+          "logical": "b ::= r | b AND b | b OR b | NOT b | true | false"
+        },
+        "statements": "S ::= x := e | if b then S else S | S; S | return e | assert b",
+        "functions": "f(x1,...,xn) { S; return e }"
+      },
+      "semantics": "Denotational: [[f]]: Z^n -> Z maps input tuples to integer outputs. For branching programs, [[f]](x) follows the unique execution path determined by x. No loops, no recursion, no exceptions beyond assertion failures.",
+      "fragment_scope": "QF-LIA: all expressions are linear in program variables (no x*y, only c*x for constant c). Quantifier-free specifications only. Array access a[i] treated as uninterpreted function for index reasoning."
+    },
+    "mutation_operators": {
+      "AOR": {
+        "name": "Arithmetic Operator Replacement",
+        "definition": "Replace binary arithmetic op in {+,-,*,/,%} with each alternative",
+        "QF_LIA_restriction": "Only +/- replacements stay within QF-LIA fragment",
+        "error_predicate": "For + -> -: E(m)(x) = (b(x) != 0) where subexpr is a(x)+b(x)"
+      },
+      "ROR": {
+        "name": "Relational Operator Replacement",
+        "definition": "Replace relational op in {<,<=,==,!=,>=,>} with each alternative",
+        "error_predicate": "For < -> <=: E(m)(x) = (a(x) = b(x))"
+      },
+      "LCR": {
+        "name": "Logical Connector Replacement",
+        "definition": "Replace logical connective AND <-> OR",
+        "error_predicate": "For AND -> OR: E(m)(x) = (NOT p(x) AND q(x)) OR (p(x) AND NOT q(x))"
+      },
+      "UOI": {
+        "name": "Unary Operator Insertion",
+        "definition": "Insert unary minus (a -> -a) or negation (b -> NOT b)",
+        "error_predicate": "For a -> -a: E(m)(x) = (a(x) != 0)"
+      },
+      "first_order_only": true,
+      "total_mutant_count": "O(n * k) where n = operator sites, k = bounded constant"
+    },
+    "specification_lattice": {
+      "carrier": "QF-LIA formulas over program variables and return value",
+      "ordering": "phi <= psi iff phi |= psi (phi implies psi, phi is stronger)",
+      "meet": "Conjunction",
+      "join": "Disjunction",
+      "top": "true (weakest)",
+      "bottom": "false (inconsistent)",
+      "key_property": "Decidable ordering via SMT for QF-LIA"
+    }
+  },
+  "definitions": {
+    "D1_error_predicate": {
+      "name": "Error Predicate",
+      "statement": "For function f and mutant m, E(m): X -> {true,false} is defined as E(m)(x) = (m(x) != f(x)). Characterizes inputs where mutant diverges.",
+      "load_bearing": true,
+      "drives_module": "WP Differencing Engine"
+    },
+    "D2_mutation_induced_spec": {
+      "name": "Mutation-Induced Specification",
+      "statement": "phi_M(f,T) = AND_{m in MKill} NOT E(m). Conjunction of negated error predicates for all killed mutants.",
+      "properties": {
+        "soundness": "f |= phi_M(f,T)",
+        "completeness_wrt_killed": "For every killed m: m |!= phi_M(f,T)",
+        "maximality": "phi_M(f,T) is weakest spec separating f from all killed mutants"
+      },
+      "load_bearing": true,
+      "drives_module": "Contract Synthesis, Gap Analysis"
+    },
+    "D3_discrimination_lattice": {
+      "name": "Discrimination Lattice",
+      "statement": "sigma: P(MKill) -> Spec sending S to AND_{m in S} NOT E(m) is a lattice homomorphism. Its image is a finite sub-lattice of Spec.",
+      "load_bearing": true,
+      "drives_module": "Lattice-Walk Algorithm"
+    },
+    "D4_mutation_adequacy": {
+      "name": "Mutation-Adequate Test Suite",
+      "statement": "T is mutation-adequate for operator set M and function f iff T kills every killable mutant in M(f).",
+      "load_bearing": true,
+      "drives_module": "Theorem 1 hypothesis"
+    },
+    "D5_gap_witness": {
+      "name": "Gap Witness",
+      "statement": "A triple (m, x0, c) where m is surviving non-equivalent, x0 is a distinguishing input, c is the violated contract clause. A formal bug report.",
+      "load_bearing": true,
+      "drives_module": "Gap Analysis Engine, Bug Report Generation"
+    }
+  },
+  "theorems": {
+    "T1_epsilon_completeness": {
+      "name": "Epsilon-Completeness of Standard Mutation Operators for QF-LIA",
+      "status": "CROWN_JEWEL",
+      "statement": "Let f be a loop-free program over QF-LIA and M = {AOR, ROR, LCR, UOI}. M is epsilon-complete for QF-LIA: for every non-tautological QF-LIA property phi with f |= phi, if phi can be violated by a single-site semantic change, then some m in M(f) witnesses it. If T is mutation-adequate, then phi_M(f,T) is the strongest QF-LIA specification satisfied by f.",
+      "proof_structure": {
+        "approach": "Case analysis over QF-LIA atomic predicates and loop-free program structure",
+        "steps": [
+          "Step 1: Every QF-LIA atom has form sum_i(a_i * x_i) + c REL 0",
+          "Step 2: For each operator site, the relevant mutation class covers all boundary-crossing behaviors",
+          "Step 3: Coverage argument via partition of f's semantics into piecewise-linear regions",
+          "Step 4: Single-site sufficiency for atomic predicates",
+          "Step 5: Site-independence condition for conjunctions"
+        ],
+        "key_lemma": "Operator Exhaustiveness: For each QF-LIA atomic predicate P over a single operator site s, there exists m in {AOR,ROR,LCR,UOI}(f) at s such that E(m) AND P is satisfiable.",
+        "limitations": [
+          "Site-independence premise required for multi-conjunct properties",
+          "QF-LIA only (no nonlinear, string, heap properties)",
+          "Loop-free only (no inductive properties)"
+        ]
+      },
+      "achievability": 0.65,
+      "load_bearing": true,
+      "consequence": "Mutation-adequate tests provably determine strongest QF-LIA spec"
+    },
+    "T2_subsumption_implication": {
+      "name": "Subsumption-Implication Correspondence",
+      "status": "SUPPORTING",
+      "statement": "m1 subsumes m2 iff E(m2) |= E(m1). Dominator set D yields phi_M(D) = phi_M(MKill) with |D| = O(n) vs |MKill| = O(nk).",
+      "achievability": 0.9,
+      "load_bearing": true,
+      "drives_module": "Subsumption reduction (O(k) factor improvement)"
+    },
+    "T3_wp_composition_completeness": {
+      "name": "WP-Composition Completeness (Restricted Fragment)",
+      "status": "NOVEL_OPEN_QUESTION",
+      "statement": "For single-expression functions, Boolean closure of WP-differences contains every mutation-derivable QF-LIA contract. Lattice-walk = SyGuS power.",
+      "positive_case": "Single-expression: WP differences are QF-LIA atoms, Boolean closure generates full algebra",
+      "negative_case": "Multi-branch: cross-path relational properties (e.g., ret=max(a,b)) not in closure",
+      "achievability_single_expr": 0.65,
+      "achievability_full": 0.4,
+      "publishable_either_way": true,
+      "load_bearing": true
+    },
+    "T4_lattice_walk_properties": {
+      "name": "Lattice-Walk Termination, Soundness, and Irredundancy",
+      "status": "NOVEL_ALGORITHM_THEOREM",
+      "statement": "The lattice-walk terminates in O(|D|^2 * SMT(n)) time producing a contract that is sound, complete w.r.t. killed mutants, and irredundant.",
+      "proof_sketch": {
+        "termination": "Finite lattice, strictly descending chain, bounded by |MKill|",
+        "soundness": "Each clause derived from f's WP, so f satisfies conjunction",
+        "completeness": "Each killed mutant's error predicate negated in some clause",
+        "irredundancy": "Explicit entailment check removes redundant conjuncts"
+      },
+      "achievability": 0.8,
+      "load_bearing": true
+    },
+    "gap_theorem": {
+      "name": "Gap Theorem",
+      "status": "FRAMEWORK_THEOREM",
+      "statement": "Every surviving mutant is either equivalent or non-equivalent. Non-equivalent survivors violating the inferred contract are formal bug witnesses with concrete distinguishing inputs.",
+      "proof": "Direct from definitions",
+      "load_bearing": true,
+      "consequence": "Transforms mutation analysis into formally grounded bug detection"
+    }
+  },
+  "algorithms": {
+    "A1_wp_differencing": {
+      "name": "WP Differencing for Error Predicate Extraction",
+      "complexity": "O(n^2) total with batch sharing, O(1) SMT queries per mutant",
+      "drives_module": "WP Differencing Engine (8K LoC)"
+    },
+    "A2_lattice_walk": {
+      "name": "Lattice-Walk Contract Synthesis",
+      "steps": [
+        "Initialize phi := true",
+        "For each dominator d_i: if phi does not exclude d_i, strengthen phi := phi AND NOT E(d_i)",
+        "Irredundancy pass: remove conjuncts implied by others",
+        "Algebraic simplification",
+        "Return phi"
+      ],
+      "complexity": "O(k^2 * SMT(n)) where k = |D| = O(n)",
+      "drives_module": "Tier 1 Synthesis (4K LoC)"
+    },
+    "A3_gap_analysis": {
+      "name": "Gap Analysis for Bug Detection",
+      "steps": [
+        "For each surviving m: check equivalence via Z3",
+        "For non-equivalent: extract distinguishing input",
+        "Check contract violation",
+        "Rank and output as SARIF"
+      ],
+      "complexity": "O(|MSurv| * SMT(n))",
+      "drives_module": "Gap Analysis (2K LoC) + Reports (1.5K LoC)"
+    },
+    "A4_subsumption": {
+      "name": "Dominator Set Computation",
+      "complexity": "O(n * k^2 * |T|)",
+      "drives_module": "Subsumption & Scaling (4K LoC)"
+    },
+    "A5_template_synthesis": {
+      "name": "Template-Based Synthesis with Mutation Filtering (Tier 2)",
+      "drives_module": "Template Synthesis (2K LoC)"
+    },
+    "A6_pipeline": {
+      "name": "End-to-End MutSpec Pipeline",
+      "phases": [
+        "PIT execution -> kill matrix",
+        "Source-level mutation replay -> symbolic ASTs",
+        "WP differencing -> error predicates",
+        "Subsumption -> dominator set",
+        "Tier classification",
+        "Contract synthesis (per tier)",
+        "SMT verification",
+        "Gap analysis",
+        "Bug report generation (SARIF)"
+      ]
+    }
+  },
+  "complexity_analysis": {
+    "per_function": "O(n^2 * SMT(n)) dominated by lattice walk and WP differencing",
+    "scalability": "10K-function codebase in overnight CI window (8-12 hours)",
+    "bottleneck": "SMT solving time, mitigated by incremental Z3 and per-site batching"
+  },
+  "implementation_mapping": {
+    "total_loc": "~48K (16K novel, 32K integration)",
+    "modules": {
+      "PIT_integration": "12K LoC",
+      "WP_differencing": "8K LoC",
+      "contract_synthesis": "10K LoC",
+      "verification_gap": "9K LoC",
+      "subsumption": "4K LoC",
+      "infrastructure": "5K LoC"
+    }
+  },
+  "experimental_plan": {
+    "rqs": [
+      "RQ1: Bug Detection",
+      "RQ2: Contract Quality",
+      "RQ3: Live Bugs",
+      "RQ4: Scalability",
+      "RQ5: Ablation",
+      "RQ6: Equiv Mutants",
+      "RQ7: Scope Boundary"
+    ],
+    "benchmarks": [
+      "Defects4J v2.0",
+      "Apache Commons Math",
+      "Guava",
+      "Commons Lang",
+      "Joda-Time",
+      "Jackson-core"
+    ],
+    "baselines": [
+      "Daikon",
+      "SpecFuzzer",
+      "EvoSpex",
+      "Descartes",
+      "SpotBugs",
+      "GPT-4+JML"
+    ]
+  },
+  "assumptions": [
+    {
+      "id": "A1",
+      "assumption": "Loop-free target functions",
+      "testable": true
+    },
+    {
+      "id": "A2",
+      "assumption": "QF-LIA specifications",
+      "testable": true
+    },
+    {
+      "id": "A3",
+      "assumption": "Site-independence for multi-conjunct properties",
+      "testable": true
+    },
+    {
+      "id": "A4",
+      "assumption": "Mutation adequacy of test suite",
+      "testable": true
+    },
+    {
+      "id": "A5",
+      "assumption": "PIT descriptors sufficient for source-level replay (>=80%)",
+      "testable": true
+    },
+    {
+      "id": "A6",
+      "assumption": "Z3 terminates within 30s timeout",
+      "testable": true
+    }
+  ],
+  "risk_assessment": {
+    "T1_fails": {
+      "probability": 0.35,
+      "impact": "CRITICAL",
+      "mitigation": "Publish gap characterization"
+    },
+    "wp_engine_hard": {
+      "probability": 0.25,
+      "impact": "HIGH",
+      "mitigation": "Budget 8K LoC, scope to scalar first"
+    },
+    "low_bug_yield": {
+      "probability": 0.3,
+      "impact": "HIGH",
+      "mitigation": "Target arithmetic-heavy libs first"
+    },
+    "high_fp_rate": {
+      "probability": 0.25,
+      "impact": "MEDIUM",
+      "mitigation": "Multi-layer filtering"
+    },
+    "specfuzzer_matches": {
+      "probability": 0.2,
+      "impact": "MEDIUM",
+      "mitigation": "Emphasize formal guarantees"
+    }
+  }
+}

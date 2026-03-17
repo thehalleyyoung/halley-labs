@@ -1,0 +1,126 @@
+# CascadeVerify
+
+## Recovered paper story
+
+CascadeVerify is now documented as a **formalization-first project** for retry amplification and timeout-chain analysis in microservice configurations.
+
+The strongest evidence currently in this repository is:
+
+1. the formal RTIG model and proofs in `tool_paper.tex`
+2. the executable Python reference implementation in `benchmarks/empirical_evaluation.py`
+3. the rerunnable artifacts `benchmarks/empirical_results.json` and `benchmarks/deep_cascade_results.json`
+4. the larger Rust workspace prototype in `implementation/`, treated as engineering scaffolding rather than the validated core story
+
+This README intentionally avoids unrun tool comparisons and speculative benchmark claims.
+
+## What we can honestly claim today
+
+- **Formal core:** the paper defines the Retry-Timeout Interaction Graph (RTIG), proves bounded cascade reachability is NP-complete, proves monotonicity for the CB-free model, and derives a completeness bound for bounded model checking.
+- **Working reference implementation:** the Python evaluator executes the RTIG recurrence, minimal failure-set search, anti-pattern checks, and a MaxSAT-style repair loop.
+- **Transparent scenario-suite validation:** rerunning the evaluator on 2026-03-17 reproduced agreement on all 14 hand-authored scenarios (9 cascade, 5 safe).
+- **Measured small/medium synthetic scaling:** the same evaluator measured total runtime up to 100 generated services.
+- **Projected deep-topology study:** the deep-cascade profiler was rerun, but its numbers are explicitly **model-based projections**, not measured verifier runtimes.
+
+## What we are **not** claiming
+
+- no 215-bug corpus results
+- no broad head-to-head comparison against kube-score, Polaris, Datree, `istioctl`, chaos tools, or TLA+
+- no externally validated “SOTA” precision/recall story
+- no claim that the Rust CLI is the primary validated artifact
+
+## Repository map
+
+- `tool_paper.tex` / `tool_paper.pdf` — recovered paper narrative
+- `groundings.json` — claim/evidence map with commands actually rerun
+- `benchmarks/empirical_evaluation.py` — executable reference model
+- `benchmarks/empirical_results.json` — scenario-suite + measured scaling output
+- `benchmarks/deep_cascade_profiler.py` — model-based deep-topology profiler
+- `benchmarks/deep_cascade_results.json` — profiler output
+- `implementation/` — Rust workspace prototype
+- `examples/` — example manifests
+
+## Reproducing the current evidence
+
+```bash
+# 1) Executable reference validation + measured scaling
+python3 benchmarks/empirical_evaluation.py
+
+# 2) Model-based deep-topology profiler
+python3 benchmarks/deep_cascade_profiler.py
+
+# 3) Rust workspace build status
+(cd implementation && cargo build --workspace --quiet)
+
+# 4) Current Rust test status (presently fails)
+(cd implementation && cargo test --workspace --quiet)
+```
+
+## Commands rerun for this recovery pass
+
+```bash
+python3 benchmarks/empirical_evaluation.py
+python3 benchmarks/deep_cascade_profiler.py
+(cd implementation && cargo build --workspace --quiet)
+(cd implementation && cargo test --workspace --quiet)
+(cd implementation && ./target/debug/cascade-verify --help)
+(cd implementation && ./target/debug/cascade-verify check ../examples/retry-amplification)
+pdflatex -interaction=nonstopmode tool_paper.tex
+pdflatex -interaction=nonstopmode tool_paper.tex
+```
+
+## Rerun results (2026-03-17)
+
+### 1) Python reference implementation: 14-scenario suite
+
+- scenarios: **14** total = **9 cascade** + **5 safe**
+- agreement with scenario labels: **14 / 14**
+- average verification time: **1.8 ms**
+- average repair time: **3.6 ms**
+- repair soundness: **13 / 14 cascade scenarios** (**92.9%**)
+- notable limitation: the dense `mesh_20_services` repair remains unsound
+
+These numbers come from a **hand-authored transparent scenario suite**, so they should be read as **reference-model agreement**, not as external precision/recall on an audited corpus.
+
+### 2) Measured scaling from the same reference implementation
+
+| Topology | 10 services | 30 services | 50 services | 100 services |
+|---|---:|---:|---:|---:|
+| Chain | 1.4 ms | 44.1 ms | 185.8 ms | 1365.8 ms |
+| Tree  | 0.5 ms | 10.5 ms | 52.0 ms | 491.7 ms |
+| Mesh  | 0.3 ms | 13.3 ms | 161.2 ms | 3561.6 ms |
+
+Interpretation: the reference model is executable on low-hundreds-of-service synthetic graphs, with dense mesh connectivity dominating cost.
+
+### 3) Deep-topology profiler (projected, not measured)
+
+Selected reproduced projections from `benchmarks/deep_cascade_results.json`:
+
+- chain, width 2, depth 50: **18.76 s**, **75.0 MB**, bottleneck `constraint_generation`
+- tree, width 2, depth 50: **41.14 s**, **148.5 MB**, bottleneck `constraint_generation`
+- mesh, width 2, depth 50: **235.33 s**, **300.0 MB**, bottleneck `smt_solving`
+- mesh, width 5, depth 50: **projected timeout**
+- mesh, width 10, depth 30: **576.72 s**, near 600 s budget
+- mesh, width 10, depth 50: **projected timeout**
+
+These values are generated by the profiler’s simulation function `_simulate_phase_times`, so they are useful as **projection data only**.
+
+### 4) Rust prototype status
+
+- `cargo build --workspace --quiet`: **passed**
+- `cargo test --workspace --quiet`: **failed** due to stale test/API mismatches across multiple crates
+- `./target/debug/cascade-verify --help`: **worked**
+- `./target/debug/cascade-verify check ../examples/retry-amplification`: **panicked** with `Mismatch between definition and access of verbose`
+
+So the Rust workspace exists and builds, but it is **not** the current validated research story.
+
+## Practical takeaway
+
+If you want to understand or extend the actual evidence-backed contribution, start with:
+
+1. `tool_paper.tex`
+2. `benchmarks/empirical_evaluation.py`
+3. `benchmarks/empirical_results.json`
+4. `benchmarks/deep_cascade_profiler.py`
+5. `benchmarks/deep_cascade_results.json`
+
+The most defensible next step is to align the Rust prototype with the Python reference model and then rerun end-to-end experiments on an audited manifest corpus.

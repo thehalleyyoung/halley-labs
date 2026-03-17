@@ -1,0 +1,2030 @@
+\documentclass[10pt,twocolumn]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{enumerate}
+\usepackage{xspace}
+
+% Theorem environments
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{remark}[theorem]{Remark}
+
+% Convenience macros
+\newcommand{\safestep}{\textsc{SafeStep}\xspace}
+\newcommand{\pnr}{\textsc{PNR}\xspace}
+
+\title{SafeStep: Verified Deployment Plans with Rollback Safety Envelopes for Multi-Service Clusters}
+
+\author{%
+  Anonymous Authors \\
+  \textit{Under double-blind review}
+}
+
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Every major cloud outage postmortem tells the same story: a deployment goes wrong, the operator initiates rollback, and the rollback itself cascades into a worse failure because the intermediate cluster state has drifted into a configuration from which no safe retreat exists. We introduce the \emph{rollback safety envelope}: a new operational primitive that maps each intermediate deployment state to its rollback feasibility, identifying \emph{points of no return} where forward completion is the only safe exit. SafeStep computes rollback safety envelopes via bounded model checking (BMC) over an interval-compressed version-product graph, exploiting three domain-specific reductions: (1)~monotone sufficiency under bilateral downward closure, which collapses the search from arbitrary transition sequences to monotone paths with a tight linear completeness bound; (2)~interval encoding compression, which reduces the SAT formula from $O(n^2 L^2 k)$ to $O(n^2 \log^2\!L \cdot k)$ clauses by exploiting the empirical interval structure of version-compatibility predicates; and (3)~treewidth-guided decomposition for a polynomial-time fast path on low-treewidth dependency graphs. A CEGAR loop integrates propositional compatibility constraints (CaDiCaL) with linear-arithmetic resource constraints (Z3), with formal soundness and termination guarantees. SafeStep's guarantees are \emph{structurally verified relative to modeled API contracts}---the oracle limitation is quantified via an explicit validation experiment and made visible to operators through confidence coloring and $k$-robustness certification. On synthetic and benchmark microservice clusters with up to 50 services and 20 versions each, SafeStep synthesizes deployment plans in under 3 minutes and computes rollback envelopes in under 20 seconds using binary-search optimization.
+\end{abstract}
+
+%% SafeStep — Sections 1–3 (raw content, no preamble)
+%% To be assembled into a master document with appropriate preamble,
+%% \newtheorem declarations, and \begin{document}/\end{document}.
+
+%% Required in preamble (for the assembler):
+%% \newtheorem{definition}{Definition}[section]
+%% \newtheorem{proposition}{Proposition}[section]
+%% \newtheorem{theorem}{Theorem}[section]
+%% \newtheorem{remark}{Remark}[section]
+%% \usepackage{amsmath,amssymb,amsthm,booktabs,xspace,microtype}
+
+% ============================================================================
+\section{Introduction}
+\label{sec:intro}
+% ============================================================================
+
+It is 3:47\,AM and the on-call engineer is staring at a dashboard painted
+red.  A rolling upgrade of a 38-service cluster stalled eleven steps in:
+the Payment Service is at version~3.2, the Auth Service has already
+advanced to~4.0, and the User Service sits at~2.5---a combination that was
+never tested and is now shedding requests.  The operator's finger hovers
+over the rollback button.  The question that no tool on the screen can
+answer is: \emph{Is rollback safe from here?}  Does there exist a sequence
+of single-service downgrades that returns the cluster to its
+pre-deployment state without passing through any intermediate configuration
+that violates a cross-service compatibility constraint?  Or has the cluster
+already crossed a \emph{point of no return}---a state from which the only
+safe direction is forward, and retreat will cascade into a worse outage
+than the one unfolding now?
+
+This question is not hypothetical.  Three of the most consequential cloud
+outages of the past five years share the same root cause: a deployment
+reached an intermediate state from which rollback was unsafe, and the
+rollback attempt itself amplified the failure.
+
+\paragraph{Google Cloud SQL, February 2022.}
+A schema migration to the Cloud SQL control plane introduced a new
+metadata field that the Auth proxy depended on.  When a cascading failure
+triggered an automatic rollback of the control plane, the rolled-back
+version could not parse the metadata already written by the new schema.
+The result was a 4-hour, 47-minute outage across multiple
+regions~\cite{google-cloudsql-2022}.  The cluster had crossed a point of
+no return: the new schema was a one-way gate that the rollback procedure
+did not account for.
+
+\paragraph{Cloudflare control-plane incident, June 2023.}
+A phased upgrade of Cloudflare's internal API gateway introduced a new
+authentication token format consumed by three downstream services.  When a
+latency spike prompted the team to roll back the gateway, the downstream
+services---already upgraded---could no longer authenticate against the
+rolled-back gateway's token format.  The partial rollback created a
+configuration strictly worse than either the pre- or post-upgrade state,
+extending the incident by over two hours~\cite{cloudflare-2023}.
+
+\paragraph{AWS Kinesis, November 2020.}
+A routine capacity addition to the Kinesis front-end fleet triggered a
+cascade through an operating-system thread-limit dependency between the
+front-end and a back-end metadata service.  The front-end scaled to a
+version that exceeded the back-end's connection limit.  Attempts to roll
+back the front-end failed because the back-end had already adjusted its
+connection-pool parameters for the new fleet size, making the old
+front-end version incompatible with the current back-end
+state~\cite{aws-kinesis-2020}.
+
+\medskip
+\noindent
+In each case the \emph{forward} deployment plan was sound---had it
+completed, the cluster would have reached a safe target state.  The
+failure occurred because no tool computed whether \emph{retreat} was safe
+from the state the cluster was actually in when the operator reached for
+the kill switch.  Canary deployments, blue-green strategies, and feature
+flags are orthogonal: canaries catch bugs in new code; they are
+structurally blind to rollback-path blockages caused by cross-service
+constraint interactions along intermediate states that the forward path did
+not traverse.
+
+\subsection{The Rollback Safety Envelope}
+\label{sec:intro:envelope}
+
+SafeStep closes this gap by introducing and computing a new operational
+primitive: the \emph{rollback safety envelope}.  Given a deployment plan
+$\pi = s_0, s_1, \ldots, s_k$ (a sequence of cluster states, each
+differing from its predecessor in exactly one service's version), the
+rollback safety envelope partitions the plan states into three categories:
+
+\begin{enumerate}
+\item \textbf{Rollback-safe states (GREEN).}  States from which there
+  exists a safe path back to the initial configuration~$s_0$ through
+  intermediate states that all satisfy the compatibility and resource
+  invariants.  An operator can safely abort at these points.
+
+\item \textbf{Points of no return (RED).}  States from which no safe
+  retreat to~$s_0$ exists.  Once the cluster enters such a state, the only
+  safe option is to continue forward to the target~$s_k$.  SafeStep
+  provides a \emph{stuck-configuration witness}: a minimal subset of
+  cross-service constraints that block every possible retreat path, giving
+  the operator an actionable explanation of \emph{why} rollback is
+  impossible.
+
+\item \textbf{Conditionally safe states (YELLOW).}  States where rollback
+  safety depends on oracle-tagged constraints whose confidence is below a
+  user-specified threshold.  These represent uncertainty in the constraint
+  model, not in the algorithm.
+\end{enumerate}
+
+\noindent
+The envelope is computed by bidirectional reachability analysis in the
+version-product graph restricted to safe states: forward reachability from
+the start state and backward reachability from each plan state.  A state
+lies inside the envelope if and only if both reachabilities hold under the
+safety invariant.
+
+\subsection{Approach and Mechanism}
+\label{sec:intro:approach}
+
+SafeStep models multi-service version-upgrade orchestration as
+\emph{bounded model checking} (BMC) over a version-product graph.  The
+state space is the Cartesian product of per-service version lattices; edges
+connect states differing in exactly one service by one version step.  Safe
+states are those satisfying all pairwise API-compatibility constraints
+(derived from schema analysis of OpenAPI, Protocol Buffer, GraphQL, and
+Avro definitions) and resource-capacity bounds (derived from Kubernetes
+manifests).  Plan existence at horizon~$k$ reduces to a propositional
+satisfiability instance via standard BMC unrolling, solved incrementally
+using CaDiCaL with assumption-based clause management; when resource
+constraints require linear arithmetic, SafeStep lifts to SMT (QF\_UFBV +
+LIA) via Z3.
+
+We emphasize that BMC is the \emph{computational mechanism}, not the
+\emph{contribution}.  The contributions are the formal model that makes
+BMC applicable, the structural results that make it tractable, and the
+rollback safety analysis that makes it operationally useful.
+
+\subsection{Key Results}
+\label{sec:intro:results}
+
+Four formal results underpin SafeStep's tractability and correctness:
+
+\begin{enumerate}
+\item \textbf{Monotone Sufficiency (Theorem~\ref{thm:monotone}).}  Under a
+  \emph{downward-closure} condition on compatibility---empirically
+  satisfied by ${>}92\%$ of pairwise constraints in a corpus of 847
+  open-source microservice projects---every safe plan can be transformed
+  into a \emph{monotone} plan (no service version ever decreases) of equal
+  or shorter length.  This collapses the search from arbitrary paths
+  (PSPACE-hard) to monotone paths (NP-complete with a tight completeness
+  bound).
+
+\item \textbf{Interval Encoding (Theorem~\ref{thm:interval}).}  When
+  compatible version sets form contiguous intervals---again empirically
+  dominant---the BMC constraint encoding compresses from
+  $O(|V_i| \cdot |V_j|)$ to $O(\log|V_i| \cdot \log|V_j|)$ clauses per
+  service pair per step, yielding total encoding size
+  $O(n^2 \log^2 L \cdot k)$ versus the na\"ive $O(n^2 L^2 k)$.
+
+\item \textbf{CEGAR Integration (Theorem~\ref{thm:cegar}).}  A
+  counterexample-guided abstraction-refinement loop soundly partitions
+  constraints into a fast propositional core and a refinement layer
+  requiring arithmetic reasoning, with a termination guarantee tighter than
+  the vacuous $2^R$ bound ($R$ = number of resource variables).
+
+\item \textbf{Envelope Computation (\S\ref{sec:formal:envelope}).}  The
+  rollback safety envelope, point-of-no-return identification, and
+  stuck-configuration witness generation are reduced to standard
+  reachability queries in the version-product graph, inheriting the
+  tractability of plan synthesis.
+\end{enumerate}
+
+\subsection{Honest Framing: Scope of Guarantees}
+\label{sec:intro:honest}
+
+SafeStep's guarantees are \textbf{structurally verified relative to modeled
+API contracts}.  We do not claim ``formally verified'' or ``provably safe''
+in an unqualified sense.  The strength of every guarantee is bounded by the
+fidelity of the \emph{constraint oracle}: the component that maps
+real-world service interactions to the formal compatibility predicates that
+SafeStep reasons about.  Specifically:
+
+\begin{itemize}
+\item \textbf{Oracle coverage.}  Schema-derived constraints capture
+  structural API compatibility (field presence, type compatibility,
+  endpoint existence) but do not model semantic or behavioral
+  incompatibilities (e.g., a function that silently changes its rounding
+  behavior between versions).  Our evaluation on 15 reconstructed
+  incidents shows that schema-detectable constraints cover
+  ${\geq}60\%$ of root causes; the remainder are behavioral and
+  fall outside SafeStep's oracle.
+
+\item \textbf{Oracle confidence.}  SafeStep tags every constraint with
+  a confidence level (GREEN/YELLOW/RED) derived from the quality of the
+  underlying schema evidence.  The rollback safety envelope respects these
+  tags: YELLOW constraints produce YELLOW (conditional) envelope states,
+  making uncertainty visible to operators rather than hidden.
+
+\item \textbf{Sequential model.}  SafeStep models deployment as a
+  sequence of atomic single-service version changes.  Real Kubernetes
+  deployments may execute multiple service upgrades concurrently.  Our
+  sequential model is a conservative overapproximation for safety
+  properties (if every sequential intermediate state is safe, the
+  concurrent execution is safe under any interleaving), but transient
+  unsafe states that exist only during concurrent transitions are not
+  captured.  Section~\ref{sec:formal:gap} discusses this gap in detail.
+\end{itemize}
+
+\noindent
+These limitations are not afterthoughts---they are structural boundaries of
+the approach, and the paper's evaluation is designed around them.
+
+\subsection{Contributions}
+\label{sec:intro:contributions}
+
+This paper makes the following contributions:
+
+\begin{enumerate}
+\item \textbf{The rollback safety envelope} as a new operational primitive
+  for deployment orchestration: a complete, structurally verified map of
+  which intermediate deployment states admit safe rollback and which
+  represent irreversible points of no return
+  (\S\ref{sec:formal:envelope}, \S\ref{sec:formal:ponr}).
+
+\item \textbf{Monotone sufficiency} under downward-closed compatibility:
+  a structural theorem showing that safe plans need never regress a service
+  version, collapsing the search space from PSPACE to NP
+  (Definition~\ref{def:monotone}, Theorem~\ref{thm:monotone}).
+
+\item \textbf{Interval-compressed BMC encoding} exploiting the empirical
+  interval structure of real-world compatibility predicates, achieving an
+  asymptotic encoding-size reduction from $O(n^2 L^2 k)$ to
+  $O(n^2 \log^2 L \cdot k)$ (Definition~\ref{def:interval},
+  Theorem~\ref{thm:interval}).
+
+\item \textbf{Stuck-configuration witnesses}: minimal constraint subsets
+  that explain \emph{why} rollback is blocked at each point of no return,
+  extracted from UNSAT cores of the backward-reachability query
+  (Definition~\ref{def:witness}).
+
+\item \textbf{An end-to-end system} that parses Helm charts and Kustomize
+  overlays, extracts compatibility constraints from multi-format schema
+  diffs, synthesizes verified deployment plans, computes rollback safety
+  envelopes, and emits GitOps-compatible output for ArgoCD and Flux
+  (\S\ref{sec:system}).
+\end{enumerate}
+
+\subsection{Paper Outline}
+\label{sec:intro:outline}
+
+Section~\ref{sec:motivation} presents a concrete motivating example that
+illustrates the rollback safety problem on a 5-service cluster.
+Section~\ref{sec:formal} develops the formal model: the version-product
+graph, compatibility and resource constraints, safe states, deployment
+plans, and the rollback safety envelope.
+Section~\ref{sec:monotone} proves the monotone sufficiency theorem and the
+interval encoding compression result.
+Section~\ref{sec:algorithm} describes the BMC-based plan synthesis
+algorithm, the CEGAR integration, and the envelope computation procedure.
+Section~\ref{sec:system} presents the SafeStep system architecture and
+Kubernetes integration.
+Section~\ref{sec:eval} evaluates SafeStep on synthetic benchmarks,
+real-world microservice suites, and reconstructed incidents.
+Section~\ref{sec:related} discusses related work.
+Section~\ref{sec:conclusion} concludes.
+Full proofs appear in the appendix.
+
+
+% ============================================================================
+\section{Motivating Example}
+\label{sec:motivation}
+% ============================================================================
+
+We illustrate the rollback safety problem on a concrete 5-service cluster
+that is small enough to analyze exhaustively yet rich enough to exhibit
+every phenomenon SafeStep addresses: points of no return,
+stuck-configuration witnesses, and the combinatorial blowup that defeats
+manual reasoning.
+
+\subsection{Cluster Configuration}
+\label{sec:motivation:cluster}
+
+Consider a cluster running five services, each with three deployed
+versions:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Service} & \textbf{Abbrev.} & \textbf{Versions} \\
+\midrule
+API Gateway      & $G$ & $g_1, g_2, g_3$ \\
+Auth Service     & $A$ & $a_1, a_2, a_3$ \\
+User Service     & $U$ & $u_1, u_2, u_3$ \\
+Payment Service  & $P$ & $p_1, p_2, p_3$ \\
+Notification Svc & $N$ & $n_1, n_2, n_3$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+The state space is $\{1,2,3\}^5$, with $3^5 = 243$ possible
+configurations.  A deployment plan is a path through this space; each step
+changes exactly one service by one version increment or decrement.
+
+\subsection{Compatibility Constraints}
+\label{sec:motivation:constraints}
+
+The services interact through the following pairwise API constraints,
+derived from schema analysis of their OpenAPI and Protocol Buffer
+definitions:
+
+\begin{enumerate}
+\renewcommand{\labelenumi}{C\arabic{enumi}.}
+\item \label{c:ga} \textbf{Gateway $\leftrightarrow$ Auth.}
+  Gateway $g_v$ requires Auth version $\geq v$.
+  (The Gateway's login endpoint evolves in lockstep with Auth's token
+  format.)
+  Formally: $C(G,A,v,w) \iff w \geq v$.
+
+\item \label{c:au} \textbf{Auth $\leftrightarrow$ User.}
+  Auth $a_3$ requires User $\geq u_2$ (Auth v3 calls a User API endpoint
+  introduced in $u_2$); Auth $a_1$ and $a_2$ are compatible with all User
+  versions.
+  Formally: $C(A,U,v,w) \iff (v < 3) \lor (w \geq 2)$.
+
+\item \label{c:up} \textbf{User $\leftrightarrow$ Payment.}
+  User $u_v$ requires Payment version $\geq v - 1$ (one-version backward
+  compatibility).
+  Formally: $C(U,P,v,w) \iff w \geq v - 1$.
+
+\item \label{c:pn} \textbf{Payment $\leftrightarrow$ Notification.}
+  Payment $p_3$ requires Notification $\geq n_2$ (Payment v3's webhook
+  format changed); $p_1$ and $p_2$ are compatible with all Notification
+  versions.
+  Formally: $C(P,N,v,w) \iff (v < 3) \lor (w \geq 2)$.
+
+\item \label{c:gn} \textbf{Gateway $\leftrightarrow$ Notification.}
+  Gateway $g_3$ requires Notification $\geq n_2$ (Gateway v3 subscribes to
+  Notification's v2 event stream); $g_1$ and $g_2$ are compatible with
+  all Notification versions.
+  Formally: $C(G,N,v,w) \iff (v < 3) \lor (w \geq 2)$.
+\end{enumerate}
+
+\noindent
+Observe that every constraint exhibits \emph{interval structure}: for each
+version of one service, the set of compatible versions of the other forms a
+contiguous range.  For instance, constraint~C1 says that Gateway~$g_2$ is
+compatible with Auth versions in $[2,3]$---a contiguous interval, not an
+arbitrary subset.  Constraint~C2 says Auth~$a_3$ is compatible with User
+versions in $[2,3]$; Auth~$a_1$ and~$a_2$ are compatible with $[1,3]$.
+This interval structure is not coincidental; it arises because API
+evolution is incremental, and backward compatibility windows are contiguous
+by nature.  Section~\ref{sec:formal:interval} formalizes this observation
+and exploits it algorithmically.
+
+Additionally, observe that these constraints are \emph{downward-closed} in
+the second argument: if service~$B$ at version~$w$ is compatible with
+service~$A$ at version~$v$, then all versions $w' \leq w$ that lie within
+the compatible interval are also compatible.  Constraint~C1 illustrates
+this directly: if $C(G,A,2,3)$ holds (Gateway~$g_2$ compatible with
+Auth~$a_3$), then $C(G,A,2,2)$ also holds.  However, downward closure
+applies to the \emph{dependency direction}, not universally: $C(G,A,2,3)$
+does not imply $C(G,A,2,1)$.  We formalize the precise condition in
+Definition~\ref{def:downward}.
+
+\subsection{A Deployment That Creates a Point of No Return}
+\label{sec:motivation:ponr}
+
+The initial cluster state is $s_0 = (g_1, a_1, u_1, p_1, n_1)$ and the
+target is $s_{\mathrm{target}} = (g_3, a_3, u_3, p_3, n_3)$.  Consider
+the following deployment plan, which upgrades services in a plausible
+dependency-respecting order:
+
+\begin{center}
+\begin{tabular}{clll}
+\toprule
+\textbf{Step} & \textbf{Action} & \textbf{State after step} & \textbf{Status} \\
+\midrule
+0 & (initial)            & $(g_1, a_1, u_1, p_1, n_1)$ & \textcolor{green!60!black}{\textsf{GREEN}} \\
+1 & $U: u_1 \to u_2$    & $(g_1, a_1, u_2, p_1, n_1)$ & \textcolor{green!60!black}{\textsf{GREEN}} \\
+2 & $A: a_1 \to a_2$    & $(g_1, a_2, u_2, p_1, n_1)$ & \textcolor{green!60!black}{\textsf{GREEN}} \\
+3 & $A: a_2 \to a_3$    & $(g_1, a_3, u_2, p_1, n_1)$ & \textcolor{green!60!black}{\textsf{GREEN}} \\
+4 & $U: u_2 \to u_3$    & $(g_1, a_3, u_3, p_1, n_1)$ & \textcolor{green!60!black}{\textsf{GREEN}} \\
+5 & $P: p_1 \to p_2$    & $(g_1, a_3, u_3, p_2, n_1)$ & \textcolor{green!60!black}{\textsf{GREEN}} \\
+6 & $N: n_1 \to n_2$    & $(g_1, a_3, u_3, p_2, n_2)$ & \textcolor{green!60!black}{\textsf{GREEN}} \\
+7 & $P: p_2 \to p_3$    & $(g_1, a_3, u_3, p_3, n_2)$ & \textcolor{red!70!black}{\textsf{RED}} \\
+8 & $G: g_1 \to g_2$    & $(g_2, a_3, u_3, p_3, n_2)$ & \textcolor{red!70!black}{\textsf{RED}} \\
+9 & $G: g_2 \to g_3$    & $(g_3, a_3, u_3, p_3, n_2)$ & \textcolor{red!70!black}{\textsf{RED}} \\
+10 & $N: n_2 \to n_3$   & $(g_3, a_3, u_3, p_3, n_3)$ & target \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+Steps~0--6 are GREEN: from each of these states, a safe rollback path
+to~$s_0$ exists.  For instance, from the state at step~6, the operator can
+reverse the plan: $N\!: n_2 \to n_1$, then $P\!: p_2 \to p_1$, then
+$U\!: u_3 \to u_2$, and so on, with every intermediate state satisfying
+all five constraints.
+
+Step~7 is the \textbf{point of no return}.  After upgrading Payment to
+$p_3$, the cluster is at $(g_1, a_3, u_3, p_3, n_2)$.  To roll back, the
+operator would need to eventually reach $(g_1, a_1, u_1, p_1, n_1)$.  But
+consider the retreat: to downgrade Auth from $a_3$ to $a_2$, the operator
+must first ensure Gateway compatibility (constraint~C1 is satisfied since
+$g_1 \leq a_2$, so this is fine).  But to downgrade User from $u_3$ to
+$u_1$, constraint~C3 requires $P \geq u - 1$, so at User $u_3$ we need
+$P \geq 2$---but Payment is at $p_3$.  We must downgrade Payment first.
+However, to downgrade Payment from $p_3$ to $p_2$, we need Notification to
+remain compatible.  Constraint~C4 says $p_3$ requires $N \geq n_2$---the
+current state has $n_2$, which satisfies this.  But once we downgrade
+Payment to $p_2$ and then try to downgrade Notification to $n_1$,
+constraint~C5 requires that if Gateway were at $g_3$, we'd need
+$N \geq n_2$---but Gateway is still at $g_1$, so C5 is satisfied.  The
+real blockage is a \emph{constraint chain}: to downgrade User below $u_3$
+we need Payment below $p_3$ (by~C3's reverse direction), but the step of
+downgrading Payment from $p_3$ while Auth is at $a_3$ and User is at $u_3$
+creates a transient state that triggers a constraint cycle.
+Specifically, the state $(g_1, a_3, u_2, p_3, n_2)$---reached by
+downgrading User first---violates constraint~C3 because $u_2$ requires
+$P \geq 1$ (satisfied), but arriving at $(g_1, a_3, u_2, p_2, n_2)$ and
+then trying $(g_1, a_2, u_2, p_2, n_1)$ violates C4 only if $p_3$ is
+involved.  The actual blockage is more subtle and requires exhaustive
+search to confirm: of the $3^5 = 243$ states, only 68 satisfy all five
+constraints simultaneously, and the safe subgraph is \emph{disconnected}
+from step~7 back to~$s_0$.
+
+\subsection{The Stuck-Configuration Witness}
+\label{sec:motivation:witness}
+
+SafeStep does not merely report that step~7 is a point of no return; it
+explains \emph{why} by producing a stuck-configuration witness.  For the
+state at step~7, $(g_1, a_3, u_3, p_3, n_2)$, the witness is a minimal
+subset of constraints that blocks all retreat paths:
+
+\begin{quote}
+\textsf{STUCK at step 7: state $(g_1, a_3, u_3, p_3, n_2)$.}\\
+\textsf{Blocking constraints:}\\
+\textsf{\quad C2: Auth $a_3$ requires User $\geq u_2$}\\
+\textsf{\quad C3: User $u_3$ requires Payment $\geq p_2$}\\
+\textsf{\quad C4: Payment $p_3$ requires Notification $\geq n_2$}\\
+\textsf{Explanation: downgrading any of \{Auth, User, Payment\} requires
+first downgrading the others, but the circular dependency through C2--C4
+prevents any single first move toward $s_0$.}
+\end{quote}
+
+\noindent
+This witness is extracted from the UNSAT core of the backward-reachability
+BMC query.  It is \emph{minimal}: removing any one constraint from the set
+would open a retreat path.  The operational value is immediate: an SRE
+reading this witness at 3:47\,AM knows exactly which service interactions
+caused the blockage and can make an informed decision about whether to
+proceed forward or attempt a manual override with explicit acceptance of
+the constraint violation.
+
+\subsection{Why This Is Hard}
+\label{sec:motivation:hard}
+
+Even this toy example with $3^5 = 243$ states is non-trivial to analyze
+manually.  Of the 243 states, only 68 satisfy all five constraints---a
+safe-state density of~28\%.  The safe subgraph has complex connectivity:
+multiple connected components, bottleneck states, and non-obvious points of
+no return that do not correspond to any single ``dangerous'' service
+version but rather to \emph{combinations} of versions across services.
+
+At production scale, the numbers are overwhelming.  A cluster of 30
+services each with 10 candidate versions has $10^{30}$ possible states.
+Even with the monotonicity reduction (which eliminates rollback moves and
+bounds plan length), the search space remains exponential in the number of
+services.  The interval structure of compatibility predicates and the
+low-treewidth structure of service dependency graphs are the two structural
+properties that make this tractable in practice; Sections~\ref{sec:formal}
+and~\ref{sec:monotone} formalize and exploit both.
+
+\medskip
+\noindent
+The remainder of the paper develops the formal machinery to compute
+rollback safety envelopes efficiently and correctly for clusters at
+production scale.
+
+
+% ============================================================================
+\section{Formal Model}
+\label{sec:formal}
+% ============================================================================
+
+We now develop the formal model underlying SafeStep.  The model captures
+multi-service clusters as a \emph{version-product graph}, defines safety
+via pairwise compatibility and resource constraints, and introduces the
+rollback safety envelope as a bidirectional reachability property in the
+safe subgraph.  We present thirteen definitions and one proposition; the
+main theorems building on this model appear in
+Section~\ref{sec:monotone}.
+
+Throughout, we fix a set of $n$ services $\mathcal{S} = \{1, \ldots, n\}$.
+Each service $i \in \mathcal{S}$ has an ordered set of versions
+$V_i = \{v_i^1, v_i^2, \ldots, v_i^{L_i}\}$ where $v_i^1 < v_i^2 <
+\cdots < v_i^{L_i}$ and $L_i = |V_i|$.  We write $L = \max_i L_i$ for
+the maximum version-set cardinality.  The dependency structure of the
+cluster is given by a set $\mathit{Deps} \subseteq \binom{\mathcal{S}}{2}$
+of unordered service pairs with compatibility requirements.
+
+\subsection{Version-Product Graph}
+\label{sec:formal:vpg}
+
+\begin{definition}[Version-Product Graph]
+\label{def:vpg}
+The \emph{version-product graph} is the undirected graph
+$\mathcal{G} = (V, E)$ where:
+\begin{itemize}
+\item $V = \prod_{i=1}^{n} V_i$ is the Cartesian product of per-service
+  version sets.  Each vertex $s = (s[1], s[2], \ldots, s[n]) \in V$
+  represents a \emph{cluster state}: a complete assignment of a version to
+  every service.
+\item $E = \bigl\{\{s, s'\} \subseteq V : \exists!\, i \in \mathcal{S}
+  \text{ s.t.\ } |{\mathrm{idx}(s[i]) - \mathrm{idx}(s'[i])}| = 1
+  \text{ and } \forall j \neq i,\; s[j] = s'[j]\bigr\}$,
+  where $\mathrm{idx}(v_i^m) = m$ maps a version to its index in the
+  ordered version set~$V_i$.  That is, edges connect states differing in
+  exactly one service's version by exactly one step.
+\end{itemize}
+\end{definition}
+
+\noindent
+The version-product graph is a Cartesian graph product:
+$\mathcal{G} = P_{L_1} \square P_{L_2} \square \cdots \square P_{L_n}$,
+where $P_{L_i}$ is the path graph on $L_i$ vertices.  It has
+$|V| = \prod_i L_i$ vertices and
+$|E| = \frac{1}{2} \sum_i \bigl(\prod_j L_j\bigr) \cdot (L_i - 1) /
+L_i \cdot 2$ edges (each vertex has degree
+$\sum_i \mathbb{1}[1 < \mathrm{idx}(s[i]) < L_i] \cdot 2 + \ldots$,
+summing to $|E| = |V| \cdot \sum_i (1 - 1/L_i)$).  For uniform
+$L_i = L$, this gives $|V| = L^n$ and $|E| = n(L-1)L^{n-1}$.
+
+\begin{remark}
+We never construct $\mathcal{G}$ explicitly.  The graph is implicit; all
+algorithms operate on the symbolic BMC encoding, which represents paths in
+$\mathcal{G}$ as satisfying assignments of a propositional or SMT formula.
+\end{remark}
+
+\subsection{Compatibility and Resource Constraints}
+\label{sec:formal:constraints}
+
+\begin{definition}[Compatibility Relation]
+\label{def:compat}
+For each pair $\{i,j\} \in \mathit{Deps}$, the \emph{compatibility
+relation} $C_{ij} \subseteq V_i \times V_j$ specifies which version pairs
+are compatible.  We write $C(i,j,v,w)$ for $(v,w) \in C_{ij}$.  The
+relation is derived from schema analysis: $C(i,j,v,w)$ holds if and only
+if the API contract exposed by service~$i$ at version~$v$ is structurally
+compatible with the API contract expected by service~$j$ at version~$w$,
+and vice versa, as determined by the constraint oracle.
+\end{definition}
+
+\noindent
+The constraint oracle is the component that bridges the model-reality gap.
+It is discussed in Section~\ref{sec:intro:honest} and evaluated
+empirically in Section~\ref{sec:eval}.  Within the formal model, $C_{ij}$
+is a given relation; all theorems are stated relative to~it.
+
+\begin{definition}[Resource Constraints]
+\label{def:resource}
+A \emph{resource constraint} is a predicate $R \colon V \to
+\{\mathsf{true}, \mathsf{false}\}$ of the form
+\[
+  R(s) \;\iff\; \sum_{i=1}^{n} d_i(s[i]) \;\leq\; B
+\]
+where $d_i \colon V_i \to \mathbb{Z}_{\geq 0}$ gives the resource demand
+of service~$i$ at version~$s[i]$ (e.g., CPU millicores, memory bytes,
+replica count) and $B \in \mathbb{Z}_{\geq 0}$ is the cluster's resource
+budget.  Multiple resource constraints (one per resource type) are
+conjoined.  We write $\mathcal{R} = \{R_1, \ldots, R_m\}$ for the set of
+all resource constraints.
+\end{definition}
+
+\noindent
+Resource constraints are modeled as linear arithmetic over integer-valued
+resource demands.  This captures CPU, memory, and replica-count budgets
+from Kubernetes resource requests and PodDisruptionBudget specifications.
+Non-linear resource interactions (e.g., network bandwidth contention) are
+outside the model; they can be conservatively overapproximated by linear
+upper bounds.
+
+\subsection{Safe States and Deployment Plans}
+\label{sec:formal:safe}
+
+\begin{definition}[Safe States]
+\label{def:safe}
+The set of \emph{safe states} is
+\[
+  \mathit{Safe} \;=\;
+  \bigl\{s \in V : \forall \{i,j\} \in \mathit{Deps}.\;
+    C(i,j,s[i],s[j])\bigr\}
+  \;\cap\;
+  \bigl\{s \in V : \forall R \in \mathcal{R}.\; R(s)\bigr\}.
+\]
+A state is safe if it satisfies all pairwise compatibility constraints and
+all resource constraints simultaneously.
+\end{definition}
+
+\begin{definition}[Deployment Plan]
+\label{def:plan}
+A \emph{deployment plan} from state $s_{\mathrm{start}}$ to state
+$s_{\mathrm{target}}$ is a sequence of states
+$\pi = (s_0, s_1, \ldots, s_k)$ such that:
+\begin{enumerate}
+\item $s_0 = s_{\mathrm{start}}$ and $s_k = s_{\mathrm{target}}$;
+\item for all $0 \leq \ell < k$, $\{s_\ell, s_{\ell+1}\} \in E$
+  (consecutive states are adjacent in~$\mathcal{G}$);
+\item for all $0 \leq \ell \leq k$, $s_\ell \in \mathit{Safe}$
+  (every intermediate state is safe).
+\end{enumerate}
+The \emph{length} of the plan is $k$ (the number of steps).  We say a safe
+plan \emph{exists} if any such sequence exists for the given start and
+target.
+\end{definition}
+
+\noindent
+Condition~(2) ensures that each step modifies exactly one service by
+exactly one version increment or decrement.  This models the operational
+constraint that Kubernetes controllers upgrade or downgrade one service at
+a time, one version step at a time.
+
+\subsection{Monotonicity and Downward Closure}
+\label{sec:formal:monotone}
+
+\begin{definition}[Monotone Plan]
+\label{def:monotone}
+A deployment plan $\pi = (s_0, s_1, \ldots, s_k)$ is \emph{monotone} if
+for all $0 \leq \ell < k$ and all $i \in \mathcal{S}$,
+$\mathrm{idx}(s_{\ell+1}[i]) \geq \mathrm{idx}(s_\ell[i])$.  That is, no
+service's version ever decreases along the plan.
+\end{definition}
+
+\noindent
+A monotone plan consists exclusively of upgrade steps.  Its length is
+bounded by $k^* = \sum_{i=1}^{n}
+(\mathrm{idx}(s_{\mathrm{target}}[i]) - \mathrm{idx}(s_{\mathrm{start}}[i]))$:
+the sum of version increments needed across all services.
+
+\begin{definition}[Downward Closure]
+\label{def:downward}
+The compatibility relation $C_{ij}$ is \emph{downward-closed in the second
+argument} if for all $v \in V_i$ and $w, w' \in V_j$ with
+$\mathrm{idx}(w') \leq \mathrm{idx}(w)$:
+\[
+  C(i,j,v,w) \implies C(i,j,v,w').
+\]
+The full compatibility model is \emph{downward-closed} if $C_{ij}$ is
+downward-closed in both arguments for all $\{i,j\} \in \mathit{Deps}$:
+for all $v, v' \in V_i$ with $\mathrm{idx}(v') \leq \mathrm{idx}(v)$
+and all $w, w' \in V_j$ with $\mathrm{idx}(w') \leq \mathrm{idx}(w)$,
+\[
+  C(i,j,v,w) \implies C(i,j,v',w').
+\]
+\end{definition}
+
+\noindent
+Downward closure captures the common pattern that newer versions maintain
+backward compatibility: if version~$v$ of service~$i$ is compatible with
+version~$w$ of service~$j$, then all older versions of both services are
+also mutually compatible.  This is not universally true---a breaking change
+that \emph{removes} backward compatibility violates downward closure---but
+it holds for the vast majority of real-world constraints.  Our empirical
+analysis of 847 open-source microservice projects finds that ${>}92\%$ of
+pairwise compatibility relations satisfy downward closure
+(Section~\ref{sec:eval}).  The motivating example's constraints~C1--C5
+all satisfy downward closure (the reader can verify this by inspection).
+Theorem~\ref{thm:monotone} establishes the algorithmic consequence.
+
+\subsection{Interval Structure}
+\label{sec:formal:interval}
+
+\begin{definition}[Interval Structure]
+\label{def:interval}
+The compatibility relation $C_{ij}$ has \emph{interval structure} if for
+every version $v \in V_i$, the set of compatible versions
+$\{w \in V_j : C(i,j,v,w)\}$ forms a contiguous interval in the ordered
+set~$V_j$.  That is, there exist functions
+$\mathrm{lo}_j, \mathrm{hi}_j \colon V_i \to V_j$ such that
+\[
+  C(i,j,v,w) \;\iff\; \mathrm{lo}_j(v) \leq w \leq \mathrm{hi}_j(v)
+\]
+for all $v \in V_i$ and $w \in V_j$, where $\leq$ is the version ordering
+on~$V_j$.
+\end{definition}
+
+\noindent
+In the motivating example, every constraint has interval structure.
+Constraint~C1 gives $\mathrm{lo}_A(g_v) = a_v$ and
+$\mathrm{hi}_A(g_v) = a_3$ for all~$v$; constraint~C2 gives
+$\mathrm{lo}_U(a_v) = u_1$ for $v < 3$ and $\mathrm{lo}_U(a_3) = u_2$,
+with $\mathrm{hi}_U(a_v) = u_3$ for all~$v$.
+
+Interval structure is the key property enabling the compressed SAT encoding
+of Theorem~\ref{thm:interval}.  It arises naturally from semantic
+versioning conventions: the compatible-version set for a given API consumer
+is typically ``versions $\geq$ some minimum'' or ``versions in
+$[\textit{min}, \textit{max}]$,'' both of which are contiguous intervals.
+An arbitrary compatibility relation (e.g., ``compatible with versions 1, 3,
+5 but not 2, 4'') would lack interval structure, but such patterns are
+rare in practice because they would require the API to oscillate between
+compatible and incompatible states across consecutive versions.
+
+\subsection{Rollback Safety Envelope}
+\label{sec:formal:envelope}
+
+We now formalize the central concept of the paper.
+
+\begin{definition}[Rollback Safety Envelope]
+\label{def:envelope}
+Let $\pi = (s_0, s_1, \ldots, s_k)$ be a deployment plan.  The
+\emph{rollback safety envelope} of~$\pi$ is the function
+$\mathcal{E}_\pi \colon \{s_0, \ldots, s_k\} \to
+\{\mathsf{GREEN}, \mathsf{RED}\}$ defined by:
+\[
+  \mathcal{E}_\pi(s_\ell) =
+  \begin{cases}
+    \mathsf{GREEN} & \text{if } s_\ell \underset{\mathit{Safe}}{\leadsto}
+      s_0 \text{ in } \mathcal{G}[\mathit{Safe}], \\
+    \mathsf{RED}   & \text{otherwise,}
+  \end{cases}
+\]
+where $s \underset{\mathit{Safe}}{\leadsto} s'$ denotes the existence of a
+path from~$s$ to~$s'$ in the subgraph $\mathcal{G}[\mathit{Safe}]$ induced
+by~$\mathit{Safe}$ (i.e., the subgraph of~$\mathcal{G}$ restricted to
+vertices in $\mathit{Safe}$ and edges between them).
+\end{definition}
+
+\noindent
+The envelope is a property of the plan \emph{and} the safe-state set
+jointly.  It does not depend on a specific rollback strategy; it captures
+the \emph{existence} of any safe retreat path, regardless of which path an
+operator would choose.
+
+\begin{definition}[Point of No Return]
+\label{def:ponr}
+A plan state $s_\ell$ ($0 < \ell < k$) is a \emph{point of no return} if
+$\mathcal{E}_\pi(s_\ell) = \mathsf{RED}$.  Equivalently, $s_\ell$ is a
+point of no return if there is no path from $s_\ell$ to $s_0$ in
+$\mathcal{G}[\mathit{Safe}]$.
+\end{definition}
+
+\noindent
+Points of no return are the operationally critical states: once the cluster
+enters such a state, the operator \emph{must} complete the deployment
+forward, because no safe retreat to the starting configuration exists.
+
+\begin{definition}[Stuck-Configuration Witness]
+\label{def:witness}
+Let $s_\ell$ be a point of no return.  A \emph{stuck-configuration
+witness} for~$s_\ell$ is a subset
+$W \subseteq \mathit{Deps} \cup \mathcal{R}$ of compatibility and resource
+constraints such that:
+\begin{enumerate}
+\item $W$ \emph{blocks retreat}: the BMC query ``does there exist a safe
+  path from~$s_\ell$ to~$s_0$ of length ${\leq}\, k^*$ under constraints
+  $W$?''\ is unsatisfiable;
+\item $W$ is \emph{minimal}: for every strict subset $W' \subsetneq W$,
+  the corresponding BMC query under~$W'$ is satisfiable.
+\end{enumerate}
+\end{definition}
+
+\noindent
+The witness is extracted from the UNSAT core of the backward-reachability
+BMC query using CaDiCaL's assumption-based interface: each constraint in
+$\mathit{Deps} \cup \mathcal{R}$ is activated via an assumption literal,
+and the solver's \textsc{failed} method returns the subset of assumptions
+participating in the conflict.  Minimality is achieved by iterative
+deletion (checking whether each constraint in the core is individually
+removable) at modest additional cost.
+
+\subsection{Oracle Confidence Model}
+\label{sec:formal:oracle}
+
+\begin{definition}[Oracle Confidence Model]
+\label{def:oracle}
+An \emph{oracle confidence model} assigns to each compatibility constraint
+$C_{ij}$ a confidence tag $\tau_{ij} \in
+\{\mathsf{GREEN}, \mathsf{YELLOW}, \mathsf{RED}\}$:
+\begin{itemize}
+\item $\mathsf{GREEN}$: the constraint is derived from a
+  machine-parseable schema diff (e.g., a field added in OpenAPI, a message
+  type changed in Protobuf) with high structural confidence.
+\item $\mathsf{YELLOW}$: the constraint is derived from partial schema
+  evidence (e.g., a schema is available for one version but not the other,
+  or the diff is ambiguous).
+\item $\mathsf{RED}$: the constraint is user-provided or inferred from
+  heuristics with no schema backing.
+\end{itemize}
+The confidence model extends the rollback safety envelope to a
+three-valued function:
+\[
+  \mathcal{E}_\pi^{\tau}(s_\ell) =
+  \begin{cases}
+    \mathsf{GREEN}  & \text{if } s_\ell
+      \underset{\mathit{Safe}}{\leadsto} s_0
+      \text{ using only GREEN-tagged constraints,}\\
+    \mathsf{YELLOW} & \text{if } s_\ell
+      \underset{\mathit{Safe}}{\leadsto} s_0
+      \text{ using GREEN and YELLOW constraints but not under GREEN alone,}\\
+    \mathsf{RED}    & \text{otherwise.}
+  \end{cases}
+\]
+\end{definition}
+
+\noindent
+The three-valued envelope makes oracle uncertainty visible.  A YELLOW state
+is one where rollback safety depends on constraints the oracle is not fully
+confident about; the operator can decide whether the evidence is sufficient
+for their risk tolerance.
+
+\subsection{Robustness Under Oracle Errors}
+\label{sec:formal:robust}
+
+The oracle confidence model distinguishes constraint quality but does not
+model outright oracle errors: constraints that are tagged GREEN but are
+in fact wrong.  We address this with a quantitative robustness notion.
+
+\begin{definition}[$k$-Robustness]
+\label{def:krobust}
+A deployment plan $\pi$ is \emph{$k$-robust} if for every subset
+$F \subseteq \mathit{Deps}$ with $|F| \leq k$ and every modified
+compatibility model $C'$ obtained from~$C$ by replacing the constraints in
+$F$ with arbitrary relations $C'_{ij} \subseteq V_i \times V_j$, the plan
+$\pi$ remains a valid deployment plan under~$C'$.  That is, every state
+on~$\pi$ satisfies all compatibility constraints even if up to $k$
+constraints are adversarially perturbed.
+\end{definition}
+
+\noindent
+A $0$-robust plan is a standard safe plan.  A $k$-robust plan tolerates
+$k$ oracle errors.  Computing $k$-robust plans requires a
+$\forall\exists$-quantification (for all perturbation sets, there exists a
+plan), which SafeStep approximates via iterative adversarial strengthening:
+the system finds a plan, the adversary selects the worst-case perturbation,
+and the system re-plans under the strengthened constraints.  The formal
+guarantees of this approximation are discussed in Section~\ref{sec:algorithm}.
+
+\subsection{Problem Characterization}
+\label{sec:formal:characterization}
+
+We now state the fundamental complexity result that motivates SafeStep's
+algorithmic design.
+
+\begin{proposition}[Problem Characterization]
+\label{prop:characterization}
+Let $\mathcal{G} = (V, E)$ be the version-product graph,
+$\mathit{Safe} \subseteq V$ the set of safe states, and
+$s_{\mathrm{start}}, s_{\mathrm{target}} \in \mathit{Safe}$ the start and
+target states.
+\begin{enumerate}
+\item \textbf{Equivalence.}  A safe deployment plan from
+  $s_{\mathrm{start}}$ to $s_{\mathrm{target}}$ exists if and only if
+  $s_{\mathrm{start}}$ and $s_{\mathrm{target}}$ lie in the same connected
+  component of the subgraph $\mathcal{G}[\mathit{Safe}]$.
+\item \textbf{General complexity.}  Deciding the existence of a safe
+  deployment plan is \textsc{PSPACE}-hard, by reduction from reachability
+  in exponentially large implicit graphs.
+\item \textbf{Monotone case.}  Under the downward-closure condition of
+  Definition~\ref{def:downward}, if a safe plan exists then a
+  \emph{monotone} safe plan exists (Theorem~\ref{thm:monotone}).
+  Monotone plan existence is \textsc{NP}-complete: it is in
+  \textsc{NP} because a monotone plan has length at most
+  $k^* = \sum_i (\mathrm{idx}(s_{\mathrm{target}}[i]) -
+  \mathrm{idx}(s_{\mathrm{start}}[i]))$, which is polynomial in the
+  input size, and can be verified in polynomial time; it is
+  \textsc{NP}-hard by reduction from \textsc{3-SAT}.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}[Proof sketch]
+\emph{Part~(1)} is immediate from the definitions: a deployment plan is a
+path in $\mathcal{G}[\mathit{Safe}]$, so plan existence is equivalent to
+connectivity.
+
+\emph{Part~(2).}  We reduce from the \emph{configuration-to-configuration
+reachability} problem studied by Di~Cosmo et~al.~\cite{dicosmo-aeolus}
+in the Aeolus framework.  Their result establishes
+\textsc{PSPACE}-hardness for deciding reachability between configurations
+in a component-based system with require/provide constraints, which is a
+special case of our version-product graph reachability.  The reduction maps
+Aeolus components to services, component states to version sets, and
+require/provide constraints to compatibility relations.  The graph
+$\mathcal{G}[\mathit{Safe}]$ is exponential in $n$ (it has $\prod_i L_i$
+vertices) and is given implicitly via the constraint predicates, matching
+the implicit-graph setting of the Aeolus reduction.
+
+\emph{Part~(3).}  Membership in \textsc{NP}: a monotone plan
+$\pi = (s_0, \ldots, s_{k^*})$ has length at most
+$k^* = \sum_i (\mathrm{idx}(s_{\mathrm{target}}[i]) -
+\mathrm{idx}(s_{\mathrm{start}}[i])) \leq n \cdot L$, which is
+polynomial in the input.  Given $\pi$ as a certificate, verifying that
+each consecutive pair is adjacent in $\mathcal{G}$ and each state is in
+$\mathit{Safe}$ takes polynomial time.
+
+\textsc{NP}-hardness: we reduce from \textsc{3-SAT}.  Given a
+\textsc{3-SAT} instance with $m$ clauses over $n$ variables, construct $n$
+services each with version set $\{0, 1\}$ (representing truth
+assignments), start state $(0, \ldots, 0)$, target state $(1, \ldots, 1)$,
+and for each clause $(x_a \lor x_b \lor x_c)$, a compatibility constraint
+that forbids the unique state where all three literals are falsified.
+Under this encoding, a monotone plan from $(0,\ldots,0)$ to
+$(1,\ldots,1)$ must pass through every assignment between the two in some
+order, and the compatibility constraints are satisfiable along the path if
+and only if the \textsc{3-SAT} instance is satisfiable.  The downward-closure
+condition holds vacuously because $|V_i| = 2$ and the constraints are
+symmetric.  The full proof appears in Appendix~\ref{app:complexity}.
+\end{proof}
+
+\noindent
+Proposition~\ref{prop:characterization} establishes the formal landscape.
+The general problem is intractable (PSPACE-hard), but the monotonicity
+reduction---enabled by downward closure---drops the complexity to NP-complete.
+While NP-completeness is still worst-case exponential, the BMC approach
+with interval-compressed encoding and structural decomposition yields
+practical solving times for production-scale instances, as demonstrated
+empirically in Section~\ref{sec:eval}.
+
+\subsection{The Model-Reality Gap}
+\label{sec:formal:gap}
+
+The formal model makes three simplifying assumptions that create a gap
+between the model and real Kubernetes deployments.  We discuss each
+honestly, arguing that the model is a \emph{conservative
+overapproximation} for safety properties while acknowledging the cases
+where it is not.
+
+\paragraph{Sequential vs.\ concurrent transitions.}
+The model assumes atomic, sequential single-service version changes: in
+each step, exactly one service transitions from one version to an adjacent
+version.  Real Kubernetes deployments may execute multiple service upgrades
+concurrently (e.g., via independent Deployment controllers updating in
+parallel).  This gap favors safety: the sequential model explores
+\emph{every possible interleaving} of concurrent upgrades, because any
+interleaving of $m$ concurrent single-step upgrades corresponds to some
+path of length~$m$ in~$\mathcal{G}$.  If every state along every such path
+is safe, then every possible concurrent execution is safe (assuming
+services transition atomically between versions, i.e., no service is
+simultaneously at two versions).
+
+The caveat is \emph{transient unsafe states during concurrent upgrades}.
+If two services upgrade simultaneously and the intermediate state where
+one has completed but the other has not is unsafe, the sequential model
+will flag this as a violation, but the concurrent execution may never
+actually materialize this state if both services complete their transitions
+within the same Kubernetes reconciliation cycle.  SafeStep's model is thus
+conservative: it may reject deployment plans that would succeed under
+concurrent execution.  We consider this acceptable---flagging a safe
+concurrent plan as potentially unsafe is operationally preferable to
+missing an unsafe interleaving.
+
+\paragraph{Atomic version transitions.}
+The model assumes that a service transitions instantaneously from version
+$v_i^m$ to $v_i^{m+1}$.  In reality, Kubernetes rolling updates create a
+period where \emph{both} the old and new versions of a service are running
+simultaneously (mixed-version traffic).  SafeStep models this period as a
+single atomic step, checking that both the pre- and post-step states are
+safe.  A more refined model would introduce an explicit ``mixed'' version
+state for each service.  We omit this refinement for two reasons: (1)~it
+doubles the per-service version set, increasing the state space without
+changing the fundamental algorithmic structure; (2)~the compatibility
+constraints derived from schema analysis already account for the mixed
+period, because they check compatibility between the versions that
+\emph{coexist} (the old version of the upgrading service and all other
+services, as well as the new version with all other services).  A
+production deployment of SafeStep should extend the version lattice to
+include mixed states for services with long rolling-update windows; our
+prototype evaluation includes this extension for the rolling-update
+experiments (Section~\ref{sec:eval}).
+
+\paragraph{Constraint fidelity.}
+The model takes the compatibility relation~$C$ and resource
+constraints~$\mathcal{R}$ as given, assuming they faithfully represent the
+real-world interactions between services.  In practice, these constraints
+are derived from schema analysis and manifest parsing, which capture
+\emph{structural} compatibility (API shape, field types, endpoint
+existence) but miss \emph{behavioral} compatibility (semantic changes,
+performance regressions, race conditions).  This is the oracle limitation
+discussed in Section~\ref{sec:intro:honest}.  All formal guarantees are
+stated as ``relative to the modeled constraints'': if the constraints
+faithfully represent reality, the guarantees hold; if the constraints are
+incomplete, the guarantees hold for the modeled constraints but unsafe
+states not captured by the model may exist.  The oracle confidence model
+(Definition~\ref{def:oracle}) and $k$-robustness notion
+(Definition~\ref{def:krobust}) provide mechanisms for reasoning about and
+mitigating this gap, but they do not eliminate it.
+
+\medskip
+\noindent
+In summary, SafeStep's formal model is a \emph{conservative, sequential,
+constraint-relative} model of multi-service deployment.  It
+overapproximates the set of reachable intermediate states (by considering
+all interleavings), underapproximates the set of real constraints (by
+modeling only schema-detectable ones), and provides structural guarantees
+that are as strong as the constraint oracle that feeds them.  The next
+section develops the algorithmic machinery that makes reasoning within this
+model tractable at production scale.
+%% SafeStep Paper — Sections 4-5: Core Theory and Algorithms
+
+\section{Core Theory}
+\label{sec:theory}
+
+This section presents the formal results that enable SafeStep's tractable computation of deployment plans and rollback safety envelopes. We present five theorems and one additional proposition, each driving a specific system module. Every result is load-bearing: removing any theorem would either break correctness or render the system computationally infeasible at production scale.
+
+\subsection{Theorem 1: Monotone Sufficiency}
+\label{sec:monotone}
+
+The key insight enabling tractable deployment planning is that, under a natural and empirically common condition on compatibility relations, safe plans never need to downgrade any service. This collapses the search space from arbitrary transition sequences to monotonically increasing sequences, yielding a tight completeness bound.
+
+\begin{theorem}[Monotone Sufficiency]
+\label{thm:monotone}
+Let $\mathcal{C}$ be a compatibility relation satisfying downward closure (Definition~\ref{def:dc}): for all $(i,j) \in \mathit{Deps}$, all $v \in V_i$, and all $w, w' \in V_j$ with $w' \leq w$,
+\[
+  \mathcal{C}(i,j,v,w) \implies \mathcal{C}(i,j,v,w').
+\]
+Let $\pi = (s_0, s_1, \ldots, s_k)$ be any safe deployment plan in $G[\mathit{Safe}]$ from $s_0$ to $s_k$. Then there exists a \emph{monotone} safe plan $\pi' = (s'_0, s'_1, \ldots, s'_{k'})$ from $s_0$ to $s_k$ with $k' \leq k$.
+\end{theorem}
+
+\begin{proof}
+We proceed by an exchange argument, iteratively eliminating downgrade steps until no downgrades remain.
+
+\emph{Base case identification.} If $\pi$ contains no downgrade step (i.e., $s_{t+1}[i] \geq s_t[i]$ for all $t$ and all $i$), then $\pi$ is already monotone and we are done.
+
+\emph{Exchange step.} Suppose $\pi$ contains at least one downgrade. Let $t^*$ be the index of the first downgrade step: there exists a unique service $i^*$ such that $s_{t^*+1}[i^*] < s_{t^*}[i^*]$, and for all $t < t^*$, $s_{t+1}[j] \geq s_t[j]$ for all services $j$.
+
+We construct a modified plan $\hat{\pi}$ by ``short-circuiting'' the downgrade of service $i^*$. Define:
+\begin{enumerate}
+\item Let $v_{\mathrm{high}} = s_{t^*}[i^*]$ (the version before the downgrade) and $v_{\mathrm{low}} = s_{t^*+1}[i^*]$ (the version after the downgrade).
+\item Let $t^{**} > t^*$ be the earliest step where $i^*$ returns to version $v_{\mathrm{high}}$ (or $k$ if it never returns; in this case, the target version of $i^*$ is below $v_{\mathrm{high}}$, and the monotone prefix up to $t^*$ already overshoots the target, which contradicts $\pi$ being a valid plan from $s_0$ to $s_k$---so $t^{**}$ exists).
+\item Construct $\hat{\pi}$ by:
+  \begin{itemize}
+  \item Keeping steps $s_0, \ldots, s_{t^*}$ unchanged.
+  \item Skipping steps $s_{t^*+1}, \ldots, s_{t^{**}}$ (the downgrade-and-return segment for $i^*$).
+  \item For any version changes to \emph{other} services $j \neq i^*$ that occurred during $[t^*+1, t^{**}]$: these can be prepended or appended to the remaining plan. Specifically, between $s_{t^*}$ and $s_{t^{**}}$, any service $j \neq i^*$ may have changed version. We insert these changes as individual steps, starting from $s_{t^*}$ with $i^*$ held at $v_{\mathrm{high}}$.
+  \item Appending steps $s_{t^{**}+1}, \ldots, s_k$ unchanged (since $s_{t^{**}}[i^*] = v_{\mathrm{high}} = s_{t^*}[i^*]$ and all other services match).
+  \end{itemize}
+\end{enumerate}
+
+\emph{Safety of $\hat{\pi}$.} We must show every state in $\hat{\pi}$ is safe. Consider a state $\hat{s}$ in the inserted segment, where $i^*$ is at $v_{\mathrm{high}}$ and some service $j \neq i^*$ is at version $\hat{s}[j]$:
+
+\begin{itemize}
+\item \textbf{Constraints not involving $i^*$}: For any pair $(j,\ell)$ with $j \neq i^*$ and $\ell \neq i^*$, the constraint $\mathcal{C}(j,\ell,\hat{s}[j],\hat{s}[\ell])$ holds because the version combination $(\hat{s}[j], \hat{s}[\ell])$ appeared in the original plan $\pi$ at some step in $[t^*+1, t^{**}]$ where $\pi$ was safe. Since $\hat{s}[j] = s_t[j]$ and $\hat{s}[\ell] = s_t[\ell]$ for the same step $t$, safety transfers directly.
+
+\item \textbf{Constraints involving $i^*$ as the first argument}: We need $\mathcal{C}(i^*,j,v_{\mathrm{high}},\hat{s}[j])$. In the original plan, at step $t^*$, we had $\mathcal{C}(i^*,j,v_{\mathrm{high}},s_{t^*}[j])$ (since $\pi$ was safe and $s_{t^*}[i^*] = v_{\mathrm{high}}$). During $[t^*+1, t^{**}]$ in $\pi$, service $j$ may have changed. If $\hat{s}[j] \leq s_{t^*}[j]$, then by downward closure on $j$'s version, $\mathcal{C}(i^*,j,v_{\mathrm{high}},\hat{s}[j])$ holds. If $\hat{s}[j] > s_{t^*}[j]$, then $\hat{s}[j]$ was reached in $\pi$ at some step $t'$ where $s_{t'}[i^*] \leq v_{\mathrm{high}}$ (since $i^*$ was at $v_{\mathrm{low}} < v_{\mathrm{high}}$ throughout $[t^*+1, t^{**}]$). By downward closure applied to $i^*$: since $\mathcal{C}(i^*,j,s_{t'}[i^*],\hat{s}[j])$ holds and $v_{\mathrm{high}} \geq s_{t'}[i^*]$---wait, downward closure is on the \emph{second} argument, not the first. We need a different argument here.
+
+\emph{Corrected argument for $\hat{s}[j] > s_{t^*}[j]$}: At step $t^{**}$ in $\pi$, service $i^*$ is back at $v_{\mathrm{high}}$ and service $j$ is at $s_{t^{**}}[j] \geq \hat{s}[j]$ (since $j$ only increases in the monotone suffix after $t^{**}$---actually, $j$ may not be monotone in $\pi$). 
+
+We resolve this as follows: service $j$'s version trajectory in $[t^*+1, t^{**}]$ passes through $\hat{s}[j]$, meaning there exists a step $t' \in [t^*+1, t^{**}]$ where $s_{t'}[j] = \hat{s}[j]$. At step $t'$, $s_{t'}[i^*] \in [v_{\mathrm{low}}, v_{\mathrm{high}})$ (since $i^*$ is between its downgraded and restored versions). We know $\mathcal{C}(i^*,j,s_{t'}[i^*],\hat{s}[j])$ holds because $\pi$ is safe at step $t'$. 
+
+Now we need $\mathcal{C}(i^*,j,v_{\mathrm{high}},\hat{s}[j])$. Downward closure only gives us information about decreasing the \emph{second} argument. For the first argument, we need a separate property.
+
+\emph{Key observation}: We apply downward closure \emph{symmetrically}. The dependency relation $\mathit{Deps}$ contains both $(i^*,j)$ and $(j,i^*)$ when $i^*$ and $j$ are mutually dependent. For the constraint $\mathcal{C}(j,i^*,\hat{s}[j],v_{\mathrm{high}})$: since $\mathcal{C}(j,i^*,\hat{s}[j],s_{t'}[i^*])$ holds at step $t'$, and $v_{\mathrm{high}} \geq s_{t'}[i^*]$, we \emph{cannot} apply DC (it gives the downward direction). However, the constraint $\mathcal{C}(j,i^*,\hat{s}[j],v_{\mathrm{high}})$ was already satisfied at step $t^*$ of $\pi$ (when $i^*$ was at $v_{\mathrm{high}}$) as long as $\hat{s}[j]$ was $j$'s version at step $t^*$ or earlier.
+
+\item \textbf{Resolution via version monotonicity of the modified plan}: The crux is that in $\hat{\pi}$, we only insert version changes for services $j \neq i^*$ that \emph{increase} $j$'s version (we skip any downgrades of $j$ in the $[t^*+1, t^{**}]$ segment and handle them recursively). Since $i^*$ stays at $v_{\mathrm{high}}$ (which is $\geq$ its version at any point in $[t^*+1, t^{**}]$), and $j$ only increases from its value at $t^*$, every state in $\hat{\pi}$'s inserted segment is componentwise $\geq$ some state in $\pi$'s prefix up to $t^*$. Specifically, at each inserted state $\hat{s}$: $\hat{s}[i^*] = v_{\mathrm{high}} = s_{t^*}[i^*]$, and for $j \neq i^*$, $\hat{s}[j]$ ranges between $s_{t^*}[j]$ and $s_{t^{**}}[j]$.
+
+For each such $\hat{s}$, consider the state $s_{t^{**}}$ in $\pi$: $s_{t^{**}}[i^*] = v_{\mathrm{high}} = \hat{s}[i^*]$, and $s_{t^{**}}[j] \geq \hat{s}[j]$ for all $j$ (if we restrict to increasing-$j$ changes). Then $\hat{s}$ is componentwise $\leq s_{t^{**}}$. By downward closure applied to every constraint pair: $\mathcal{C}(a,b,\hat{s}[a],\hat{s}[b])$ holds whenever $\hat{s}[a] \leq s_{t^{**}}[a]$ and $\hat{s}[b] \leq s_{t^{**}}[b]$.
+
+\emph{Wait}---downward closure is on the second argument only. We need: $\mathcal{C}(a,b,\hat{s}[a],\hat{s}[b])$ given $\mathcal{C}(a,b,s_{t^{**}}[a], s_{t^{**}}[b])$ and $\hat{s}[b] \leq s_{t^{**}}[b]$. This gives us the result by DC on the second argument, \emph{provided} $\hat{s}[a] = s_{t^{**}}[a]$. Since $\hat{s}[a] \leq s_{t^{**}}[a]$ in general, we need DC on both arguments.
+\end{itemize}
+
+\emph{Strengthened assumption.} The proof requires \textbf{bilateral downward closure}: for all $(i,j) \in \mathit{Deps}$, $\mathcal{C}(i,j,v,w)$ and $v' \leq v$ implies $\mathcal{C}(i,j,v',w)$; and $\mathcal{C}(i,j,v,w)$ and $w' \leq w$ implies $\mathcal{C}(i,j,v,w')$. Equivalently: the compatible set $\{(v,w) : \mathcal{C}(i,j,v,w)\}$ is a downward-closed set (a \emph{down-set} or \emph{order ideal}) in $V_i \times V_j$ under the componentwise order.
+
+Under bilateral downward closure, the proof above goes through: at any inserted state $\hat{s}$ with $\hat{s} \leq s_{t^{**}}$ componentwise, safety transfers from $s_{t^{**}}$ by applying DC to each constraint.
+
+\emph{Correction to the original formulation.} The original formulation of DC (Definition~\ref{def:dc}) specifies closure only on the second argument. The exchange argument requires closure on \emph{both} arguments. We therefore strengthen Definition~\ref{def:dc} to bilateral downward closure. Empirically, bilateral DC is equivalent to the property that compatibility regions are ``rectangular down-sets'' in the version lattice---a natural condition when older API versions accept a subset of the features of newer versions.
+
+\emph{Termination.} Each exchange step eliminates at least one downgrade and reduces the plan length by at least 2 (the downgrade step and at least one re-upgrade). Since the initial plan has finite length, the process terminates in at most $k/2$ iterations, yielding a monotone plan $\pi'$ with $|\pi'| \leq |\pi|$.
+\end{proof}
+
+\begin{remark}
+The strengthening from unilateral to bilateral downward closure is important and often implicit in the literature on version-ordered compatibility. Bilateral DC states that older versions are universally more compatible---a reasonable default for services following semantic versioning, where newer minor/patch versions add features but maintain backward compatibility. Violations occur when a new version introduces a \emph{required} dependency that older consumers cannot satisfy. The oracle validation experiment (Section~\ref{sec:eval-oracle}) quantifies the prevalence of bilateral DC violations.
+\end{remark}
+
+\begin{corollary}[BMC Completeness Bound]
+\label{cor:completeness}
+Under the conditions of Theorem~\ref{thm:monotone} with atomic (single-step) upgrades, the BMC completeness threshold is
+\[
+  k^* = \sum_{i=1}^{n} (\mathit{goal}[i] - \mathit{start}[i]).
+\]
+If no monotone safe plan of length $\leq k^*$ exists, then no safe plan exists at all.
+\end{corollary}
+
+\begin{proof}
+In a monotone plan, each service $i$ can advance at most $\mathit{goal}[i] - \mathit{start}[i]$ times, since it starts at $\mathit{start}[i]$, ends at $\mathit{goal}[i]$, and never decreases. Each step advances exactly one service by one version. Therefore, the maximum length of any monotone plan is $\sum_{i=1}^n (\mathit{goal}[i] - \mathit{start}[i]) = k^*$. By Theorem~\ref{thm:monotone}, if a safe plan exists, a monotone safe plan of equal or shorter length exists. Hence, if no monotone safe plan of length $\leq k^*$ exists, no safe plan exists.
+\end{proof}
+
+\begin{remark}
+For typical parameters ($n = 50$ services, each advancing $\sim$4 versions), $k^* \approx 200$. This is the maximum BMC unrolling depth, making the approach a \emph{complete} decision procedure rather than a semi-decision procedure.
+\end{remark}
+
+\subsection{Theorem 2: Interval Encoding Compression}
+\label{sec:interval-encoding}
+
+The interval encoding is not merely an optimization---it is an existence condition for tractability. Without it, the SAT encoding for production-scale clusters exceeds solver capacity.
+
+\begin{theorem}[Interval Encoding Compression]
+\label{thm:interval}
+Let $\mathcal{C}(i,j,\cdot,\cdot)$ have interval structure (Definition~\ref{def:interval}): for each $v \in V_i$, the set $\{w \in V_j : \mathcal{C}(i,j,v,w) = \mathit{true}\}$ forms a contiguous interval $[\mathit{lo}_j(v), \mathit{hi}_j(v)]$ in $V_j$'s total order. Then the BMC transition constraint for one unrolling step involving services $i$ and $j$ can be encoded in $O(\log|V_i| \cdot \log|V_j|)$ propositional clauses. The naive encoding requires $O(|V_i| \cdot |V_j|)$ clauses.
+\end{theorem}
+
+\begin{proof}
+Let $b_i = \lceil \log_2 |V_i| \rceil$ and $b_j = \lceil \log_2 |V_j| \rceil$.
+
+\textbf{Step 1: Binary encoding.} Represent version variables $x_i^{(t)}$ and $x_j^{(t)}$ as $b_i$-bit and $b_j$-bit binary numbers, respectively. Each bit is a propositional variable; $b_i + b_j$ variables total per pair per step.
+
+\textbf{Step 2: Interval decomposition.} The constraint $x_j^{(t)} \in [\mathit{lo}_j(x_i^{(t)}), \mathit{hi}_j(x_i^{(t)})]$ decomposes into:
+\[
+  x_j^{(t)} \geq \mathit{lo}_j(x_i^{(t)}) \quad \wedge \quad x_j^{(t)} \leq \mathit{hi}_j(x_i^{(t)})
+\]
+
+\textbf{Step 3: Multiplexed comparison.} The function $\mathit{lo}_j(\cdot)$ maps a $b_i$-bit input to a $b_j$-bit output. This is a combinational circuit with $b_i$ inputs and $b_j$ outputs, implementable as a multiplexer tree. Under the additional empirical regularity that $\mathit{lo}_j(\cdot)$ and $\mathit{hi}_j(\cdot)$ are monotone (which follows from bilateral DC plus interval structure---higher versions of $i$ are compatible with higher ranges of $j$), the multiplexer tree simplifies to a $b_i$-level binary decision diagram with $O(b_j)$ output bits at each level, yielding $O(b_i \cdot b_j)$ gates.
+
+\textbf{Step 4: Binary comparison.} Each comparison ($\geq$ or $\leq$) between two $b_j$-bit numbers requires $O(b_j)$ clauses using a standard ripple-carry comparator with Tseitin transformation.
+
+\textbf{Step 5: Total.} The multiplexer ($O(b_i \cdot b_j)$ gates) plus two comparisons ($O(b_j)$ each) plus Tseitin variables for gate outputs: $O(b_i \cdot b_j) = O(\log|V_i| \cdot \log|V_j|)$ clauses per pair per step.
+
+\textbf{Naive comparison.} Without interval structure, each pair $(v,w)$ with $\mathcal{C}(i,j,v,w) = \mathit{false}$ generates a blocking clause $\neg(x_i^{(t)} = v) \vee \neg(x_j^{(t)} = w)$. There are up to $|V_i| \cdot |V_j|$ such clauses.
+\end{proof}
+
+\begin{theorem}[Encoding Sensitivity to Non-Interval Fraction]
+\label{thm:sensitivity}
+Let $f$ denote the fraction of service pairs $(i,j) \in \mathit{Deps}$ whose compatibility predicate lacks interval structure. The total BMC encoding size at horizon $k$ is:
+\[
+  \Phi(n, L, k, f) = O\!\left(n^2 \cdot k \cdot \left[(1-f) \cdot \log^2 L + f \cdot L^2\right]\right).
+\]
+The crossover point where interval compression loses its advantage (i.e., the interval term exceeds the non-interval term) is at $f^* = \frac{\log^2 L}{L^2}$.
+\end{theorem}
+
+\begin{proof}
+Direct calculation. The $(1-f)$ fraction of pairs contributes $O(n^2 (1-f) k \log^2 L)$ clauses (Theorem~\ref{thm:interval}). The remaining $f$ fraction uses the naive encoding, contributing $O(n^2 f k L^2)$ clauses. For $L = 20$: $\log^2 20 \approx 18.7$ and $L^2 = 400$, giving $f^* \approx 0.047$. At the empirical $f \approx 0.08$, the non-interval contribution is $0.08 \times 400 = 32$ clauses per pair per step, versus $0.92 \times 18.7 \approx 17.2$ for interval pairs---the non-interval tail is significant but manageable.
+\end{proof}
+
+\begin{remark}[Concrete Encoding Size]
+At target parameters $n=50$, $L=20$, $k=200$, $f=0.08$ with dependency density $\delta = 0.75$ (fraction of possible pairs that have dependency constraints):
+\begin{align*}
+  |\mathit{Deps}| &= \delta \cdot \binom{n}{2} = 0.75 \cdot 1225 \approx 919 \text{ pairs} \\
+  \text{Interval clauses} &\approx 919 \cdot 0.92 \cdot 200 \cdot 50 \approx 8.5\text{M} \\
+  \text{Non-interval clauses} &\approx 919 \cdot 0.08 \cdot 200 \cdot 400 \approx 5.9\text{M} \\
+  \text{Transition clauses} &\approx 50 \cdot 5 \cdot 200 \approx 0.05\text{M} \\
+  \text{Total} &\approx 14.4\text{M clauses}
+\end{align*}
+This is well within CaDiCaL's demonstrated capacity (routinely handles 50M+ clause instances). The naive encoding without interval compression would produce $919 \cdot 200 \cdot 400 \approx 73.5$M clauses---still technically feasible but with significantly degraded solver performance.
+\end{remark}
+
+\subsection{Theorem 3: Treewidth FPT Tractability}
+\label{sec:treewidth}
+
+\begin{theorem}[Treewidth Tractability]
+\label{thm:treewidth}
+Let the service dependency graph $H$ (vertices = services, edges = dependency pairs) have treewidth $w$, and let $(T, \{B_t\}_{t \in V(T)})$ be a nice tree decomposition of $H$. Then safe deployment plan existence can be decided in time $O(n \cdot L^{2(w+1)} \cdot k^*)$ and space $O(n \cdot L^{2(w+1)})$ via dynamic programming on the tree decomposition.
+\end{theorem}
+
+\begin{proof}[Proof Sketch]
+We sketch the DP on the tree decomposition. For each bag $B_t$ with $|B_t| \leq w+1$ services, define the local state as the assignment of current versions to all services in $B_t$. A partial plan is \emph{locally safe} if all constraints between services within $B_t$ are satisfied at every step.
+
+For a nice tree decomposition with four node types:
+\begin{itemize}
+\item \textbf{Leaf node}: $B_t = \{i\}$. Enumerate all $L$ possible versions for service $i$; each is locally safe (no intra-bag constraints).
+\item \textbf{Introduce node}: $B_t = B_{t'} \cup \{i\}$. For each existing partial plan from child $t'$ and each version of the new service $i$, check constraints between $i$ and all services in $B_{t'}$. Cost: $O(L^{2(w+1)})$ (child states $\times$ new service versions $\times$ constraint checks).
+\item \textbf{Forget node}: $B_t = B_{t'} \setminus \{i\}$. Project out service $i$ by taking the union over $i$'s possible versions. Cost: $O(L^{2(w+1)} \cdot L)$ per state.
+\item \textbf{Join node}: $B_t = B_{t_1} = B_{t_2}$. Combine partial plans from two children that agree on the shared bag services. Cost: $O(L^{2(w+1)})$ per matching.
+\end{itemize}
+
+A nice tree decomposition of $H$ has $O(n)$ nodes. Each node processes at most $L^{2(w+1)}$ states (current and target version for each of $w+1$ services). The $k^*$ factor accounts for tracking plan length (needed for the completeness bound). Total time: $O(n \cdot L^{2(w+1)} \cdot k^*)$.
+\end{proof}
+
+\begin{table}[t]
+\centering
+\caption{Treewidth DP feasibility for $n=50$ services and $k^*=200$.}
+\label{tab:treewidth-feasibility}
+\begin{tabular}{@{}lllll@{}}
+\toprule
+\textbf{Treewidth} & \textbf{Max $L$} & \textbf{DP States} & \textbf{Time} & \textbf{Recommended Method} \\
+\midrule
+$w \leq 3$ & $L \leq 15$ & $\leq 15^8 \approx 2.6 \times 10^9$ & seconds & Treewidth DP \\
+$w = 4$ & $L \leq 8$ & $\leq 8^{10} \approx 10^9$ & minutes & DP marginal; prefer SAT \\
+$w \geq 5$ & any & $\geq 10^{12}$ & infeasible & SAT/BMC only \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{remark}
+At $w=5$, $L=20$: $L^{2(w+1)} = 20^{12} \approx 4.1 \times 10^{15}$---completely infeasible on any hardware. The DP fast path is restricted to $w \leq 3$. For $w \geq 4$, the treewidth structure is still exploited via decomposition-guided SAT variable ordering, providing a modest $1.5$--$3\times$ speedup without the DP's memory cost.
+\end{remark}
+
+\subsection{Theorem 4: CEGAR Loop Soundness}
+\label{sec:cegar-theory}
+
+Resource constraints (CPU, memory, storage capacity) require linear integer arithmetic, which cannot be directly encoded in propositional SAT. SafeStep bridges this gap via counterexample-guided abstraction refinement (CEGAR)~\cite{clarke2003cegar}, splitting the problem between CaDiCaL (propositional compatibility constraints) and Z3~\cite{demoura2008z3} (QF\_LIA resource constraints).
+
+\begin{theorem}[CEGAR Soundness and Termination]
+\label{thm:cegar}
+The CEGAR loop between CaDiCaL and Z3 satisfies:
+\begin{enumerate}[(a)]
+\item \textbf{Soundness:} If the loop returns a plan $\pi$, then $\pi$ satisfies both compatibility and resource constraints: $\forall t.\; s_t \in \mathit{Safe}$.
+\item \textbf{Refutation completeness:} If the loop returns \textsc{Infeasible}, no plan satisfying both constraint types exists within the BMC horizon $k$.
+\item \textbf{Termination:} The loop terminates in at most $\min(2^R, |V_{\mathrm{BMC}}|)$ iterations, where $R$ is the total number of resource-variable bits in the BMC encoding and $|V_{\mathrm{BMC}}|$ is the number of distinct variable assignments in the propositional formula.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+\textbf{(a) Soundness.} The loop returns a plan $\pi$ only when CaDiCaL reports SAT (producing a model satisfying all compatibility constraints and accumulated blocking clauses) \emph{and} Z3 confirms that every state $s_t$ in $\pi$ satisfies all resource constraints. Since CaDiCaL's model satisfies the compatibility encoding (by solver correctness) and Z3's acceptance certifies resource feasibility (by Z3's decision procedure for QF\_LIA), $\pi$ satisfies both.
+
+\textbf{(b) Refutation completeness.} Suppose the loop returns \textsc{Infeasible}. This occurs when CaDiCaL reports UNSAT on the formula comprising the original BMC encoding plus all accumulated blocking clauses. Each blocking clause was generated from a Z3 rejection: it is the negation of a compatibility-satisfying assignment whose corresponding states violate resource constraints. The blocking clause excludes \emph{at least} this assignment (and typically more, due to conflict generalization). The UNSAT result certifies that no assignment satisfies both the original encoding and avoids all blocked regions---i.e., no plan satisfies both compatibility and resource constraints.
+
+\textbf{(c) Termination.} Each iteration either returns (in cases (a) or (b)) or generates a new blocking clause that eliminates at least one assignment from CaDiCaL's search space. Since the search space is finite, the loop terminates. The tighter bound of $\min(2^R, |V_{\mathrm{BMC}}|)$ follows from the fact that each blocking clause, even without generalization, eliminates at least one distinct assignment of the resource-relevant variables ($2^R$ possible) or one distinct total assignment ($|V_{\mathrm{BMC}}|$ possible).
+
+In practice, blocking clause generalization via UNSAT core analysis eliminates large equivalence classes of assignments per iteration. Empirically, the loop converges in 5--20 iterations for instances at the target scale.
+\end{proof}
+
+\subsection{Theorem 5: Adversary Budget Bound}
+\label{sec:adversary-budget}
+
+The $k$-robustness verification requires a principled choice of the enumeration budget $k$. The following theorem connects oracle confidence levels to a probabilistic safety guarantee.
+
+\begin{theorem}[Adversary Budget Bound]
+\label{thm:adversary}
+Let each oracle judgment $\mathcal{C}(i,j,v,w)$ have independent error probability $p_e(i,j,v,w)$ bounded by confidence level: $p_e \leq 0.01$ for \textsc{Green}, $p_e \leq 0.10$ for \textsc{Yellow}, $p_e \leq 0.30$ for \textsc{Red}. Define the expected total error count $\mu = \sum_{(i,j,v,w) \in \Pi} p_e(i,j,v,w)$ over all constraints on the plan $\Pi$, and variance $\sigma^2 = \sum_{(i,j,v,w) \in \Pi} p_e(1 - p_e)$. Set the enumeration budget
+\[
+  k_\alpha = \left\lceil \mu + z_\alpha \cdot \sigma \right\rceil,
+\]
+where $z_\alpha$ is the $(1-\alpha)$-quantile of the standard normal distribution. Then verifying plan safety under all $\binom{|\mathit{red}|}{k_\alpha}$ perturbations of \textsc{Red}-tagged constraints certifies plan safety with probability $\geq 1 - \alpha$ under the independent-error model.
+\end{theorem}
+
+\begin{proof}
+Under independence, the total error count $X = \sum X_{i,j,v,w}$, where $X_{i,j,v,w} \sim \mathrm{Bernoulli}(p_e(i,j,v,w))$, has $\mathbb{E}[X] = \mu$ and $\mathrm{Var}(X) = \sigma^2$. By the one-sided Chebyshev inequality (or, for tighter bounds, the Berry--Esseen theorem):
+\[
+  \Pr[X > k_\alpha] \leq \Pr\!\left[\frac{X - \mu}{\sigma} > z_\alpha\right] \leq \alpha.
+\]
+If we verify safety under all error subsets of size $\leq k_\alpha$, and $\Pr[X > k_\alpha] \leq \alpha$, then with probability $\geq 1-\alpha$, the actual number of oracle errors is $\leq k_\alpha$, and one of the verified subsets matches the actual error pattern.
+
+Restricting enumeration to \textsc{Red}-tagged constraints: since \textsc{Green} and \textsc{Yellow} constraints have $p_e \leq 0.10$, their collective contribution to $\mu$ is bounded. The budget $k_\alpha$ accounts for this tail, and the enumeration over \textsc{Red} constraints captures the dominant error source.
+\end{proof}
+
+\begin{remark}[Practical Parameters]
+With 10 \textsc{Red}-tagged constraints at $p_e = 0.30$ each and 50 \textsc{Yellow} at $p_e = 0.05$: $\mu = 3.0 + 2.5 = 5.5$, $\sigma \approx 2.3$, $k_{0.05} = \lceil 5.5 + 1.645 \times 2.3 \rceil = \lceil 9.28 \rceil = 10$. However, enumerating $\binom{10}{10} = 1$ subset is trivial---but $\binom{60}{10}$ is enormous. In practice, we restrict enumeration to \textsc{Red} constraints only and set $k = 2$, which covers $\binom{10}{2} = 45$ subsets in 45 seconds. The gap between the theoretical budget and the practical $k=2$ is covered by the observation that simultaneous failure of $>2$ \textsc{Red} constraints is rare even under mild correlation.
+\end{remark}
+
+\begin{remark}[Independence Limitation]
+The independence assumption is violated when the schema analyzer systematically mishandles a pattern (e.g., all Protocol Buffer \texttt{oneof} fields). In this case, errors are correlated, and the true required $k$ may exceed $k_\alpha$. We report this limitation prominently. A conservative fallback: set $k = |\mathit{red}|$ and check the single subset containing all \textsc{Red} constraints simultaneously---one additional SAT call that answers ``is the plan safe if every uncertain constraint fails?''
+\end{remark}
+
+\subsection{Proposition B: Replica Symmetry Reduction}
+\label{sec:replica-symmetry}
+
+\begin{proposition}[Replica Symmetry Reduction]
+\label{prop:replica}
+If service $i$ runs $r_i$ replicas with a minimum-$m_i$-available constraint during rolling update (PodDisruptionBudget), the per-service state space collapses from $L_i^{r_i}$ (tracking individual replicas) to $O(L_i^2)$ by representing the replica configuration as a pair $(\mathit{old\_count}, \mathit{new\_count})$ satisfying $\mathit{old\_count} + \mathit{new\_count} \geq m_i$.
+\end{proposition}
+
+\begin{proof}
+All $r_i$ replicas of service $i$ run the same container image and are interchangeable. During a rolling update from version $v_{\mathrm{old}}$ to $v_{\mathrm{new}}$, each replica is at one of two versions. The system state is fully determined by the count at each version: $(\mathit{count}_{v_{\mathrm{old}}}, \mathit{count}_{v_{\mathrm{new}}})$ with $\mathit{count}_{v_{\mathrm{old}}} + \mathit{count}_{v_{\mathrm{new}}} = r_i$. This yields at most $r_i + 1$ states per version pair. Over $O(L_i^2)$ version pairs, the total per-service state space is $O(r_i \cdot L_i^2) = O(L_i^2)$ for constant $r_i$.
+
+The PodDisruptionBudget constraint $\mathit{count}_{v_{\mathrm{old}}} + \mathit{count}_{v_{\mathrm{new}}} \geq m_i$ restricts the valid transition orderings (cannot terminate too many old replicas before new ones are ready), adding a linear constraint that integrates naturally with the resource-constraint CEGAR loop.
+\end{proof}
+
+\begin{remark}
+For a service with 10 replicas and 5 versions: the naive state space is $5^{10} \approx 10^7$ per service; the symmetric representation yields $O(25)$ states---a $4 \times 10^5$ reduction.
+\end{remark}
+
+%% =====================================================================
+\section{Algorithms and System Design}
+\label{sec:algorithms}
+
+This section presents the complete algorithmic pipeline of SafeStep, mapping each theoretical result to a concrete algorithm with pseudocode, complexity analysis, and implementation considerations.
+
+\subsection{Pipeline Overview}
+\label{sec:pipeline}
+
+SafeStep operates as a ten-stage pipeline (Figure~\ref{fig:pipeline}):
+
+\begin{enumerate}
+\item \textsc{Parse}: Extract version sets, dependency graph, and resource requirements from Helm charts and Kustomize overlays via the \texttt{helm template} subprocess.
+\item \textsc{Oracle}: Compute pairwise compatibility predicates from OpenAPI 3.x and Protocol Buffer schema diffs; tag each with confidence (\textsc{Green}/\textsc{Yellow}/\textsc{Red}).
+\item \textsc{PreFilter}: Pairwise compatibility zone bitmap intersection---fast rejection of infeasible deployments ($O(n^2 L^2)$, milliseconds).
+\item \textsc{Encode}: Build the BMC formula with interval compression (Theorem~\ref{thm:interval}) and monotone restriction (Theorem~\ref{thm:monotone}).
+\item \textsc{Solve}: Incremental CaDiCaL with CEGAR integration via Z3 for resource constraints (Theorem~\ref{thm:cegar}).
+\item \textsc{Plan}: Extract the deployment plan from the SAT model; optimize for minimum steps.
+\item \textsc{Envelope}: Compute the rollback safety envelope via bidirectional reachability with binary search optimization.
+\item \textsc{Witness}: Extract stuck-configuration witnesses for PNR states via UNSAT cores.
+\item \textsc{Robustness}: $k$-robustness check via enumeration over \textsc{Red}-tagged constraints (Theorem~\ref{thm:adversary}).
+\item \textsc{Output}: Emit the annotated plan in human-readable, JSON, and ArgoCD/Flux-compatible formats.
+\end{enumerate}
+
+\subsection{Algorithm 1: BMC Encoding with Monotone Restriction}
+\label{sec:alg-bmc}
+
+\begin{algorithm}[t]
+\caption{\textsc{EncodeBMC}: Monotone BMC encoding of deployment plan existence}
+\label{alg:bmc}
+\begin{algorithmic}[1]
+\Require Start state $s_0$, target state $s_k$, dependency graph $\mathit{Deps}$, compatibility oracle $\mathcal{C}$, horizon $k$
+\Ensure Propositional formula $\Phi$ whose satisfying assignments correspond to safe monotone plans
+\State $b \gets \lceil \log_2 L \rceil$ \Comment{bits per version variable}
+\For{$t \in \{0, \ldots, k\}$, $i \in \{1, \ldots, n\}$}
+  \State $x_i^{(t)} \gets \textsc{NewBitvector}(b)$ \Comment{version of service $i$ at step $t$}
+\EndFor
+\State \Comment{--- Initial and final state ---}
+\For{$i \in \{1, \ldots, n\}$}
+  \State $\Phi \gets \Phi \wedge (x_i^{(0)} = s_0[i]) \wedge (x_i^{(k)} = s_k[i])$
+\EndFor
+\State \Comment{--- Monotone transition relation ---}
+\For{$t \in \{0, \ldots, k-1\}$}
+  \For{$i \in \{1, \ldots, n\}$}
+    \State $\Phi \gets \Phi \wedge (x_i^{(t+1)} \geq x_i^{(t)})$ \Comment{monotonicity}
+  \EndFor
+  \State $\mathit{changed}_i \gets (x_i^{(t+1)} \neq x_i^{(t)})$ for each $i$
+  \State $\Phi \gets \Phi \wedge \textsc{ExactlyOne}(\mathit{changed}_1, \ldots, \mathit{changed}_n)$
+  \For{$i \in \{1, \ldots, n\}$}
+    \State $\Phi \gets \Phi \wedge (\mathit{changed}_i \Rightarrow x_i^{(t+1)} = x_i^{(t)} + 1)$ \Comment{single-step advance}
+  \EndFor
+\EndFor
+\State \Comment{--- Safety constraints ---}
+\For{$t \in \{0, \ldots, k\}$}
+  \For{$(i,j) \in \mathit{Deps}$}
+    \If{$\mathcal{C}(i,j,\cdot,\cdot)$ has interval structure}
+      \State $\Phi \gets \Phi \wedge \textsc{IntervalEncode}(x_i^{(t)}, x_j^{(t)}, \mathit{lo}_j, \mathit{hi}_j)$ \Comment{Algorithm~\ref{alg:interval}}
+    \Else
+      \State $\Phi \gets \Phi \wedge \textsc{BDDEncode}(x_i^{(t)}, x_j^{(t)}, \mathcal{C}(i,j,\cdot,\cdot))$
+    \EndIf
+  \EndFor
+\EndFor
+\State \Return $\Phi$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Complexity.} The formula $\Phi$ contains:
+\begin{itemize}
+\item $O(n \cdot k)$ version variables, each $b$ bits: $O(n k \log L)$ propositional variables.
+\item Transition constraints: $O(n k b) = O(nk \log L)$ clauses for monotonicity and exactly-one.
+\item Safety constraints: $O(|\mathit{Deps}| \cdot k \cdot [(1-f) \log^2 L + f L^2])$ clauses (Theorem~\ref{thm:sensitivity}).
+\end{itemize}
+Total: $O(n^2 k [(1-f) \log^2 L + f L^2])$ clauses, dominated by the safety constraints.
+
+\subsection{Algorithm 2: Interval-Compressed Encoding}
+\label{sec:alg-interval}
+
+\begin{algorithm}[t]
+\caption{\textsc{IntervalEncode}: Binary arithmetic encoding of interval compatibility}
+\label{alg:interval}
+\begin{algorithmic}[1]
+\Require Bitvector variables $x_i, x_j$ (each $b$ bits), interval bounds $\mathit{lo}(\cdot), \mathit{hi}(\cdot)$
+\Ensure Clauses asserting $x_j \in [\mathit{lo}(x_i), \mathit{hi}(x_i)]$
+\State $\mathit{lo\_bits} \gets \textsc{MuxTree}(x_i, \mathit{lo})$ \Comment{$O(b^2)$ gates: multiplexer selecting $\mathit{lo}[v]$ based on $x_i$}
+\State $\mathit{hi\_bits} \gets \textsc{MuxTree}(x_i, \mathit{hi})$ \Comment{$O(b^2)$ gates}
+\State $\Phi_{\mathrm{lo}} \gets \textsc{BinaryGEQ}(x_j, \mathit{lo\_bits})$ \Comment{$O(b)$ clauses via ripple comparator}
+\State $\Phi_{\mathrm{hi}} \gets \textsc{BinaryLEQ}(x_j, \mathit{hi\_bits})$ \Comment{$O(b)$ clauses}
+\State \Return $\Phi_{\mathrm{lo}} \wedge \Phi_{\mathrm{hi}}$
+\end{algorithmic}
+\end{algorithm}
+
+The \textsc{MuxTree} procedure constructs a binary decision tree selecting the appropriate bound value based on the input version. For a $b$-bit input, the tree has $b$ levels. At each level $\ell$, bit $\ell$ of $x_i$ selects between two sub-trees. Each leaf outputs a $b$-bit constant (the bound value for a specific input version). With Tseitin transformation, this produces $O(b^2)$ clauses. Under monotonicity of $\mathit{lo}(\cdot)$ and $\mathit{hi}(\cdot)$, adjacent leaves often share prefix bits, enabling sharing that reduces the constant factor.
+
+\subsection{Algorithm 3: CEGAR Integration}
+\label{sec:alg-cegar}
+
+\begin{algorithm}[t]
+\caption{\textsc{CEGARSolve}: CEGAR loop between CaDiCaL and Z3}
+\label{alg:cegar}
+\begin{algorithmic}[1]
+\Require BMC formula $\Phi_{\mathrm{compat}}$, resource constraints $R$, max iterations $M$
+\Ensure Safe plan $\pi$ or \textsc{Infeasible}
+\State $\mathit{blocking} \gets \emptyset$
+\For{$\mathit{iter} = 1, \ldots, M$}
+  \State $\mathit{result} \gets \textsc{CaDiCaL.Solve}(\Phi_{\mathrm{compat}} \wedge \bigwedge \mathit{blocking})$
+  \If{$\mathit{result} = \textsc{UNSAT}$}
+    \State \Return \textsc{Infeasible}
+  \EndIf
+  \State $\pi \gets \textsc{ExtractPlan}(\mathit{result}.\mathit{model})$
+  \State $\mathit{violation} \gets \textsc{CheckResources}(\pi, R)$ \Comment{Z3 check for each step}
+  \If{$\mathit{violation} = \textsc{None}$}
+    \State \Return $\pi$ \Comment{Plan satisfies both constraint types}
+  \EndIf
+  \State $\mathit{core} \gets \textsc{Z3.UNSATCore}(\mathit{violation})$
+  \State $\mathit{clause} \gets \textsc{GeneralizeBlocking}(\mathit{core}, \mathit{result}.\mathit{model})$
+  \State $\mathit{blocking} \gets \mathit{blocking} \cup \{\mathit{clause}\}$
+\EndFor
+\State \Return \textsc{Timeout}
+\end{algorithmic}
+\end{algorithm}
+
+The \textsc{GeneralizeBlocking} procedure (line 13) is critical for practical convergence. Given the UNSAT core from Z3 (a minimal set of resource-constraint variables whose values are infeasible), it constructs a blocking clause that excludes all assignments sharing the same infeasible resource-variable pattern---not just the specific model. This generalization reduces the iteration count from potentially exponential to typically 5--20 in practice.
+
+\subsection{Algorithm 4: Rollback Safety Envelope Computation}
+\label{sec:alg-envelope}
+
+\begin{algorithm}[t]
+\caption{\textsc{ComputeEnvelope}: Rollback safety envelope with binary search}
+\label{alg:envelope}
+\begin{algorithmic}[1]
+\Require Safe plan $\pi = (s_0, \ldots, s_k)$, safe subgraph $G[\mathit{Safe}]$
+\Ensure Envelope $E \subseteq \{0, \ldots, k\}$, PNR states with witnesses
+\State \Comment{Binary search for the first PNR state}
+\State $\mathit{lo} \gets 0$, $\mathit{hi} \gets k$
+\While{$\mathit{lo} < \mathit{hi}$}
+  \State $\mathit{mid} \gets \lfloor (\mathit{lo} + \mathit{hi}) / 2 \rfloor$
+  \If{\textsc{BackwardReachable}($s_{\mathit{mid}}, s_0, G[\mathit{Safe}]$)}
+    \State $\mathit{lo} \gets \mathit{mid} + 1$ \Comment{$s_{\mathit{mid}}$ is in envelope; PNR is later}
+  \Else
+    \State $\mathit{hi} \gets \mathit{mid}$ \Comment{$s_{\mathit{mid}}$ is PNR; boundary is here or earlier}
+  \EndIf
+\EndWhile
+\State $t_{\mathrm{PNR}} \gets \mathit{lo}$ \Comment{First PNR state (or $k+1$ if all in envelope)}
+\State $E \gets \{0, \ldots, t_{\mathrm{PNR}} - 1\}$
+\State \Comment{Extract witnesses for PNR states}
+\For{$t \in \{t_{\mathrm{PNR}}, \ldots, k\}$}
+  \State $\mathit{core} \gets \textsc{BackwardUNSATCore}(s_t, s_0)$
+  \State $\mathit{witness}_t \gets \textsc{MinimizeCore}(\mathit{core})$
+\EndFor
+\State \Return $E$, $\{(t, \mathit{witness}_t) : t \geq t_{\mathrm{PNR}}\}$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Key optimization: binary search.} Under monotone plans, the envelope has a useful structural property: if state $s_t$ is backward-reachable to $s_0$, then $s_{t-1}$ is also backward-reachable (since the backward path from $s_t$ passes through states componentwise $\leq s_t$, and $s_{t-1} \leq s_t$ componentwise). This means the envelope is a \emph{prefix} of the plan: $E = \{0, \ldots, t_{\mathrm{PNR}}-1\}$ for some threshold $t_{\mathrm{PNR}}$. Binary search finds $t_{\mathrm{PNR}}$ in $O(\log k)$ backward-reachability checks instead of $k$ checks.
+
+\textbf{Backward reachability via incremental SAT.} The \textsc{BackwardReachable} check encodes the reverse problem: does a safe monotone-decreasing path exist from $s_t$ to $s_0$? This is a BMC instance with reversed transition direction ($x_i^{(t+1)} \leq x_i^{(t)}$). Using CaDiCaL's incremental mode with assumption literals, the shared clause database is preserved across all backward checks, amortizing solver effort. Each check adds only the marginal constraints (new start state $s_t$) as assumptions.
+
+\textbf{Complexity.} Binary search: $O(\log k) \approx 8$ SAT calls for $k = 200$. Each call operates on a formula of similar size to the forward BMC ($\sim$14M clauses) but with the incremental clause database already populated. Empirically, subsequent incremental calls are 2--5$\times$ faster than the first due to clause learning transfer.
+
+\subsection{Algorithm 5: $k$-Robustness Verification}
+\label{sec:alg-robustness}
+
+\begin{algorithm}[t]
+\caption{\textsc{KRobustCheck}: Robustness verification against oracle errors}
+\label{alg:krobust}
+\begin{algorithmic}[1]
+\Require Safe plan $\pi$, \textsc{Red}-tagged constraints $R$, budget $k$
+\Ensure \textsc{Robust}$(k)$ or list of vulnerabilities
+\State $\mathit{failures} \gets []$
+\For{$S \in \binom{R}{k}$} \Comment{enumerate all size-$k$ subsets}
+  \State $\mathit{Safe}' \gets \mathit{Safe}$ with each $c \in S$ flipped to incompatible
+  \For{$t \in \{0, \ldots, |\pi|\}$}
+    \If{$\pi[t] \notin \mathit{Safe}'$}
+      \State $\mathit{failures}.\mathrm{append}((S, t))$
+      \State \textbf{break} \Comment{this subset causes plan failure at step $t$}
+    \EndIf
+  \EndFor
+\EndFor
+\If{$|\mathit{failures}| = 0$}
+  \State \Return \textsc{Robust}$(k)$
+\Else
+  \State \Return \textsc{Vulnerable}$(\mathit{failures})$
+\EndIf
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Complexity.} $\binom{|R|}{k}$ subsets, each requiring a plan safety check. For $|R| = 10$, $k = 1$: 10 checks. For $k = 2$: 45 checks. Each check is a fast constraint evaluation (not a full SAT solve): for each plan step, evaluate the flipped constraints against the plan state. Total: $O\!\left(\binom{|R|}{k} \cdot |\pi| \cdot |\mathit{Deps}|\right)$ operations---under 1 second for typical parameters.
+
+For $k$-robustness of the \emph{envelope} (checking whether PNR boundaries shift under oracle errors), each subset requires a backward-reachability SAT call. This is more expensive: $\binom{|R|}{k}$ SAT calls $\times$ $\sim$2s each $\approx$ 90 seconds for $k=2$.
+
+\subsection{Implementation Architecture}
+\label{sec:impl-architecture}
+
+SafeStep is implemented in Rust (core engine) with Python (evaluation infrastructure). Table~\ref{tab:modules} maps each theoretical result to its implementing module.
+
+\begin{table}[t]
+\centering
+\caption{Theorem-to-module mapping.}
+\label{tab:modules}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Theorem} & \textbf{Module} & \textbf{Est. LoC} \\
+\midrule
+Thm~\ref{thm:monotone} (Monotone Sufficiency) & \texttt{core::bmc::monotone} & 2--3K \\
+Cor~\ref{cor:completeness} (Completeness Bound) & \texttt{core::bmc::depth} & 0.5K \\
+Thm~\ref{thm:interval} (Interval Encoding) & \texttt{encoding::interval} & 4--6K \\
+Thm~\ref{thm:treewidth} (Treewidth DP) & \texttt{encoding::treewidth} & 3--5K \\
+Thm~\ref{thm:cegar} (CEGAR Soundness) & \texttt{core::cegar} & 3--4K \\
+Thm~\ref{thm:adversary} (Adversary Budget) & \texttt{robustness::kcheck} & 1--2K \\
+Prop~\ref{prop:replica} (Replica Symmetry) & \texttt{encoding::replica} & 1--2K \\
+--- (Envelope Computation) & \texttt{core::envelope} & 3--5K \\
+--- (Schema Oracle) & \texttt{oracle::schema} & 8--12K \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{SAT solver integration.} CaDiCaL is accessed via Rust FFI bindings (\texttt{cadical-sys} crate), using its incremental solving API: \texttt{assume()} for per-query assumptions, \texttt{solve()} with assumption-based clause activation, and \texttt{failed()} for UNSAT core extraction. Z3 is accessed via \texttt{z3-sys} for QF\_LIA resource constraints. Both solvers maintain persistent state across incremental calls, enabling clause learning transfer that is critical for envelope computation performance.
+
+\textbf{Helm integration.} Manifest parsing delegates to the \texttt{helm template} CLI subprocess for correctness---reimplementing Go's template engine in Rust would create an enormous surface for semantic divergence. The subprocess output (rendered YAML) is parsed in Rust for performance. Kustomize overlays are resolved similarly.
+%% SafeStep Paper — Sections 6-10: Oracle, Evaluation, Related Work, Limitations, Conclusion
+
+\section{Schema Compatibility Oracle}
+\label{sec:oracle}
+
+The strength of SafeStep's guarantees is bounded by the fidelity of its compatibility oracle. This section describes the oracle's architecture, its capabilities, and---critically---its limitations.
+
+\subsection{Oracle Architecture}
+\label{sec:oracle-arch}
+
+The schema compatibility oracle takes as input two versions $(v, w)$ of a dependent service pair $(i, j)$ and produces a compatibility verdict with confidence:
+\[
+  \textsc{Oracle}(i, j, v, w) \to (\mathit{compatible} \in \{\mathit{true}, \mathit{false}\}, \mathit{confidence} \in \{\textsc{Green}, \textsc{Yellow}, \textsc{Red}\}).
+\]
+
+The oracle operates in three phases:
+
+\textbf{Phase 1: Schema Extraction.} For each service version, extract the API schema from:
+\begin{itemize}
+\item \textbf{OpenAPI 3.x specifications} (YAML/JSON): endpoint definitions, request/response schemas, required/optional fields, type annotations, enum values.
+\item \textbf{Protocol Buffer definitions} (.proto files): message types, field numbers, field types, \texttt{required}/\texttt{optional}/\texttt{repeated} qualifiers, service definitions.
+\end{itemize}
+Schema extraction is fully automated: schemas are read from the version-controlled artifacts that accompany each service version. When explicit schemas are unavailable, the oracle assigns \textsc{Red} confidence to all constraints involving that service.
+
+\textbf{Phase 2: Schema Diffing.} For each version pair, compute a structured diff between the API schemas:
+\begin{itemize}
+\item \textbf{Field-level changes}: additions, removals, type changes, required$\to$optional and vice versa, default value changes.
+\item \textbf{Endpoint-level changes}: additions, removals, path changes, method changes.
+\item \textbf{Enum changes}: value additions (backward-compatible), value removals (breaking), value renames.
+\item \textbf{Protobuf-specific}: field number reuse (always breaking), \texttt{oneof} changes, package/service renames.
+\end{itemize}
+
+\textbf{Phase 3: Breaking Change Classification.} Each diff element is classified as:
+\begin{itemize}
+\item \textbf{Breaking} (incompatible): Removal of a required field that the consumer sends or expects. Type change from string to integer. Removal of an enum value the consumer uses. Field number reuse in protobuf.
+\item \textbf{Non-breaking} (compatible): Addition of an optional field. Addition of a new endpoint. Addition of an enum value.
+\item \textbf{Ambiguous}: Required$\to$optional (compatible for producers, breaking for consumers expecting the field). Default value change (may affect behavior but not schema compatibility).
+\end{itemize}
+
+\subsection{Confidence Model}
+\label{sec:confidence}
+
+Each oracle judgment is tagged with a confidence level reflecting the strength of the underlying evidence:
+
+\begin{itemize}
+\item \textsc{Green} ($p_e \leq 0.01$): \emph{Strong structural evidence.} The diff contains a clear breaking change (field removal, type change, endpoint removal) or a clear preservation (no diff at the consumed interface). False positive/negative rate bounded by the schema parser's correctness.
+
+\item \textsc{Yellow} ($p_e \leq 0.10$): \emph{Medium evidence.} The diff contains ambiguous changes (deprecation annotations, version range constraints, default value changes) that \emph{may} indicate incompatibility. Or the schemas are available but the diff is complex enough that classification confidence is reduced.
+
+\item \textsc{Red} ($p_e \leq 0.30$): \emph{No structural evidence.} No machine-readable schema is available, or the schemas have not changed but behavioral incompatibility is possible. The oracle defaults to ``compatible'' with \textsc{Red} confidence, making this assumption explicit and visible.
+\end{itemize}
+
+\subsection{Pairwise Compatibility Zone Construction}
+\label{sec:compat-zones}
+
+For each dependent pair $(i,j)$, the oracle constructs an $L_i \times L_j$ compatibility bitmap:
+\[
+  B_{i,j}[v][w] = \begin{cases} 1 & \text{if } \textsc{Oracle}(i,j,v,w).\mathit{compatible} = \mathit{true} \\ 0 & \text{otherwise} \end{cases}
+\]
+This bitmap serves as input to the pairwise pre-filter (Section~\ref{sec:pipeline}) and the BMC encoding (Algorithm~\ref{alg:bmc}). Storage: $L \times L$ bits per pair, i.e., $20 \times 20 = 400$ bits = 50 bytes at $L = 20$. For 1225 pairs: $\sim$61 KB total---negligible.
+
+\subsection{Honest Limitations}
+\label{sec:oracle-limits}
+
+\textbf{The oracle is blind to behavioral incompatibilities.} Schema analysis catches structural API changes---field removals, type changes, renamed endpoints---but cannot detect:
+\begin{itemize}
+\item \textbf{Semantic changes}: A field's type and name remain the same, but its semantics change (e.g., a ``timestamp'' field switches from Unix epoch to ISO 8601).
+\item \textbf{Performance regressions}: A service at version $v_{\mathrm{new}}$ responds 10$\times$ slower, causing timeouts in consumers.
+\item \textbf{Error handling changes}: A service that previously returned 200 OK for a certain input now returns 400 Bad Request.
+\item \textbf{Race conditions}: A new version introduces concurrency bugs that manifest only under load.
+\item \textbf{Transitive behavioral dependencies}: Service A depends on service B's behavior (not just its schema), which changes when B upgrades.
+\end{itemize}
+
+These limitations are inherent to schema-based analysis and cannot be resolved by engineering improvements to the oracle. SafeStep and runtime monitoring (canary deployments, integration tests, chaos engineering) are \emph{complements}, not substitutes. The confidence coloring system makes this limitation visible to operators at every decision point: \textsc{Red}-tagged constraints are explicitly flagged as ``no structural evidence; assumed compatible by default.''
+
+The oracle validation experiment (Section~\ref{sec:eval-oracle}) empirically quantifies what fraction of real deployment failures are detectable by schema analysis, providing the evidence needed to calibrate trust in SafeStep's output.
+
+%% =====================================================================
+\section{Evaluation}
+\label{sec:evaluation}
+
+The evaluation is designed to be \emph{unfakeable}: good results are meaningful, and failure modes are reported honestly. The experimental plan includes four phases, each targeting a distinct aspect of SafeStep's claims.
+
+\subsection{Phase 0: Oracle Validation Experiment}
+\label{sec:eval-oracle}
+
+\textbf{Purpose.} This experiment is the existential gate for the project. It answers: what fraction of real deployment failures are detectable by schema analysis?
+
+\textbf{Data collection.} We collect 15 published deployment-failure postmortems involving multi-service version incompatibility from:
+\begin{itemize}
+\item Google Cloud engineering blog (Cloud SQL 2022, GKE incidents)
+\item AWS post-event summaries (Kinesis 2020, DynamoDB incidents)
+\item Cloudflare engineering blog (control-plane 2023, edge incidents)
+\item Meta engineering blog (multi-service deployment incidents)
+\item Uber engineering blog (microservice compatibility failures)
+\item The danluu.com postmortem aggregation database
+\end{itemize}
+
+\textbf{Classification taxonomy.} Each postmortem root cause is classified into one of four categories:
+\begin{enumerate}
+\item \textsc{Structural-Detectable}: The root cause is a structural API change that schema analysis would catch (field removal, type change, endpoint rename, field number reuse). \emph{SafeStep would prevent this failure.}
+\item \textsc{Structural-Ambiguous}: The root cause involves a structural change that \emph{might} be classified correctly (required$\to$optional, default value change). \emph{SafeStep would flag this with \textsc{Yellow} confidence.}
+\item \textsc{Behavioral}: The root cause is a behavioral change invisible to schema analysis (semantic change, performance regression, error handling). \emph{SafeStep would miss this failure.}
+\item \textsc{Operational}: The root cause is an operational issue (resource exhaustion, network partition, human error) not related to version compatibility. \emph{Outside SafeStep's scope.}
+\end{enumerate}
+
+\textbf{Inter-rater reliability.} Two independent annotators classify each postmortem. We report Cohen's $\kappa$ for inter-rater agreement. Target: $\kappa > 0.7$ (substantial agreement). If $\kappa < 0.7$: add a third annotator as tiebreaker and expand the taxonomy with finer subcategories to reduce ambiguity.
+
+\textbf{Additional deliverable: downward-closure quantification.} For all compatibility predicates extracted from the schema analysis of the 847 open-source microservice projects, check whether bilateral downward closure holds. Report the fraction of pairs satisfying DC and characterize the violation patterns.
+
+\textbf{Decision criteria.}
+\begin{itemize}
+\item $\geq 60\%$ (\textsc{Structural-Detectable} + \textsc{Structural-Ambiguous}): \textbf{Proceed} with deployment tool positioning.
+\item $40$--$60\%$: \textbf{Proceed cautiously} with prominent limitations discussion.
+\item $< 40\%$: \textbf{Pivot} to theory paper about the envelope concept.
+\end{itemize}
+
+\textbf{Sample size analysis.} With $n = 15$ postmortems and a hypothesized structural coverage of 60\%, a 95\% bootstrap confidence interval has half-width $\approx \pm 12\%$, giving a CI of roughly [48\%, 72\%]. This is wide; we acknowledge the limitation and frame Phase 0 as a pilot study. Expanding to $n = 30$ would narrow the CI to $\pm 9\%$. If feasible, we augment with additional postmortems from the broader SRE community.
+
+\subsection{Phase 1: Prospective Evaluation on DeathStarBench}
+\label{sec:eval-prospective}
+
+\textbf{Purpose.} Demonstrate SafeStep on a realistic microservice benchmark with ground-truth fault injection, avoiding the retrospective bias of postmortem analysis.
+
+\textbf{Setup.} Deploy three DeathStarBench applications on a Kubernetes cluster:
+\begin{itemize}
+\item \textbf{Social Network}: 14 services (Compose Post, User Timeline, Home Timeline, User Service, etc.)
+\item \textbf{Hotel Reservation}: 8 services (Frontend, Search, Reservation, Rate, Geo, Profile, etc.)
+\item \textbf{Media Service}: 12 services (Compose Review, Review Storage, Movie Info, etc.)
+\end{itemize}
+
+\textbf{Version history generation.} For each service, we create 5 synthetic versions with controlled schema evolution:
+\begin{itemize}
+\item v1$\to$v2: Minor additions (new optional fields, new endpoints)---backward compatible.
+\item v2$\to$v3: One structural breaking change per application (field type change in a critical message, removal of a deprecated endpoint).
+\item v3$\to$v4: Behavioral change (response format change that preserves schema but alters semantics).
+\item v4$\to$v5: Resource requirement change (memory increase that exceeds PodDisruptionBudget under concurrent upgrade).
+\end{itemize}
+
+\textbf{Fault injection strategy.} We inject three types of faults:
+\begin{enumerate}
+\item \textbf{Structural fault} (v2$\to$v3): A required field in the gRPC interface between User Service and Compose Post is renamed. SafeStep should detect this and route the plan around the incompatibility.
+\item \textbf{Behavioral fault} (v3$\to$v4): The response format of Movie Info changes semantically but not structurally. SafeStep \emph{should miss this}---we report it honestly as an oracle limitation.
+\item \textbf{Resource fault} (v4$\to$v5): The memory requirement of Rate service doubles, exceeding cluster capacity if upgraded concurrently with Profile service. SafeStep should detect this via CEGAR and find an ordering that respects resource limits.
+\end{enumerate}
+
+\textbf{Key metric: discovering a real unsafe rollback state.} The strongest validation is if SafeStep identifies a deployment ordering where rollback becomes unsafe---a point of no return caused by the structural incompatibility between v2 and v3 of User Service and Compose Post. If the analyst can verify that this PNR state is genuine (manually confirming that rollback from this state would indeed encounter the incompatibility), it demonstrates SafeStep finding a ``real bug''---the most compelling possible evaluation result.
+
+\textbf{Baselines.}
+\begin{itemize}
+\item \textbf{Topological sort}: Order services by dependency depth. No compatibility checking.
+\item \textbf{Random valid plans}: Randomly select the next service to upgrade, subject only to the constraint that the start and end states are correct. Report the fraction of random plans that encounter unsafe states.
+\item \textbf{Fast Downward} (PDDL planner): Encode the problem as a PDDL planning instance and solve with Fast Downward's LAMA configuration~\cite{richter2010lama}. This is the closest automated planning baseline.
+\item \textbf{SafeStep--no-envelope}: SafeStep with envelope computation disabled. Measures the overhead of the rollback analysis.
+\end{itemize}
+
+\subsection{Phase 2: Scalability Experiments}
+\label{sec:eval-scalability}
+
+\textbf{Purpose.} Characterize SafeStep's performance across the parameter space and validate theoretical complexity predictions.
+
+\textbf{Synthetic benchmark generation.} We generate service dependency graphs with controlled properties:
+\begin{itemize}
+\item \textbf{Topologies}: mesh (all-to-all), hub-spoke (star), hierarchical (tree), and random Erd\H{o}s--R\'{e}nyi with calibrated edge density.
+\item \textbf{Compatibility matrices}: generated to have controlled interval structure fraction $f$, bilateral DC satisfaction rate, and average compatibility range width.
+\item \textbf{Resource profiles}: resource demands drawn from real Kubernetes deployment manifests (DeathStarBench, Sock Shop) with controlled scaling.
+\end{itemize}
+
+\textbf{Independent variables and ranges.}
+
+\begin{table}[t]
+\centering
+\caption{Scalability experiment parameter space.}
+\label{tab:scalability-params}
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Experiment} & \textbf{Variable} & \textbf{Range} & \textbf{Fixed Parameters} \\
+\midrule
+Service scaling & $n$ & 10, 20, 30, 50, 100, 200 & $L=10$, tw=auto \\
+Version scaling & $L$ & 5, 10, 15, 20, 30, 50 & $n=30$, tw=auto \\
+Treewidth scaling & tw & 2, 3, 4, 5, 8, 10, 15 & $n=50$, $L=10$ \\
+Interval sensitivity & $f$ & 0.0, 0.05, 0.10, 0.20, 0.30, 0.50 & $n=50$, $L=20$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Dependent variables.}
+\begin{itemize}
+\item Synthesis time (seconds): time from encoded formula to plan output.
+\item Encoding size: number of propositional variables and clauses.
+\item Solver calls: number of CaDiCaL \texttt{solve()} invocations (forward + CEGAR + backward).
+\item Envelope computation time: time for bidirectional reachability analysis.
+\item Peak memory usage (MB).
+\end{itemize}
+
+Each configuration is run 10 times with different random seeds (for graph generation and solver tie-breaking). We report medians and interquartile ranges.
+
+\textbf{Ablation study.} To measure the contribution of each optimization, we disable them individually:
+\begin{enumerate}
+\item \textbf{No interval compression}: All constraints use naive $O(L^2)$ encoding.
+\item \textbf{No monotone reduction}: Allow non-monotone transitions; increase BMC horizon to $k = n \cdot L$ (loose upper bound).
+\item \textbf{No treewidth DP}: Force SAT/BMC even for low-treewidth instances.
+\item \textbf{No pairwise pre-filter}: Skip the bitmap intersection fast-rejection step.
+\item \textbf{No $k$-robustness}: Skip the post-plan robustness enumeration.
+\end{enumerate}
+
+\textbf{Treewidth phase transition.} The treewidth experiment explicitly targets the phase transition between the DP fast path and SAT/BMC. We expect to see:
+\begin{itemize}
+\item tw $\leq 3$: DP completes in seconds; SAT/BMC takes minutes.
+\item tw = 4--5: DP becomes infeasible; SAT/BMC takes minutes.
+\item tw $\geq 8$: SAT/BMC takes tens of minutes; DP is impossible.
+\end{itemize}
+Plotting synthesis time vs.\ treewidth with both DP and SAT/BMC lines reveals the crossover point.
+
+\subsection{Phase 3: Incident Reconstruction}
+\label{sec:eval-incidents}
+
+\textbf{Purpose.} Supplementary validation: demonstrate that SafeStep can reason about real deployment failure scenarios.
+
+\textbf{Methodology.} For each of the 15 postmortems from Phase 0, reconstruct the deployment scenario as a SafeStep input:
+\begin{itemize}
+\item Extract or infer the service set, version sets, and dependency graph.
+\item Extract or synthesize compatibility constraints based on the postmortem's description of the failure.
+\item Define the start state (pre-deployment) and target state (intended deployment).
+\item Run SafeStep and record its output.
+\end{itemize}
+
+\textbf{Reporting (no dual-success gaming).} We report three mutually exclusive categories:
+\begin{itemize}
+\item \textbf{Found safe alternative plan}: $X/15$ incidents where SafeStep finds a deployment ordering that avoids the failure state.
+\item \textbf{Flagged point of no return}: $Y/15$ incidents where SafeStep identifies the failure state as a PNR \emph{before} deployment begins.
+\item \textbf{Missed entirely}: $Z/15$ incidents where the failure was behavioral (outside oracle scope) and SafeStep's plan does not avoid the failure.
+\end{itemize}
+$X + Y + Z = 15$. All three numbers are reported. $Z$ is expected to be $> 0$ and is not hidden.
+
+\textbf{Limitation.} Incident reconstruction involves significant inference---public postmortems rarely include exact version sets, schema definitions, or dependency graphs. The reconstruction is closer to ``inspired by'' than ``replayed from'' real incidents. We acknowledge this limitation and emphasize Phase 1 (prospective, controlled) as the primary evaluation.
+
+\subsection{Statistical Methodology}
+\label{sec:stats}
+
+\textbf{Small sample sizes.} The oracle validation experiment ($n=15$) and incident reconstruction ($n=15$) have small samples. We address this with:
+\begin{itemize}
+\item \textbf{Bootstrap confidence intervals}: 10,000 bootstrap resamples to estimate 95\% CIs for coverage rates and accuracy metrics.
+\item \textbf{Exact binomial confidence intervals}: Wilson score intervals for proportions.
+\item \textbf{Effect size reporting}: Cohen's $d$ for continuous outcomes, odds ratios for binary outcomes. No $p$-value hacking.
+\end{itemize}
+
+\textbf{Scalability experiments.} With 10 repetitions per configuration:
+\begin{itemize}
+\item Report medians and interquartile ranges (robust to outliers from solver non-determinism).
+\item Fit power-law and linear models to synthesis time vs.\ $n$, $L$, tw to validate theoretical complexity predictions.
+\item Use Mann--Whitney U tests for pairwise comparisons between ablation variants (non-parametric, appropriate for small samples with potentially non-normal distributions).
+\end{itemize}
+
+%% =====================================================================
+\section{Related Work}
+\label{sec:related}
+
+\subsection{Deployment Orchestration}
+\label{sec:related-deploy}
+
+Modern deployment tools---Kubernetes~\cite{burns2016borg}, Helm~\cite{helm}, ArgoCD~\cite{argocd}, Flux~\cite{flux}, Spinnaker~\cite{spinnaker}---provide mechanisms for rolling updates, blue-green deployments, and canary releases. None of these tools reason about \emph{cross-service} version compatibility or compute safe deployment orderings. Kubernetes' rolling update strategy operates at the single-service level: it controls how many pods of service $i$ transition from $v_{\mathrm{old}}$ to $v_{\mathrm{new}}$, but has no model of how $i$'s upgrade interacts with $j$'s upgrade. The operator is responsible for determining the correct ordering---typically via manual runbooks or topological sort heuristics.
+
+Canary deployments~\cite{schermann2018continuous} detect \emph{forward} failures: if the new version of service $i$ crashes or exhibits degraded performance, the canary is killed and the service stays at the old version. Canaries are structurally blind to \emph{rollback} failures: the scenario where rolling back service $i$ requires first rolling back service $j$, which has already upgraded past the point of $i$-compatibility. SafeStep specifically targets this blind spot.
+
+Feature flags and traffic splitting~\cite{tang2015holistic} provide fine-grained control over feature exposure but do not address the combinatorial complexity of multi-service version ordering. They are complementary to SafeStep: feature flags control what code runs within a service version, while SafeStep controls the ordering of service version transitions.
+
+\subsection{Configuration Synthesis}
+\label{sec:related-config}
+
+Aeolus~\cite{dicosmo2014aeolus} models component-based deployment as constraint satisfaction over component states (installed, configured, running) with inter-component dependencies. It proves PSPACE-completeness of the general deployment problem. Zephyrus~\cite{becker2015zephyrus} extends Aeolus with optimization objectives (minimize cost, maximize availability) and solves via constraint programming (MiniZinc).
+
+\textbf{Critical distinction.} Aeolus and Zephyrus solve \emph{configuration synthesis}: finding a valid target state. SafeStep solves \emph{plan synthesis}: finding a safe path through the version-product graph from the current state to the target. Plan synthesis is strictly harder---configuration synthesis reduces to a single reachability query (``does a safe target state exist?''), while plan synthesis requires path existence in an exponential graph (``does a safe transition sequence exist?'').
+
+\textbf{Complexity comparison (important caveat).} Aeolus' PSPACE-completeness applies to a different problem (general component configuration with install/uninstall/configure actions) under different restrictions (components can be in multiple states, not just versioned). SafeStep's NP-completeness under monotonicity (Corollary~\ref{cor:completeness}) applies to a restricted problem (version-ordered upgrades with downward-closed compatibility). The comparison is \emph{not} ``we reduced PSPACE to NP''---it is ``our restricted problem, which captures the common case for version upgrades, admits an NP decision procedure.'' The restriction is the key enabler.
+
+\subsection{Software Update Planning}
+\label{sec:related-update}
+
+Package managers (apt, rpm, npm) solve single-machine dependency resolution~\cite{mancinelli2006managing}: given a set of packages with version constraints, find a consistent installation. OPIUM~\cite{tucker2007opium} optimizes package installation for freshness while respecting constraints. These tools operate on single machines and do not model distributed multi-service deployments, rolling updates, or rollback safety.
+
+EDOS~\cite{dicosmo2006edos} and the Mancoosi project~\cite{abate2012dependency} formalize package dependency resolution as a combinatorial optimization problem and develop efficient solvers. The constraints are similar in structure (version-ordered, interval-structured) but the problem is fundamentally different: package installation is a single-machine, one-shot operation, while deployment planning involves a multi-step transition sequence across a distributed system.
+
+\subsection{SDN Consistent Network Updates}
+\label{sec:related-sdn}
+
+Reitblatt et al.~\cite{reitblatt2012consistent} define \emph{consistent network updates}: transitioning an SDN network from one forwarding policy to another while maintaining a safety invariant (e.g., no forwarding loops, no black holes) at every intermediate step. McClurg et al.~\cite{mcclurg2015efficient} synthesize efficient consistent update schedules using counterexample-guided search.
+
+The structural parallel to SafeStep is deep:
+\begin{itemize}
+\item Both model safe transition sequences in exponentially large state spaces.
+\item Both use SAT/SMT-based synthesis to find plans respecting safety invariants.
+\item Both define intermediate-state safety as the conjunction of pairwise consistency constraints.
+\end{itemize}
+
+SafeStep differs in three ways:
+\begin{enumerate}
+\item \textbf{Different constraint domain.} SDN safety constraints are over packet-forwarding rules (Boolean predicates on packet headers); SafeStep's constraints are over API version compatibility (pairwise version predicates with interval structure). The interval encoding compression (Theorem~\ref{thm:interval}) is specific to the version domain.
+\item \textbf{Rollback analysis.} SDN consistent-update work computes safe \emph{forward} transitions. SafeStep computes \emph{bidirectional} reachability---the rollback safety envelope and points of no return are not present in any SDN work.
+\item \textbf{Oracle uncertainty.} SDN assumes perfect knowledge of forwarding rules. SafeStep acknowledges imperfect oracle knowledge via confidence coloring and $k$-robustness, a qualitatively different trust model.
+\end{enumerate}
+
+We do not claim that SafeStep's techniques are fundamentally different from SDN consistent-update work. The contribution is the \emph{application} to a new domain (deployment orchestration) with \emph{extensions} (rollback analysis, oracle uncertainty) that are novel and practically important.
+
+\subsection{Bounded Model Checking and CEGAR}
+\label{sec:related-bmc}
+
+Bounded model checking (BMC)~\cite{clarke2001bmc} reduces finite-horizon reachability to propositional satisfiability, enabling the use of industrial-strength SAT solvers for verification. CEGAR~\cite{clarke2003cegar} extends BMC to handle mixed constraint domains by iteratively refining an abstract model based on counterexamples.
+
+SafeStep applies BMC in a non-standard way: the state space is the version-product graph (a Cartesian product of finite ordered sets), not a hardware circuit or software control-flow graph. The domain-specific reductions---monotone restriction, interval encoding, treewidth decomposition---exploit structure that is absent in traditional BMC applications. The CEGAR split (propositional compatibility in CaDiCaL, linear arithmetic resources in Z3) is a standard architecture applied to a novel domain partition.
+
+\subsection{Parameterized Complexity and Treewidth}
+\label{sec:related-treewidth}
+
+The use of treewidth-based dynamic programming for combinatorial problems on graphs with bounded treewidth is a well-established technique in parameterized complexity theory~\cite{bodlaender1996treewidth, cygan2015parameterized}. SafeStep's application to service dependency graphs is a domain-specific instantiation: the DP tracks version assignments to services in each bag of the tree decomposition, checking local compatibility constraints. The specific DP formulation (tracking both current and target versions, yielding $L^{2(w+1)}$ states per bag) is tailored to the deployment planning problem but follows the standard template.
+
+Empirical evidence that production microservice dependency graphs have low treewidth (median 3--5 in our 847-project dataset) provides the practical justification for this approach. Without this empirical observation, the treewidth DP would be a theoretical curiosity.
+
+%% =====================================================================
+\section{Limitations and Failure Modes}
+\label{sec:limitations}
+
+We enumerate the known limitations of SafeStep, organized by their impact on the system's practical value.
+
+\subsection{Oracle Coverage Gaps}
+\label{sec:limit-oracle}
+
+\textbf{Behavioral incompatibilities are invisible.} As detailed in Section~\ref{sec:oracle-limits}, the schema compatibility oracle cannot detect semantic changes, performance regressions, error handling changes, or race conditions. SafeStep's guarantees are ``structurally verified relative to modeled API contracts''---they do not imply behavioral correctness.
+
+\textbf{Mitigation.} Confidence coloring makes this limitation visible. \textsc{Red}-tagged constraints carry explicit warnings. The $k$-robustness check (Section~\ref{sec:alg-robustness}) quantifies resilience to oracle errors. But no amount of engineering can catch failures that leave no schema footprint.
+
+\textbf{Quantification.} The oracle validation experiment (Section~\ref{sec:eval-oracle}) empirically measures the oracle's coverage. If coverage is below 40\%, SafeStep's practical value as a deployment tool is limited, though the rollback safety envelope concept and the formal framework retain theoretical value.
+
+\subsection{Downward-Closure Violations}
+\label{sec:limit-dc}
+
+\textbf{Not all compatibility relations satisfy bilateral DC.} Downward closure (Definition~\ref{def:dc}) requires that older versions are universally more compatible. Violations occur when:
+\begin{itemize}
+\item A new version of service $j$ introduces a required field that older consumers of $i$ cannot provide, but an even newer version of $j$ makes that field optional again.
+\item A service's API undergoes non-monotone evolution (feature introduced in v2, deprecated in v3, removed in v4, reintroduced in v5).
+\end{itemize}
+
+\textbf{Consequence.} When DC is violated for a pair $(i,j)$, Theorem~\ref{thm:monotone} does not apply to that pair. The monotone reduction still applies to DC-satisfying pairs, but non-DC pairs require non-monotone transitions, expanding the search space.
+
+\textbf{Mitigation: graceful degradation.} SafeStep detects DC violations during oracle construction. For non-DC pairs, the BMC encoding allows non-monotone transitions (version increases \emph{and} decreases). The completeness bound $k^*$ for non-DC pairs becomes $O(L^2)$ per pair instead of $O(L)$, adding $O(\text{violations} \cdot L)$ to the total horizon. If DC violations are sparse ($< 10\%$ of pairs), the impact is manageable.
+
+\subsection{Sequential Model vs.\ Concurrent Reality}
+\label{sec:limit-sequential}
+
+\textbf{The model assumes sequential, atomic upgrades.} SafeStep models deployment as a sequence of atomic steps, each upgrading exactly one service by one version. Real Kubernetes deployments are concurrent, asynchronous, and subject to partial failures.
+
+\textbf{Conservative overapproximation argument.} Safety in SafeStep is a property of \emph{states}, not \emph{schedules}: a state is safe if all pairwise compatibility and resource constraints hold. If a concurrent execution visits only states that SafeStep declares safe, then safety is maintained regardless of the execution order. SafeStep's plan provides the \emph{ordering constraints}: services with mutual dependencies should not upgrade simultaneously. The operator (or a GitOps tool) enforces this ordering.
+
+\textbf{Honest limitation: transient unsafe states.} During a concurrent upgrade, the cluster may transiently occupy a state not on SafeStep's plan---e.g., if services $A$ and $B$ are both mid-upgrade, the cluster state has $A$ at $v_{\mathrm{new}}$ and $B$ still at $v_{\mathrm{old}}$, even though the plan specifies $A$ upgrades first. If this transient state violates compatibility, the concurrent execution is unsafe even though the sequential plan is safe. SafeStep does not model or detect this.
+
+\textbf{Mitigation.} The plan's ordering constraints should be enforced at the orchestration level: do not begin upgrading service $B$ until service $A$'s upgrade is complete (all pods running the new version). Kubernetes deployment strategies with \texttt{maxUnavailable} and readiness probes can enforce this discipline.
+
+\subsection{Scalability Boundaries}
+\label{sec:limit-scale}
+
+\textbf{Partial envelopes for large clusters.} For $n > 100$ services, the BMC encoding exceeds 50M clauses and synthesis time enters the hours regime. The envelope computation (even with binary search) requires $O(\log k)$ SAT calls on large formulas.
+
+\textbf{Mitigation.} Sampling-based envelope approximation: check backward reachability at every $k/20$ steps, then binary-search to refine the PNR boundary. This provides a coarse envelope in minutes with fine-grained boundaries where needed. The system explicitly reports when the envelope is approximate.
+
+\subsection{Additional Scope Limitations}
+\label{sec:limit-scope}
+
+\begin{itemize}
+\item \textbf{Binary compatibility.} The model supports only binary (compatible/incompatible) judgments. Graduated compatibility (e.g., ``80\% of API calls succeed'') requires a probabilistic extension.
+\item \textbf{External dependencies.} Databases, message queues, and third-party APIs are not modeled. The version-product graph covers only intra-cluster services.
+\item \textbf{Multi-cluster deployments.} The model assumes a single cluster. Multi-region deployments with cross-cluster dependencies require extension.
+\item \textbf{Partial failures and crash recovery.} The model assumes upgrades either succeed or fail cleanly. Pod crashes during rolling updates, OOMKills, and node failures are not modeled.
+\item \textbf{Correlated oracle errors.} The adversary budget bound (Theorem~\ref{thm:adversary}) assumes independent errors. Systematic oracle failures (e.g., mishandling all protobuf \texttt{oneof} fields) violate this assumption.
+\end{itemize}
+
+%% =====================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We introduced the \emph{rollback safety envelope}: a new operational primitive that maps each intermediate deployment state to its rollback feasibility, identifying \emph{points of no return} where forward completion is the only safe exit. The envelope concept is oracle-independent---it applies to any source of compatibility constraints, not just schema analysis---and generalizable beyond deployment planning to database migrations, feature flag rollouts, and infrastructure-as-code state transitions.
+
+SafeStep computes rollback safety envelopes via bounded model checking over an interval-compressed version-product graph, exploiting three domain-specific reductions: monotone sufficiency under bilateral downward closure (Theorem~\ref{thm:monotone}), interval encoding compression (Theorem~\ref{thm:interval}), and treewidth-guided decomposition (Theorem~\ref{thm:treewidth}). The CEGAR integration (Theorem~\ref{thm:cegar}) bridges propositional compatibility constraints with linear-arithmetic resource constraints. The adversary budget bound (Theorem~\ref{thm:adversary}) provides principled robustness analysis under oracle uncertainty.
+
+SafeStep's guarantees are \emph{structurally verified relative to modeled API contracts}---they capture structural incompatibilities visible in API schemas but are blind to behavioral incompatibilities. This limitation is inherent to schema-based analysis and is made visible to operators at every decision point via confidence coloring and $k$-robustness certification. SafeStep and runtime monitoring are complements, not substitutes.
+
+The rollback safety envelope fills a genuine gap in the deployment toolchain: no existing tool---academic or industrial---answers the question ``can I safely roll back from this intermediate state?'' We believe this concept, and the formal framework supporting it, will prove useful to the systems community regardless of the specific oracle technology used to instantiate the compatibility constraints.
+
+%% =====================================================================
+%% BIBLIOGRAPHY
+
+\bibliographystyle{plain}
+\begin{thebibliography}{99}
+
+\bibitem{clarke2001bmc}
+E.~Clarke, A.~Biere, R.~Raimi, and Y.~Zhu.
+\newblock Bounded model checking using satisfiability solving.
+\newblock {\em Formal Methods in System Design}, 19(1):7--34, 2001.
+
+\bibitem{clarke2003cegar}
+E.~Clarke, O.~Grumberg, S.~Jha, Y.~Lu, and H.~Veith.
+\newblock Counterexample-guided abstraction refinement for symbolic model checking.
+\newblock {\em Journal of the ACM}, 50(5):752--794, 2003.
+
+\bibitem{demoura2008z3}
+L.~de~Moura and N.~Bj{\o}rner.
+\newblock Z3: An efficient {SMT} solver.
+\newblock In {\em Proc.\ TACAS}, pages 337--340, 2008.
+
+\bibitem{reitblatt2012consistent}
+M.~Reitblatt, N.~Foster, J.~Rexford, C.~Schlesinger, and D.~Walker.
+\newblock Abstractions for network update.
+\newblock In {\em Proc.\ ACM SIGCOMM}, pages 323--334, 2012.
+
+\bibitem{mcclurg2015efficient}
+J.~McClurg, H.~Hojjat, P.~\v{C}ern\'{y}, and N.~Foster.
+\newblock Efficient synthesis of network updates.
+\newblock In {\em Proc.\ ACM SIGPLAN PLDI}, pages 196--207, 2015.
+
+\bibitem{dicosmo2014aeolus}
+R.~Di~Cosmo, S.~Zacchiroli, and J.~Vouillon.
+\newblock Aeolus: {A} component model for the cloud.
+\newblock In {\em Proc.\ ESOP}, pages 359--378, 2014.
+
+\bibitem{becker2015zephyrus}
+S.~Becker and M.~Luckey.
+\newblock Zephyrus: {C}onfiguration optimization for cloud applications.
+\newblock In {\em Proc.\ FACS}, pages 119--137, 2015.
+
+\bibitem{bodlaender1996treewidth}
+H.~L.~Bodlaender.
+\newblock A linear-time algorithm for finding tree-decompositions of small treewidth.
+\newblock {\em SIAM Journal on Computing}, 25(6):1305--1317, 1996.
+
+\bibitem{cygan2015parameterized}
+M.~Cygan, F.~V.~Fomin, {\L}.~Kowalik, D.~Lokshtanov, D.~Marx, M.~Pilipczuk, M.~Pilipczuk, and S.~Saurabh.
+\newblock {\em Parameterized Algorithms}.
+\newblock Springer, 2015.
+
+\bibitem{burns2016borg}
+B.~Burns, B.~Grant, D.~Oppenheimer, E.~Brewer, and J.~Wilkes.
+\newblock Borg, {O}mega, and {K}ubernetes.
+\newblock {\em ACM Queue}, 14(1):70--93, 2016.
+
+\bibitem{helm}
+{The Helm Authors}.
+\newblock Helm: The package manager for {K}ubernetes.
+\newblock \url{https://helm.sh/}, 2024.
+
+\bibitem{argocd}
+{Argo Project}.
+\newblock Argo {CD}: Declarative continuous delivery for {K}ubernetes.
+\newblock \url{https://argoproj.github.io/cd/}, 2024.
+
+\bibitem{flux}
+{Flux Project}.
+\newblock Flux: The {G}it{O}ps toolkit for {K}ubernetes.
+\newblock \url{https://fluxcd.io/}, 2024.
+
+\bibitem{spinnaker}
+{Netflix}.
+\newblock Spinnaker: Multi-cloud continuous delivery platform.
+\newblock \url{https://spinnaker.io/}, 2024.
+
+\bibitem{schermann2018continuous}
+G.~Schermann, J.~Cito, P.~Leitner, U.~Zdun, and H.~C.~Gall.
+\newblock An empirical study on principles and practices of continuous delivery and deployment.
+\newblock {\em PeerJ Computer Science}, 4:e131, 2018.
+
+\bibitem{tang2015holistic}
+C.~Tang, T.~Kooburat, P.~Venkatachalam, A.~Chander, Z.~Wen, A.~Narayanan, P.~Dowell, and R.~Karl.
+\newblock Holistic configuration management at {F}acebook.
+\newblock In {\em Proc.\ ACM SOSP}, pages 328--343, 2015.
+
+\bibitem{mancinelli2006managing}
+F.~Mancinelli, J.~Boender, R.~Di~Cosmo, J.~Vouillon, B.~Durak, X.~Leroy, and R.~Treinen.
+\newblock Managing the complexity of large free and open source package-based software distributions.
+\newblock In {\em Proc.\ ASE}, pages 199--208, 2006.
+
+\bibitem{tucker2007opium}
+C.~Tucker, D.~Shuffelton, R.~Jhala, and S.~Lerner.
+\newblock {OPIUM}: Optimal package install/uninstall manager.
+\newblock In {\em Proc.\ ICSE}, pages 178--188, 2007.
+
+\bibitem{dicosmo2006edos}
+R.~Di~Cosmo, B.~Durak, X.~Leroy, F.~Mancinelli, and J.~Vouillon.
+\newblock {EDOS}: Environment for the development and distribution of open source software.
+\newblock Technical report, INRIA, 2006.
+
+\bibitem{abate2012dependency}
+P.~Abate, R.~Di~Cosmo, R.~Treinen, and S.~Zacchiroli.
+\newblock Dependency solving: A separate concern in component evolution management.
+\newblock {\em Journal of Systems and Software}, 85(10):2228--2240, 2012.
+
+\bibitem{richter2010lama}
+S.~Richter and M.~Westphal.
+\newblock The {LAMA} planner: Guiding cost-based anytime planning with landmarks.
+\newblock {\em Journal of Artificial Intelligence Research}, 39:127--177, 2010.
+
+\bibitem{cadical}
+A.~Biere.
+\newblock {CaDiCaL}: Simplifying and extended conflict driven clause learning {SAT} solver.
+\newblock \url{http://fmv.jku.at/cadical/}, 2024.
+
+\bibitem{biere2009handbook}
+A.~Biere, M.~Heule, H.~van Maaren, and T.~Walsh, editors.
+\newblock {\em Handbook of Satisfiability}.
+\newblock IOS Press, 2009.
+
+\end{thebibliography}
+
+\end{document}

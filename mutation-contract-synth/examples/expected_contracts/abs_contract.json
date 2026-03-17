@@ -1,0 +1,40 @@
+{
+  "function": "abs",
+  "tier": 1,
+  "preconditions": [
+    {
+      "clause": "true",
+      "strength": "trivial",
+      "note": "Absolute value is total; no precondition needed."
+    }
+  ],
+  "postconditions": [
+    {
+      "clause": "ret >= 0",
+      "strength": "tight",
+      "note": "Result is always non-negative."
+    },
+    {
+      "clause": "(x >= 0) -> ret == x",
+      "strength": "tight",
+      "note": "Non-negative inputs returned unchanged."
+    },
+    {
+      "clause": "(x < 0) -> ret == -x",
+      "strength": "tight",
+      "note": "Negative inputs are negated."
+    }
+  ],
+  "provenance": {
+    "mutants_killed": [
+      { "id": "M2", "operator": "ROR", "original": "x < 0", "mutant": "x > 0"  },
+      { "id": "M3", "operator": "ROR", "original": "x < 0", "mutant": "x == 0" },
+      { "id": "M4", "operator": "UOI", "original": "-x",    "mutant": "x"      },
+      { "id": "M5", "operator": "UOI", "original": "x",     "mutant": "-x"     }
+    ],
+    "synthesis_method": "lattice_walk",
+    "lattice_tiers_explored": 1,
+    "z3_queries": 10,
+    "wall_time_ms": 28
+  }
+}

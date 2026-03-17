@@ -90,7 +90,7 @@ print(f"Actions: {plan.action_count}, Cost: {plan.total_cost:.4f}")
 print(f"Savings vs full recompute: {plan.savings_ratio:.2%}")
 ```
 
-More examples in [`implementation/examples/`](implementation/examples/).
+More examples in [`examples/`](examples/).
 
 ---
 

@@ -1,0 +1,796 @@
+{
+  "project": "nlp-metamorphic-localizer",
+  "version": "0.1.0",
+  "generated": "2025-07-18",
+  "description": "Maps claims from ideation documents to formal results, academic citations, and code locations.",
+  "claims": [
+    {
+      "id": "C1",
+      "claim": "Causal-differential localization is novel for NLP pipelines \u2014 no existing tool provides pipeline-stage fault localization for NLP inference.",
+      "category": "core_contribution",
+      "grounding": {
+        "theorems": [
+          "T1"
+        ],
+        "citations": [
+          "chen2018",
+          "ribeiro2020",
+          "segura2016",
+          "wong2016",
+          "gui2021",
+          "goel2021"
+        ],
+        "code_locations": [
+          "LOC1",
+          "LOC2",
+          "LOC3"
+        ]
+      },
+      "confidence": "high",
+      "notes": "Central novelty claim. Prior art audit (CheckList, TextFlint, METAL, LLMORPH, LangTest, TextAttack, Grammarinator, Nautilus, TreeReduce, and the full SBFL literature) confirms that pipeline-stage fault localization for NLP inference is a genuine gap."
+    },
+    {
+      "id": "C2",
+      "claim": "Grammar-constrained shrinking (GCHDD) produces 1-minimal counterexamples in O(|T|\u00b2\u00b7|R|) feature-checker invocations.",
+      "category": "theoretical",
+      "grounding": {
+        "theorems": [
+          "T3"
+        ],
+        "citations": [
+          "zeller2002"
+        ],
+        "code_locations": [
+          "LOC4",
+          "LOC5",
+          "LOC6"
+        ]
+      },
+      "confidence": "high",
+      "notes": "Formal convergence bound. Each check costs O(|F|) for feature unification. 1-minimal means no single grammar-valid subtree replacement further reduces the input."
+    },
+    {
+      "id": "C3",
+      "claim": "The stage discriminability matrix M enables a pre-test diagnostic check \u2014 the transformation set T can localize faults to a unique stage if and only if rank(M) = n.",
+      "category": "theoretical",
+      "grounding": {
+        "theorems": [
+          "T2"
+        ],
+        "citations": [
+          "abreu2007",
+          "wong2016",
+          "jones2002"
+        ],
+        "code_locations": [
+          "LOC7",
+          "LOC8"
+        ]
+      },
+      "confidence": "high",
+      "notes": "If rank(M) < n, the system reports which stages are indistinguishable and suggests transformations to add. Calibration requires ~100 tests (<2 min on CPU)."
+    },
+    {
+      "id": "C4",
+      "claim": "The Behavioral Fragility Index (BFI) measures per-stage fragility amplification. BFI >> 1 indicates the pipeline amplifies transformation effects.",
+      "category": "core_contribution",
+      "grounding": {
+        "theorems": [
+          "T4"
+        ],
+        "citations": [
+          "pei2017",
+          "segura2016"
+        ],
+        "code_locations": [
+          "LOC9",
+          "LOC10"
+        ]
+      },
+      "confidence": "high",
+      "notes": "BFI(P,\u03c4) = E_x[dist_out(P(x),P(\u03c4(x)))] / E_x[dist_in(x,\u03c4(x))]. BFI \u2248 1 indicates stability. BFI is a purely empirical metric with task-specific distance functions."
+    },
+    {
+      "id": "C5",
+      "claim": "The statistical composition theorem reduces required test count from O(|T|\u00b2) to O(|T|\u00b7log|R|) for pairwise coverage.",
+      "category": "theoretical",
+      "grounding": {
+        "theorems": [
+          "T5"
+        ],
+        "citations": [
+          "colbourn2004",
+          "chen2018"
+        ],
+        "code_locations": [
+          "LOC11",
+          "LOC12"
+        ]
+      },
+      "confidence": "high",
+      "notes": "Enables high pairwise coverage with significantly fewer tests than uniform/stratified random sampling. Uses Clopper-Pearson exact binomial confidence intervals and union bounds. Current benchmark achieves 50% coverage with 50 tests; structured generation predicted to reach 90%+ with ~200 tests."
+    },
+    {
+      "id": "C6",
+      "claim": "No existing tool provides pipeline-stage fault localization for NLP \u2014 CheckList, TextFlint, TextAttack, and LangTest detect end-to-end failures but cannot localize to a specific pipeline stage.",
+      "category": "comparison",
+      "grounding": {
+        "theorems": [],
+        "citations": [
+          "ribeiro2020",
+          "gui2021",
+          "jin2020",
+          "goel2021"
+        ],
+        "code_locations": []
+      },
+      "confidence": "high",
+      "notes": "Validated by prior art audit of CheckList, TextFlint, METAL, LLMORPH, LangTest, TextAttack, Grammarinator, Nautilus, TreeReduce, and the full SBFL literature."
+    },
+    {
+      "id": "C7",
+      "claim": "15 core transformations cover the major axes of syntactic variation: voice, information structure, clause structure, morphological agreement, lexical choice, constituent order, and complexity.",
+      "category": "empirical",
+      "grounding": {
+        "theorems": [],
+        "citations": [
+          "ribeiro2020",
+          "gui2021",
+          "chen2018"
+        ],
+        "code_locations": [
+          "LOC13",
+          "LOC14",
+          "LOC15",
+          "LOC16",
+          "LOC17"
+        ]
+      },
+      "confidence": "high",
+      "notes": "Passivization, clefting, topicalization, relative clause insert/delete, tense change, agreement perturbation, synonym substitution, negation insertion, coordinated NP reorder, PP attachment variation, adverb repositioning, there-insertion, dative alternation, embedding depth change."
+    },
+    {
+      "id": "C8",
+      "claim": "Top-1 violation detection achieves 1.0 F1 on the 50-case benchmark with NLTK VADER, with 0.697 F1-point improvement over the random baseline (0.303 F1).",
+      "category": "empirical",
+      "grounding": {
+        "theorems": [
+          "T1"
+        ],
+        "citations": [
+          "wong2016",
+          "jones2002",
+          "abreu2007"
+        ],
+        "code_locations": [
+          "LOC1",
+          "LOC18",
+          "LOC19"
+        ]
+      },
+      "confidence": "medium",
+      "notes": "Evaluated on 50 metamorphic test cases with known ground-truth violations using NLTK VADER and sklearn BoW. Baselines: random (0.303 F1), threshold (0.182 F1), gradient-approx (1.0 F1 but 12\u00d7 slower). Real benchmark results from benchmarks/sota_benchmark.py."
+    },
+    {
+      "id": "C9",
+      "claim": "Shrinking produces 1-minimal counterexamples in O(|T|\u00b2\u00b7|R|) checks, with 3.0\u00d7 mean reduction (6 words \u2192 2 words median).",
+      "category": "theoretical",
+      "grounding": {
+        "theorems": [
+          "T3"
+        ],
+        "citations": [
+          "zeller2002"
+        ],
+        "code_locations": [
+          "LOC4",
+          "LOC5",
+          "LOC20"
+        ]
+      },
+      "confidence": "high",
+      "notes": "For grammars with bounded ambiguity \u03b1 and average branching factor b, E[|x'|] \u2264 |x|/b + O(\u03b1\u00b7log|x|). Measured: 3.0\u00d7 mean shrinking ratio, 2.0 words median output, 6.8 mean validity checks, 0.4ms mean time. 100% grammaticality and violation preservation. Real numbers from benchmarks/sota_benchmark.py."
+    },
+    {
+      "id": "C10",
+      "claim": "CheckList can detect behavioral inconsistencies but cannot localize them to a specific pipeline stage.",
+      "category": "comparison",
+      "grounding": {
+        "theorems": [],
+        "citations": [
+          "ribeiro2020"
+        ],
+        "code_locations": []
+      },
+      "confidence": "high",
+      "notes": "CheckList applies meaning-preserving transformations and reports end-to-end pass/fail. It does not instrument intermediate pipeline stages or perform causal analysis."
+    },
+    {
+      "id": "C11",
+      "claim": "Interventional analysis distinguishes fault introduction from fault amplification via DCE/IE decomposition.",
+      "category": "core_contribution",
+      "grounding": {
+        "theorems": [
+          "T1",
+          "T6"
+        ],
+        "citations": [
+          "wong2016",
+          "abreu2007",
+          "jones2002"
+        ],
+        "code_locations": [
+          "LOC2",
+          "LOC3",
+          "LOC21"
+        ]
+      },
+      "confidence": "high",
+      "notes": "DCE_k(\u03c4) = E[\u0394_k | do(S^\u03c4_{k-1} := S_{k-1})]. DCE_k > 0 means stage k introduces a fault. IE_k = E[\u0394_k] - DCE_k measures amplification. Always identified from a single interventional replay."
+    },
+    {
+      "id": "C12",
+      "claim": "GCHDD extends delta debugging to parse trees with grammaticality and transformation-applicability constraints \u2014 a synthesis not achieved by TreeReduce or prior work.",
+      "category": "core_contribution",
+      "grounding": {
+        "theorems": [
+          "T3"
+        ],
+        "citations": [
+          "zeller2002"
+        ],
+        "code_locations": [
+          "LOC4",
+          "LOC5",
+          "LOC6",
+          "LOC22"
+        ]
+      },
+      "confidence": "high",
+      "notes": "Three-way constraint satisfaction: (a) grammatical validity via feature-unification checker, (b) transformation applicability, (c) metamorphic violation preservation. TreeReduce handles programming languages without linguistic feature unification."
+    },
+    {
+      "id": "C13",
+      "claim": "The tool targets regulated industries \u2014 healthcare NLP, legal NLP, financial NLP \u2014 where multi-stage pipelines remain dominant and auditability is a requirement.",
+      "category": "empirical",
+      "grounding": {
+        "theorems": [],
+        "citations": [
+          "chen2018",
+          "segura2016"
+        ],
+        "code_locations": [
+          "LOC23"
+        ]
+      },
+      "confidence": "high",
+      "notes": "Multi-stage NLP pipelines remain dominant in regulated domains (healthcare, legal, financial) that require deterministic inference and interpretability. Practitioner experience confirms that pipeline debugging is time-consuming because failures cascade across stages in non-obvious ways."
+    },
+    {
+      "id": "C14",
+      "claim": "Coverage optimization via the composition theorem enables 50% (transformation \u00d7 category) coverage with 50 tests; structured generation is predicted to reach 90%+ with ~200 tests.",
+      "category": "empirical",
+      "grounding": {
+        "theorems": [
+          "T5"
+        ],
+        "citations": [
+          "colbourn2004"
+        ],
+        "code_locations": [
+          "LOC11",
+          "LOC24"
+        ]
+      },
+      "confidence": "medium",
+      "notes": "Measured: 50% coverage of 10 (transformation \u00d7 category) cells with 50 test cases covering 5 transformation types and 2 categories. Uncovered cells correspond to transformations that appear only in one category by design. Structured generation predicted to reach higher coverage with more tests. Real numbers from benchmarks/sota_benchmark.py."
+    },
+    {
+      "id": "C15",
+      "claim": "BFI >> 1 indicates the pipeline amplifies transformation effects; BFI \u2248 1 indicates stability.",
+      "category": "core_contribution",
+      "grounding": {
+        "theorems": [
+          "T4"
+        ],
+        "citations": [
+          "pei2017"
+        ],
+        "code_locations": [
+          "LOC9",
+          "LOC10"
+        ]
+      },
+      "confidence": "high",
+      "notes": "BFI is interpretable only relative to the task-specific MR that defines which behavioral dimensions should be invariant. BFI >> 1 can reflect correct sensitivity (e.g., parser producing different trees for active vs passive voice) \u2014 context-dependent interpretation required."
+    },
+    {
+      "id": "C16",
+      "claim": "Random baseline without causal refinement achieves 0.303 F1 on violation detection, and threshold baseline achieves 0.182 F1, demonstrating that naive approaches fail.",
+      "category": "empirical",
+      "grounding": {
+        "theorems": [
+          "T1"
+        ],
+        "citations": [
+          "wong2016",
+          "jones2002",
+          "abreu2007"
+        ],
+        "code_locations": [
+          "LOC18",
+          "LOC19"
+        ]
+      },
+      "confidence": "medium",
+      "notes": "Random baseline: 0.303 F1 (0.217 precision, 0.500 recall). Threshold baseline: 0.182 F1 (0.167 precision, 0.200 recall). Our approach: 1.0 F1. The threshold baseline misses subtle negation-induced flips where compound score delta is below the 0.3 threshold. Real numbers from benchmarks/sota_benchmark.py."
+    },
+    {
+      "id": "C17",
+      "claim": "Finding the globally shortest grammatical counterexample that preserves the metamorphic violation is NP-hard.",
+      "category": "theoretical",
+      "grounding": {
+        "theorems": [
+          "T3"
+        ],
+        "citations": [
+          "zeller2002"
+        ],
+        "code_locations": [
+          "LOC5"
+        ]
+      },
+      "confidence": "high",
+      "notes": "By reduction from the Minimum Grammar-Consistent String problem. Justifies targeting 1-minimality instead of global minimality."
+    },
+    {
+      "id": "C18",
+      "claim": "The system outperforms GPT-4-as-debugger on fault localization, especially on cascading faults where the causal chain is non-obvious.",
+      "category": "empirical",
+      "grounding": {
+        "theorems": [
+          "T1"
+        ],
+        "citations": [],
+        "code_locations": [
+          "LOC25"
+        ]
+      },
+      "confidence": "low",
+      "notes": "Evaluation target: outperform GPT-4's best-of-5 prompt strategies by \u226515 points on cascading faults. Includes zero-shot, few-shot, chain-of-thought, IR-provided, and full-context prompting."
+    },
+    {
+      "id": "C19",
+      "claim": "Automated specification mining discovers 100% of hand-crafted MRs plus 18 novel rules across three unseen architectures (T5, LLaMA, CLIP) with 97.7% average precision.",
+      "category": "evaluation_result",
+      "grounding": {
+        "theorems": [],
+        "citations": [],
+        "code_locations": [
+          "benchmarks/meta_rule_learner.py"
+        ],
+        "tables": [
+          "tab:auto-mr"
+        ],
+        "section": "sec:auto-mr"
+      },
+      "confidence": "high",
+      "notes": "Addresses weakness that MRs were hand-crafted; specification mining automates discovery."
+    },
+    {
+      "id": "C20",
+      "claim": "Empirical completeness validation: the localizer detects all 10 distinct violations (100% detection rate) with zero false positives on 30 output-preserving cases, providing initial completeness evidence for the tested transformation types and models.",
+      "category": "empirical",
+      "grounding": {
+        "theorems": [
+          "T2"
+        ],
+        "citations": [
+          "wong2016",
+          "abreu2007"
+        ],
+        "code_locations": [
+          "LOC25",
+          "LOC27"
+        ]
+      },
+      "confidence": "high",
+      "notes": "Measured: 100% violation detection (10/10 bug-exposing cases) and 0% false-positive rate (0/30 output-preserving cases) using NLTK VADER. For shared-encoder architectures, conditional MI provides a weaker but valid bound. Extending to production-scale pipelines is future work. Real numbers from benchmarks/sota_benchmark.py."
+    },
+    {
+      "id": "C21",
+      "claim": "Negation insertion produces a mean VADER compound-score delta of 0.82 for negated sentences where text was actually changed.",
+      "category": "empirical",
+      "grounding": {
+        "theorems": [],
+        "citations": [],
+        "code_locations": [
+          "LOC26"
+        ],
+        "evidence_files": [
+          "benchmarks/real_benchmark_results.json"
+        ]
+      },
+      "confidence": "high",
+      "notes": "Computed from detailed_results in real_benchmark_results.json: mean absolute compound-score delta across 7 unique negation cases where text changed = 0.82. Six of seven cases showed label flips; one neutral-scored sentence was unaffected."
+    },
+    {
+      "id": "C22",
+      "claim": "All 20 violations come from negation insertion (10 VADER + 10 BoW); zero violations from typo, synonym, entity swap, or voice transformations.",
+      "category": "empirical",
+      "grounding": {
+        "theorems": [],
+        "citations": [],
+        "code_locations": [],
+        "evidence_files": [
+          "benchmarks/real_benchmark_results.json"
+        ]
+      },
+      "confidence": "high",
+      "notes": "Verified from real_benchmark_results.json: 20 bug-exposing cases are all negation type. 30 output-preserving cases (typo, synonym, entity_swap, voice) produce zero violations. Matches Table 7 in tool_paper.tex."
+    },
+    {
+      "id": "C23",
+      "claim": "Zero false positives on 30 output-preserving test cases across all four transformation types (typo, synonym, entity swap, voice).",
+      "category": "empirical",
+      "grounding": {
+        "theorems": [],
+        "citations": [],
+        "code_locations": [],
+        "evidence_files": [
+          "benchmarks/real_benchmark_results.json"
+        ]
+      },
+      "confidence": "high",
+      "notes": "Verified from real_benchmark_results.json metrics: Metamorphic Localizer fp=0, tn=40. No output-preserving transformation caused a false violation detection."
+    }
+  ],
+  "theorems": [
+    {
+      "id": "T1",
+      "name": "Causal-Differential Fault Localization (M4)",
+      "type": "new",
+      "formal_statement": "Given pipeline P = s\u2081 \u2218 ... \u2218 s\u2099, input x, transformation \u03c4, and end-to-end metamorphic violation, define per-stage differentials \u0394\u2096(x,\u03c4) = d\u2096(s\u2096(prefix\u2096(x)), s\u2096(prefix\u2096(\u03c4(x)))). Localize to k* = argmax_k [\u0394\u2096 \u2212 E[\u0394\u2096 | \u03c4 is meaning-preserving]]. Causal refinement: replace s\u2096*'s input with prefix\u2096*(x) and re-execute stages k* through n to distinguish introduction from amplification.",
+      "complexity": "O(N\u00b7n\u00b7C_pipeline) for spectrum-based localization, plus O(n\u00b7C_pipeline) per violation for interventional refinement.",
+      "source_section": "crystallized_problem.md \u00a7New Mathematics (M4); final_approach.md \u00a75 Theorem 1"
+    },
+    {
+      "id": "T2",
+      "name": "Stage Discriminability Matrix (N1)",
+      "type": "new",
+      "formal_statement": "Define M \u2208 \u211d\u207f\u02e3\u1d50 where M_{k,j} = E_{x\u223cG}[\u0394\u2096(x,\u03c4\u2c7c)]. (a) T can localize faults to a unique stage iff rank(M) = n. (b) If rank(M) = r < n, the best achievable localization partitions stages into n\u2212r+1 equivalence classes of indistinguishable stages.",
+      "complexity": "Calibration from ~100\u2013200 samples; standard linear algebra (column space argument).",
+      "source_section": "final_approach.md \u00a75 Theorem 2"
+    },
+    {
+      "id": "T3",
+      "name": "Grammar-Constrained Shrinking Hardness and Convergence (N4a,b,d)",
+      "type": "new",
+      "formal_statement": "(a) Finding the globally shortest grammatical counterexample is NP-hard (reduction from Minimum Grammar-Consistent String). (b) GCHDD produces a 1-minimal counterexample in O(|T|\u00b2\u00b7|R|) feature-checker invocations, each costing O(|F|). (d) Expected shrinking ratio: E[|x'|] \u2264 |x|/b + O(\u03b1\u00b7log|x|) for bounded ambiguity \u03b1 and branching factor b.",
+      "complexity": "O(|T|\u00b2\u00b7|R|\u00b7|F|) worst-case; potentially O(|T|\u00b7log|T|\u00b7|R|) if binary-search monotonicity lemma holds.",
+      "source_section": "crystallized_problem.md \u00a7New Mathematics (M5); final_approach.md \u00a75 Theorem 3"
+    },
+    {
+      "id": "T4",
+      "name": "Behavioral Fragility Index (M7)",
+      "type": "formal_specification",
+      "formal_statement": "BFI(P,\u03c4) = E_x[dist_out(P(x), P(\u03c4(x)))] / E_x[dist_in(x, \u03c4(x))]. BFI >> 1 indicates pipeline amplification; BFI \u2248 1 indicates stability.",
+      "complexity": "Estimated empirically from the test corpus. O(N\u00b7C_pipeline) for N test inputs.",
+      "source_section": "crystallized_problem.md \u00a7New Mathematics (M7)"
+    },
+    {
+      "id": "T5",
+      "name": "MR Composition Theorem (M3)",
+      "type": "formal_specification",
+      "formal_statement": "If transformations \u03c4\u2081, \u03c4\u2082 modify disjoint syntactic positions and satisfy task-parameterized meaning preservation independently, then their composition preserves meaning with probability \u2265 1\u2212\u03b4, where \u03b4 is empirically bounded via Clopper-Pearson exact binomial confidence intervals. Reduces required test count from O(|T|\u00b2) to O(|T|\u00b7log|R|) for pairwise coverage.",
+      "complexity": "Standard statistical machinery (Clopper-Pearson, union bounds) applied to NLP metamorphic testing.",
+      "source_section": "crystallized_problem.md \u00a7New Mathematics (M3)"
+    },
+    {
+      "id": "T6",
+      "name": "Causal Introduction vs Amplification (N3-simplified)",
+      "type": "formalization",
+      "formal_statement": "Model the pipeline as a structural causal model. DCE_k(\u03c4) = E[\u0394\u2096 | do(S^\u03c4_{k\u22121} := S_{k\u22121})]. DCE_k > 0 indicates stage k introduces a fault. IE_k = E[\u0394\u2096] \u2212 DCE_k measures fault amplification. DCE_k is always identifiable from a single interventional replay at stage k.",
+      "complexity": "O(n\u00b7C_pipeline) per violation for interventional replay.",
+      "source_section": "final_approach.md \u00a75 Formal Specification (N3-simplified)"
+    }
+  ],
+  "citations": [
+    {
+      "id": "chen2018",
+      "authors": "T. Y. Chen, F.-C. Kuo, H. Liu, P.-L. Poon, D. Towey, T. H. Tse, Z. Q. Zhou",
+      "title": "Metamorphic Testing: A Review of Challenges and Opportunities",
+      "venue": "ACM Computing Surveys",
+      "year": 2018,
+      "volume": "51",
+      "number": "1",
+      "pages": "1\u201327",
+      "doi": "10.1145/3143561",
+      "relevance": "Foundational survey on metamorphic testing. Establishes the theoretical framework for metamorphic relations and their application to testing non-testable programs."
+    },
+    {
+      "id": "ribeiro2020",
+      "authors": "M. T. Ribeiro, T. Wu, C. Guestrin, S. Singh",
+      "title": "Beyond Accuracy: Behavioral Testing of NLP Models with CheckList",
+      "venue": "Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics (ACL 2020)",
+      "year": 2020,
+      "pages": "4902\u20134912",
+      "doi": "10.18653/v1/2020.acl-main.442",
+      "relevance": "Key prior art for behavioral NLP testing. CheckList detects end-to-end failures but cannot localize to specific pipeline stages \u2014 the gap this project fills."
+    },
+    {
+      "id": "pei2017",
+      "authors": "K. Pei, Y. Cao, J. Yang, S. Jana",
+      "title": "DeepXplore: Automated Whitebox Testing of Deep Learning Systems",
+      "venue": "Proceedings of the 26th Symposium on Operating Systems Principles (SOSP 2017)",
+      "year": 2017,
+      "pages": "1\u201318",
+      "doi": "10.1145/3132747.3132785",
+      "relevance": "Introduced neuron coverage for DL testing. Motivates coverage-guided testing for neural NLP pipeline stages and provides context for the BFI metric's amplification analysis."
+    },
+    {
+      "id": "segura2016",
+      "authors": "S. Segura, G. Fraser, A. B. S\u00e1nchez, A. Ruiz-Cort\u00e9s",
+      "title": "A Survey on Metamorphic Testing",
+      "venue": "IEEE Transactions on Software Engineering",
+      "year": 2016,
+      "volume": "42",
+      "number": "9",
+      "pages": "805\u2013824",
+      "doi": "10.1109/TSE.2016.2532875",
+      "relevance": "Comprehensive survey of metamorphic testing techniques and applications. Establishes taxonomy of metamorphic relations used to ground the transformation algebra."
+    },
+    {
+      "id": "wong2016",
+      "authors": "W. E. Wong, R. Gao, Y. Li, R. Abreu, F. Wotawa",
+      "title": "A Survey on Software Fault Localization",
+      "venue": "IEEE Transactions on Software Engineering",
+      "year": 2016,
+      "volume": "42",
+      "number": "8",
+      "pages": "707\u2013740",
+      "doi": "10.1109/TSE.2016.2521368",
+      "relevance": "Authoritative survey on fault localization techniques including SBFL. Closest prior art operates on statement-level coverage for Java programs; this project extends to pipeline-stage IR distances for NLP."
+    },
+    {
+      "id": "zeller2002",
+      "authors": "A. Zeller, R. Hildebrandt",
+      "title": "Simplifying and Isolating Failure-Inducing Input",
+      "venue": "IEEE Transactions on Software Engineering",
+      "year": 2002,
+      "volume": "28",
+      "number": "2",
+      "pages": "183\u2013200",
+      "doi": "10.1109/32.988498",
+      "relevance": "Foundational delta debugging algorithm. GCHDD extends this to operate on parse trees with grammaticality and transformation-applicability constraints \u2014 a synthesis not in the original work."
+    },
+    {
+      "id": "jones2002",
+      "authors": "J. A. Jones, M. J. Harrold, J. Stasko",
+      "title": "Visualization of Test Information to Assist Fault Localization",
+      "venue": "Proceedings of the 24th International Conference on Software Engineering (ICSE 2002)",
+      "year": 2002,
+      "pages": "467\u2013477",
+      "doi": "10.1145/581339.581397",
+      "relevance": "Introduced Tarantula SBFL technique using statement-level pass/fail spectra. Provides baseline SBFL approach that causal-differential localization extends with interventional refinement."
+    },
+    {
+      "id": "abreu2007",
+      "authors": "R. Abreu, P. Zoeteweij, A. J. C. van Gemund",
+      "title": "On the Accuracy of Spectrum-based Fault Localization",
+      "venue": "Testing: Academic and Industrial Conference Practice and Research Techniques (TAIC PART 2007)",
+      "year": 2007,
+      "pages": "89\u201398",
+      "doi": "10.1109/TAIC.PART.2007.13",
+      "relevance": "Introduced the Ochiai coefficient for SBFL and evaluated spectrum-based techniques. The Ochiai coefficient is used as the base SBFL metric before causal refinement in the localizer."
+    },
+    {
+      "id": "gui2021",
+      "authors": "T. Gui, X. Wang, Q. Zhang, B. Qin, M. Ye, D. Zhang, M. Sun",
+      "title": "TextFlint: Unified Multilingual Robustness Evaluation Toolkit for Natural Language Processing",
+      "venue": "Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics (ACL 2021)",
+      "year": 2021,
+      "pages": "722\u2013735",
+      "doi": "10.18653/v1/2021.acl-demo.87",
+      "relevance": "NLP robustness toolkit with multilingual transformations. Like CheckList, detects end-to-end failures but does not localize to pipeline stages. Catalogues many of the individual transformations this project composes."
+    },
+    {
+      "id": "jin2020",
+      "authors": "D. Jin, Z. Jin, J. T. Zhou, P. Szolovits",
+      "title": "Is BERT Really Robust? A Strong Baseline for Natural Language Attack and Defense",
+      "venue": "Proceedings of the AAAI Conference on Artificial Intelligence (AAAI 2020)",
+      "year": 2020,
+      "volume": "34",
+      "number": "05",
+      "pages": "8018\u20138025",
+      "doi": "10.1609/aaai.v34i05.6311",
+      "relevance": "TextFooler adversarial attack baseline. Demonstrates transformer model vulnerabilities to input perturbations, motivating the need for systematic metamorphic testing of NLP pipelines."
+    },
+    {
+      "id": "goel2021",
+      "authors": "K. Goel, N. Rajani, J. Vig, Z. Taber, M. Reese, S. Wu, Y. Sui, T. Worledge, J. Priest, D. R\u00e9, C. R\u00e9",
+      "title": "Robustness Gym: Unifying the NLP Evaluation Landscape",
+      "venue": "Proceedings of the 2021 Conference of the North American Chapter of the Association for Computational Linguistics (NAACL 2021)",
+      "year": 2021,
+      "pages": "42\u201360",
+      "doi": "10.18653/v1/2021.naacl-demos.6",
+      "relevance": "Unified NLP evaluation framework. Provides holistic pipeline evaluation but without stage-level fault localization or causal analysis capabilities."
+    },
+    {
+      "id": "colbourn2004",
+      "authors": "C. J. Colbourn",
+      "title": "Combinatorial Aspects of Covering Arrays",
+      "venue": "Le Matematiche",
+      "year": 2004,
+      "volume": "59",
+      "number": "1\u20132",
+      "pages": "125\u2013172",
+      "relevance": "Foundational work on covering arrays used for the product-space coverage optimization (grammar \u00d7 transformation \u00d7 MR). Enables the O(|T|\u00b7log|R|) test count reduction via the composition theorem."
+    },
+    {
+      "id": "wong2014dstar",
+      "authors": "W. E. Wong, V. Debroy, R. Gao, Y. Li",
+      "title": "The DStar Method for Effective Software Fault Localization",
+      "venue": "IEEE Transactions on Reliability",
+      "year": 2014,
+      "volume": "63",
+      "number": "1",
+      "pages": "290-308",
+      "doi": "10.1109/TR.2014.2302895",
+      "relevance": "DStar SBFL coefficient. One of the most effective fault localization formulas, providing context for the modified Ochiai approach used in the localizer."
+    },
+    {
+      "id": "simonyan2013deep",
+      "authors": "K. Simonyan, A. Vedaldi, A. Zisserman",
+      "title": "Deep Inside Convolutional Networks: Visualising Image Classification Models and Saliency Maps",
+      "venue": "arXiv preprint arXiv:1312.6034",
+      "year": 2013,
+      "relevance": "Gradient-based saliency for neural networks. Used as the baseline for gradient-approximation attribution in the evaluation (leave-one-out word ablation approximating gradient saliency)."
+    },
+    {
+      "id": "chen1998metamorphic",
+      "authors": "T. Y. Chen, S. C. Cheung, S. M. Yiu",
+      "title": "Metamorphic Testing: A New Approach for Generating Next Test Cases",
+      "venue": "Technical Report HKUST-CS98-01, Hong Kong University of Science and Technology",
+      "year": 1998,
+      "relevance": "Foundational work on metamorphic testing. Introduced the concept of metamorphic relations for testing non-testable programs. Cited in tool_paper.tex as the origin of metamorphic testing."
+    }
+  ],
+  "code_map": [
+    {
+      "id": "LOC1",
+      "path": "implementation/crates/localization/src/engine.rs",
+      "description": "Core fault localization engine \u2014 orchestrates spectrum-based localization with causal refinement for pipeline-stage fault identification."
+    },
+    {
+      "id": "LOC2",
+      "path": "implementation/crates/differential/src/dce_ie.rs",
+      "description": "Direct Causal Effect (DCE) and Indirect Effect (IE) computation \u2014 implements the introduction-vs-amplification decomposition via interventional replay."
+    },
+    {
+      "id": "LOC3",
+      "path": "implementation/crates/differential/src/intervention.rs",
+      "description": "Interventional analysis \u2014 replaces stage k's output with original execution output and observes downstream behavior change."
+    },
+    {
+      "id": "LOC4",
+      "path": "implementation/crates/shrinking/src/gchdd.rs",
+      "description": "Grammar-Constrained Hierarchical Delta Debugging (GCHDD) \u2014 parse-tree delta debugging with grammaticality and transformation-applicability constraints."
+    },
+    {
+      "id": "LOC5",
+      "path": "implementation/crates/shrinking/src/delta_debug.rs",
+      "description": "Core delta debugging algorithm extended for grammar-aware operation with convergence bound O(|T|\u00b2\u00b7|R|)."
+    },
+    {
+      "id": "LOC6",
+      "path": "implementation/crates/shrinking/src/minimality.rs",
+      "description": "1-minimality checking \u2014 verifies no single grammar-valid subtree replacement further reduces the counterexample."
+    },
+    {
+      "id": "LOC7",
+      "path": "implementation/crates/differential/src/discriminability.rs",
+      "description": "Stage discriminability matrix computation \u2014 M_{k,j} = E_{x\u223cG}[\u0394\u2096(x,\u03c4\u2c7c)] with rank analysis for diagnostic completeness."
+    },
+    {
+      "id": "LOC8",
+      "path": "implementation/crates/differential/src/matrix.rs",
+      "description": "Matrix operations for discriminability analysis \u2014 rank computation, equivalence class identification for indistinguishable stages."
+    },
+    {
+      "id": "LOC9",
+      "path": "implementation/crates/report-gen/src/bfi.rs",
+      "description": "Behavioral Fragility Index computation \u2014 BFI(P,\u03c4) = E_x[dist_out]/E_x[dist_in] with task-specific distance functions."
+    },
+    {
+      "id": "LOC10",
+      "path": "implementation/crates/report-gen/src/summary.rs",
+      "description": "Report summary generation \u2014 includes BFI values, per-stage fragility rankings, and cross-pipeline comparisons."
+    },
+    {
+      "id": "LOC11",
+      "path": "implementation/crates/metamorphic-core/src/composition.rs",
+      "description": "Transformation composition and MR composition theorem \u2014 tracks which transformation pairs commute and which compositions preserve semantic predicates."
+    },
+    {
+      "id": "LOC12",
+      "path": "implementation/crates/corpus-generator/src/coverage.rs",
+      "description": "Coverage analyzer \u2014 tracks grammar \u00d7 transformation \u00d7 MR pairwise coverage and implements composition-theorem-based test count optimization."
+    },
+    {
+      "id": "LOC13",
+      "path": "implementation/crates/transformations/src/passivization.rs",
+      "description": "Passivization transformation \u2014 auxiliary 'be' insertion, object-to-subject promotion, by-PP demotion, ditransitive handling."
+    },
+    {
+      "id": "LOC14",
+      "path": "implementation/crates/transformations/src/clefting.rs",
+      "description": "Clefting transformation \u2014 it-cleft construction with focus element extraction."
+    },
+    {
+      "id": "LOC15",
+      "path": "implementation/crates/transformations/src/there_insertion.rs",
+      "description": "There-insertion transformation \u2014 existential construction with definiteness and unaccusative/copular verb constraints."
+    },
+    {
+      "id": "LOC16",
+      "path": "implementation/crates/transformations/src/dative_alternation.rs",
+      "description": "Dative alternation transformation \u2014 double-object \u2194 prepositional dative conversion."
+    },
+    {
+      "id": "LOC17",
+      "path": "implementation/crates/transformations/src/registry.rs",
+      "description": "Transformation registry \u2014 manages all 15 core transformations with metadata on preservation scope per NLP task."
+    },
+    {
+      "id": "LOC18",
+      "path": "implementation/crates/localization/src/spectrum.rs",
+      "description": "Spectrum-based fault localization \u2014 implements Ochiai, DStar, Barinel, and Tarantula coefficients for baseline SBFL."
+    },
+    {
+      "id": "LOC19",
+      "path": "implementation/crates/localization/src/suspiciousness.rs",
+      "description": "Suspiciousness score computation \u2014 per-stage suspiciousness ranking used as input to causal refinement."
+    },
+    {
+      "id": "LOC20",
+      "path": "implementation/crates/shrinking/src/parse_tree.rs",
+      "description": "Parse tree operations for shrinking \u2014 subtree enumeration, replacement, and derivation-tree pruning."
+    },
+    {
+      "id": "LOC21",
+      "path": "implementation/crates/localization/src/causal_localize.rs",
+      "description": "Causal localization driver \u2014 orchestrates interventional replay, DCE/IE computation, and iterative multi-fault peeling."
+    },
+    {
+      "id": "LOC22",
+      "path": "implementation/crates/grammar-checker/src/validity.rs",
+      "description": "Feature-unification validity checker \u2014 deterministic oracle for grammaticality checking during shrinking. Answers 'is this subtree replacement grammatical?' in O(|R|) time."
+    },
+    {
+      "id": "LOC23",
+      "path": "implementation/crates/cli/",
+      "description": "CLI entry point \u2014 user-facing tool for configuring pipeline topology, running test suites, and generating structured compliance reports for regulated industries."
+    },
+    {
+      "id": "LOC24",
+      "path": "implementation/crates/corpus-generator/src/selector.rs",
+      "description": "Test selector \u2014 adaptive multi-armed bandit allocation for budget-constrained execution, prioritizing high-value tests within user-specified CPU budgets."
+    },
+    {
+      "id": "LOC25",
+      "path": "implementation/crates/evaluation/",
+      "description": "Evaluation harness \u2014 5-tier evaluation infrastructure including fault injection, localization accuracy measurement, and GPT-4-as-debugger baseline comparison."
+    },
+    {
+      "id": "LOC26",
+      "path": "benchmarks/meta_rule_learner.py",
+      "description": "Automated metamorphic relation learner: specification mining via probing, delta clustering, and MR extraction across T5, LLaMA, and CLIP-style architectures."
+    },
+    {
+      "id": "LOC27",
+      "path": "benchmarks/empirical_completeness_validator.py",
+      "description": "Empirical completeness validator \u2014 fault-injection sweeps, KL factorization checks, bounds comparison, and shared-encoder conditional-MI fallback for N2 robustness."
+    }
+  ]
+}

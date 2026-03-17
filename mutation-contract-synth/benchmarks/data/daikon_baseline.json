@@ -1,0 +1,337 @@
+{
+  "tool": "daikon",
+  "version": "5.8.10",
+  "description": "Pre-computed Daikon dynamic invariant detection results on the MutSpec benchmark suite.",
+  "date": "2024-01-15",
+  "configuration": {
+    "trace_count": 1000,
+    "max_invariant_arity": 3,
+    "filters": ["NonZero", "OneOf"]
+  },
+  "functions": [
+    {
+      "name": "clamp",
+      "benchmark": "mutspec_core",
+      "invariants_generated": 8,
+      "true_positives": 2,
+      "false_positives": 4,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret >= lo",            "correct": true  },
+        { "clause": "ret <= hi",            "correct": true  },
+        { "clause": "ret != 0",             "correct": false, "note": "spurious: fails for clamp(0,0,10)" },
+        { "clause": "lo <= hi",             "correct": false, "note": "precondition, not postcondition" },
+        { "clause": "ret one of {lo,hi,x}", "correct": false, "note": "Daikon 'one-of' not a proper contract clause" },
+        { "clause": "x >= lo - 100",        "correct": false, "note": "trace-dependent range bound" }
+      ]
+    },
+    {
+      "name": "abs",
+      "benchmark": "mutspec_core",
+      "invariants_generated": 5,
+      "true_positives": 1,
+      "false_positives": 3,
+      "false_negatives": 2,
+      "invariants": [
+        { "clause": "ret >= 0",        "correct": true  },
+        { "clause": "ret <= 1000",     "correct": false, "note": "trace-dependent upper bound" },
+        { "clause": "x != ret || x >= 0", "correct": false, "note": "overly complex conditional" },
+        { "clause": "ret != -1",       "correct": false, "note": "spurious: true but not useful" }
+      ]
+    },
+    {
+      "name": "max",
+      "benchmark": "mutspec_core",
+      "invariants_generated": 6,
+      "true_positives": 2,
+      "false_positives": 2,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret >= a",            "correct": true  },
+        { "clause": "ret >= b",            "correct": true  },
+        { "clause": "ret <= 500",          "correct": false, "note": "trace-dependent bound" },
+        { "clause": "a - b <= ret",        "correct": false, "note": "spurious inequality" }
+      ]
+    },
+    {
+      "name": "safe_get",
+      "benchmark": "mutspec_core",
+      "invariants_generated": 7,
+      "true_positives": 1,
+      "false_positives": 4,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "idx < 0 || idx >= 8 ==> ret == default_val", "correct": true  },
+        { "clause": "ret >= -100",    "correct": false, "note": "trace-dependent" },
+        { "clause": "idx <= 100",     "correct": false, "note": "trace-dependent" },
+        { "clause": "default_val != 0","correct": false, "note": "spurious" },
+        { "clause": "ret != 999",     "correct": false, "note": "spurious" }
+      ]
+    },
+    {
+      "name": "linear_search",
+      "benchmark": "mutspec_core",
+      "invariants_generated": 9,
+      "true_positives": 2,
+      "false_positives": 5,
+      "false_negatives": 2,
+      "invariants": [
+        { "clause": "ret >= -1",     "correct": true  },
+        { "clause": "ret <= 3",      "correct": true  },
+        { "clause": "ret != -2",     "correct": false, "note": "redundant with ret >= -1" },
+        { "clause": "key >= -50",    "correct": false, "note": "trace-dependent" },
+        { "clause": "key <= 50",     "correct": false, "note": "trace-dependent" },
+        { "clause": "ret one of {-1,0,1,2,3}", "correct": false, "note": "Daikon one-of format" },
+        { "clause": "arr[0] != arr[3]", "correct": false, "note": "spurious array relation" }
+      ]
+    },
+    {
+      "name": "clamp",
+      "benchmark": "commons_math",
+      "invariants_generated": 9,
+      "true_positives": 2,
+      "false_positives": 5,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret >= min",           "correct": true  },
+        { "clause": "ret <= max",           "correct": true  },
+        { "clause": "ret <= 1.0E8",         "correct": false, "note": "trace-dependent upper bound" },
+        { "clause": "ret >= -1.0E8",        "correct": false, "note": "trace-dependent lower bound" },
+        { "clause": "min <= max",           "correct": false, "note": "precondition misclassified as postcondition" },
+        { "clause": "ret != NaN",           "correct": false, "note": "type-level property, not contract" },
+        { "clause": "val - ret <= max - min","correct": false, "note": "spurious arithmetic relation" }
+      ]
+    },
+    {
+      "name": "abs",
+      "benchmark": "commons_math",
+      "invariants_generated": 6,
+      "true_positives": 1,
+      "false_positives": 4,
+      "false_negatives": 2,
+      "invariants": [
+        { "clause": "ret >= 0",              "correct": true  },
+        { "clause": "ret <= 2147483647",     "correct": false, "note": "trace-dependent MAX_VALUE bound" },
+        { "clause": "ret >= -1 * x || x >= 0","correct": false, "note": "overly complex conditional" },
+        { "clause": "x != Integer.MIN_VALUE", "correct": false, "note": "true precondition but not discovered as such" },
+        { "clause": "ret != -1",             "correct": false, "note": "spurious" }
+      ]
+    },
+    {
+      "name": "max",
+      "benchmark": "commons_math",
+      "invariants_generated": 7,
+      "true_positives": 2,
+      "false_positives": 3,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret >= a",             "correct": true  },
+        { "clause": "ret >= b",             "correct": true  },
+        { "clause": "ret <= 2147483647",    "correct": false, "note": "trivially true type bound" },
+        { "clause": "a + b >= ret",         "correct": false, "note": "spurious" },
+        { "clause": "ret - a >= 0",         "correct": false, "note": "redundant with ret >= a" }
+      ]
+    },
+    {
+      "name": "signum",
+      "benchmark": "commons_math",
+      "invariants_generated": 5,
+      "true_positives": 2,
+      "false_positives": 2,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret >= -1",            "correct": true  },
+        { "clause": "ret <= 1",             "correct": true  },
+        { "clause": "ret one of {-1, 0, 1}","correct": false, "note": "Daikon one-of format" },
+        { "clause": "x * ret >= 0",         "correct": false, "note": "true but non-linear" }
+      ]
+    },
+    {
+      "name": "addExact",
+      "benchmark": "commons_math",
+      "invariants_generated": 6,
+      "true_positives": 1,
+      "false_positives": 4,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret == a + b",          "correct": true  },
+        { "clause": "ret >= -2147483648",    "correct": false, "note": "trivially true type bound" },
+        { "clause": "ret <= 2147483647",     "correct": false, "note": "trivially true type bound" },
+        { "clause": "a + b >= -1000000",     "correct": false, "note": "trace-dependent" },
+        { "clause": "a != b || ret == 2 * a","correct": false, "note": "redundant with ret == a + b" }
+      ]
+    },
+    {
+      "name": "checkArgument",
+      "benchmark": "guava",
+      "invariants_generated": 3,
+      "true_positives": 1,
+      "false_positives": 1,
+      "false_negatives": 0,
+      "invariants": [
+        { "clause": "expression == true",    "correct": true  },
+        { "clause": "expression != false",   "correct": false, "note": "redundant double negation" }
+      ]
+    },
+    {
+      "name": "checkNotNull",
+      "benchmark": "guava",
+      "invariants_generated": 4,
+      "true_positives": 1,
+      "false_positives": 2,
+      "false_negatives": 0,
+      "invariants": [
+        { "clause": "ret == reference",      "correct": true  },
+        { "clause": "ret != null",           "correct": false, "note": "redundant; implied by non-exceptional return" },
+        { "clause": "reference != null",     "correct": false, "note": "precondition misclassified" }
+      ]
+    },
+    {
+      "name": "checkElementIndex",
+      "benchmark": "guava",
+      "invariants_generated": 7,
+      "true_positives": 2,
+      "false_positives": 3,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret == index",          "correct": true  },
+        { "clause": "ret >= 0",              "correct": true  },
+        { "clause": "ret <= 1000",           "correct": false, "note": "trace-dependent" },
+        { "clause": "size >= 1",             "correct": false, "note": "true but not a postcondition" },
+        { "clause": "index - ret == 0",      "correct": false, "note": "redundant with ret == index" }
+      ]
+    },
+    {
+      "name": "constrainToRange",
+      "benchmark": "guava",
+      "invariants_generated": 8,
+      "true_positives": 2,
+      "false_positives": 4,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret >= min",            "correct": true  },
+        { "clause": "ret <= max",            "correct": true  },
+        { "clause": "min <= max",            "correct": false, "note": "precondition misclassified" },
+        { "clause": "ret <= 10000",          "correct": false, "note": "trace-dependent" },
+        { "clause": "ret >= -10000",         "correct": false, "note": "trace-dependent" },
+        { "clause": "value - ret <= max - min","correct": false, "note": "spurious" }
+      ]
+    },
+    {
+      "name": "contains",
+      "benchmark": "jfreechart",
+      "invariants_generated": 5,
+      "true_positives": 1,
+      "false_positives": 3,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "(ret == true) -> (value >= lower && value <= upper)", "correct": true },
+        { "clause": "lower <= upper",        "correct": false, "note": "precondition misclassified" },
+        { "clause": "value <= 1.0E6",        "correct": false, "note": "trace-dependent" },
+        { "clause": "lower >= -1.0E6",       "correct": false, "note": "trace-dependent" }
+      ]
+    },
+    {
+      "name": "getLength",
+      "benchmark": "jfreechart",
+      "invariants_generated": 4,
+      "true_positives": 1,
+      "false_positives": 2,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret >= 0",              "correct": true  },
+        { "clause": "ret <= 1.0E8",          "correct": false, "note": "trace-dependent" },
+        { "clause": "ret != -1",             "correct": false, "note": "spurious: redundant with ret >= 0" }
+      ]
+    },
+    {
+      "name": "intersects",
+      "benchmark": "jfreechart",
+      "invariants_generated": 6,
+      "true_positives": 1,
+      "false_positives": 4,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "(ret == true) -> (b0 <= upper && b1 >= lower)", "correct": true },
+        { "clause": "b0 <= b1",              "correct": false, "note": "precondition misclassified" },
+        { "clause": "lower <= upper",        "correct": false, "note": "precondition misclassified" },
+        { "clause": "b0 >= -1.0E6",          "correct": false, "note": "trace-dependent" },
+        { "clause": "b1 <= 1.0E6",           "correct": false, "note": "trace-dependent" }
+      ]
+    },
+    {
+      "name": "compareTo",
+      "benchmark": "joda_time",
+      "invariants_generated": 5,
+      "true_positives": 2,
+      "false_positives": 2,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret >= -1",             "correct": true  },
+        { "clause": "ret <= 1",              "correct": true  },
+        { "clause": "ret one of {-1, 0, 1}", "correct": false, "note": "Daikon one-of format" },
+        { "clause": "this.millis >= 0",      "correct": false, "note": "trace-dependent; not universally true" }
+      ]
+    },
+    {
+      "name": "isAfter",
+      "benchmark": "joda_time",
+      "invariants_generated": 4,
+      "true_positives": 1,
+      "false_positives": 2,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "(ret == true) -> (this.millis > instant.millis)", "correct": true },
+        { "clause": "this.millis >= 0",      "correct": false, "note": "trace-dependent" },
+        { "clause": "instant != null",       "correct": false, "note": "precondition misclassified" }
+      ]
+    }
+  ],
+  "aggregate_metrics": {
+    "mutspec_core": {
+      "total_invariants_generated": 35,
+      "total_true_positives": 8,
+      "total_false_positives": 18,
+      "total_false_negatives": 7,
+      "precision": 0.308,
+      "recall": 0.533,
+      "f1": 0.390
+    },
+    "commons_math": {
+      "total_invariants_generated": 33,
+      "total_true_positives": 8,
+      "total_false_positives": 18,
+      "total_false_negatives": 6,
+      "precision": 0.308,
+      "recall": 0.571,
+      "f1": 0.400
+    },
+    "guava": {
+      "total_invariants_generated": 22,
+      "total_true_positives": 6,
+      "total_false_positives": 10,
+      "total_false_negatives": 2,
+      "precision": 0.375,
+      "recall": 0.750,
+      "f1": 0.500
+    },
+    "jfreechart": {
+      "total_invariants_generated": 15,
+      "total_true_positives": 3,
+      "total_false_positives": 9,
+      "total_false_negatives": 3,
+      "precision": 0.250,
+      "recall": 0.500,
+      "f1": 0.333
+    },
+    "joda_time": {
+      "total_invariants_generated": 9,
+      "total_true_positives": 3,
+      "total_false_positives": 4,
+      "total_false_negatives": 2,
+      "precision": 0.429,
+      "recall": 0.600,
+      "f1": 0.500
+    }
+  }
+}

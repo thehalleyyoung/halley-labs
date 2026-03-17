@@ -4,6 +4,22 @@ usability_oracle.benchmarks.datasets — Benchmark dataset management.
 Provides loading, saving, listing, and synthetic generation of benchmark
 case collections.  Includes a set of built-in test cases covering the
 five bottleneck types.
+
+NOTE — Import requirements
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+This module depends on project-internal packages that are **not**
+independently pip-installable.  The following intra-project imports must
+be resolvable before this file can be loaded:
+
+  - usability_oracle.core.enums        (BottleneckType, RegressionVerdict)
+  - usability_oracle.benchmarks.suite   (BenchmarkCase)
+  - usability_oracle.benchmarks.generators (SyntheticUIGenerator)
+  - usability_oracle.benchmarks.mutations  (MutationGenerator)
+
+To satisfy them, install the package in editable/development mode from
+the ``implementation/`` directory::
+
+    cd implementation && pip install -e ".[dev]"
 """
 
 from __future__ import annotations

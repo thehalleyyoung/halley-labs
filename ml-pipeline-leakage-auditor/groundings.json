@@ -1,0 +1,103 @@
+{
+  "tool": "TaintFlow",
+  "version": "0.1.0",
+  "positioning": "Prototype for quantitative ML leakage auditing with a grounded live sklearn audit-replay benchmark.",
+  "scripts_used": [
+    {
+      "path": "benchmarks/live_audit_recovery.py",
+      "purpose": "Runs live sklearn scenarios through AuditedEstimator, AuditedPipeline, and PipelineAuditor, then writes grounded JSON results."
+    }
+  ],
+  "result_files": [
+    {
+      "path": "benchmarks/live_audit_recovery_results.json",
+      "generated_by": "benchmarks/live_audit_recovery.py"
+    }
+  ],
+  "grounded_claims": [
+    {
+      "id": "G1",
+      "claim": "The repository contains executable sklearn audit wrappers that record live stage events through AuditedEstimator, AuditedPipeline, and PipelineAuditor.",
+      "type": "capability",
+      "evidence": {
+        "code_paths": [
+          "implementation/src/taintflow/integrations/sklearn_interceptor.py"
+        ],
+        "benchmark_script": "benchmarks/live_audit_recovery.py"
+      }
+    },
+    {
+      "id": "G2",
+      "claim": "On the live audit recovery benchmark, a simple checker over live audit logs separated 4 leaky and 4 clean sklearn scenarios with TP=4, TN=4, FP=0, FN=0.",
+      "type": "empirical_result",
+      "evidence": {
+        "result_file": "benchmarks/live_audit_recovery_results.json",
+        "json_paths": [
+          "confusion.tp",
+          "confusion.tn",
+          "confusion.fp",
+          "confusion.fn"
+        ]
+      }
+    },
+    {
+      "id": "G3",
+      "claim": "In the four paired real-dataset scenarios of the recovery benchmark, leaky and clean variants had identical held-out scores, so structural audit evidence can matter even when score deltas are absent.",
+      "type": "empirical_result",
+      "evidence": {
+        "result_file": "benchmarks/live_audit_recovery_results.json",
+        "json_path": "paired_holdout_score_deltas"
+      }
+    },
+    {
+      "id": "G4",
+      "claim": "In a synthetic random-label feature-selection stress test, fitting SelectKBest before the split increased test accuracy from 0.5833 to 0.7417 (+0.1583 absolute).",
+      "type": "empirical_result",
+      "evidence": {
+        "result_file": "benchmarks/live_audit_recovery_results.json",
+        "json_path": "synthetic_feature_selection_inflation"
+      }
+    },
+    {
+      "id": "G5",
+      "claim": "Measured audited-wrapper overhead was near-1x on two representative clean scenarios: 1.115x on clean_scaler_iris and 1.014x on clean_pca_wine.",
+      "type": "empirical_result",
+      "evidence": {
+        "result_file": "benchmarks/live_audit_recovery_results.json",
+        "json_path": "overhead"
+      }
+    },
+    {
+      "id": "G6",
+      "claim": "The current grounded evaluation validates the live sklearn wrapper and replay layer, not the full taintflow audit CLI.",
+      "type": "scope_note",
+      "evidence": {
+        "result_file": "benchmarks/live_audit_recovery_results.json",
+        "json_path": "methodology.note"
+      }
+    }
+  ],
+  "theory_claims_retained": [
+    {
+      "id": "T1",
+      "claim": "The repository implements a partition-taint lattice and worklist analyzer for quantitative leakage analysis.",
+      "code_paths": [
+        "implementation/src/taintflow/core/lattice.py",
+        "implementation/src/taintflow/analysis/__init__.py"
+      ]
+    },
+    {
+      "id": "T2",
+      "claim": "The paper's quantitative story is best read as a research direction supported by executable wrappers and partial analysis components, rather than as a fully validated end-to-end product claim.",
+      "code_paths": [
+        "implementation/src/taintflow/integrations/sklearn_interceptor.py",
+        "implementation/src/taintflow/analysis/__init__.py"
+      ]
+    }
+  ],
+  "removed_story_elements": [
+    "Descriptor-benchmark perfect recall / zero-FPR / perfect-F1 claims.",
+    "Unverified sub-millisecond end-to-end runtime claims.",
+    "Broad head-to-head benchmark claims against external tooling."
+  ]
+}

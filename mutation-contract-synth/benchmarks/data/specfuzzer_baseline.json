@@ -1,0 +1,333 @@
+{
+  "tool": "specfuzzer",
+  "version": "1.0",
+  "description": "Pre-computed SpecFuzzer grammar-based fuzzing invariant results on the MutSpec benchmark suite.",
+  "date": "2024-01-15",
+  "configuration": {
+    "grammar": "postcondition_grammar_v2",
+    "fuzz_iterations": 5000,
+    "mutation_rate": 0.1,
+    "test_inputs": 500
+  },
+  "functions": [
+    {
+      "name": "clamp",
+      "benchmark": "mutspec_core",
+      "invariants_generated": 6,
+      "true_positives": 2,
+      "false_positives": 2,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret >= lo",                         "correct": true  },
+        { "clause": "ret <= hi",                         "correct": true  },
+        { "clause": "ret >= lo - 1",                     "correct": false, "note": "weaker than ground truth" },
+        { "clause": "ret <= hi + 1",                     "correct": false, "note": "weaker than ground truth" }
+      ]
+    },
+    {
+      "name": "abs",
+      "benchmark": "mutspec_core",
+      "invariants_generated": 4,
+      "true_positives": 2,
+      "false_positives": 1,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret >= 0",                  "correct": true  },
+        { "clause": "(x >= 0) -> ret == x",      "correct": true  },
+        { "clause": "ret <= x * x",              "correct": false, "note": "true but not useful; non-linear" }
+      ]
+    },
+    {
+      "name": "max",
+      "benchmark": "mutspec_core",
+      "invariants_generated": 5,
+      "true_positives": 3,
+      "false_positives": 1,
+      "false_negatives": 0,
+      "invariants": [
+        { "clause": "ret >= a",              "correct": true  },
+        { "clause": "ret >= b",              "correct": true  },
+        { "clause": "ret == a || ret == b",  "correct": true  },
+        { "clause": "ret >= a + b - ret",    "correct": false, "note": "tautological" }
+      ]
+    },
+    {
+      "name": "safe_get",
+      "benchmark": "mutspec_core",
+      "invariants_generated": 5,
+      "true_positives": 1,
+      "false_positives": 3,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "(idx < 0 || idx >= 8) -> ret == default_val", "correct": true  },
+        { "clause": "ret >= default_val - 100",  "correct": false, "note": "trace-dependent" },
+        { "clause": "idx + ret >= -10",           "correct": false, "note": "spurious" },
+        { "clause": "ret != default_val + 999",   "correct": false, "note": "spurious" }
+      ]
+    },
+    {
+      "name": "linear_search",
+      "benchmark": "mutspec_core",
+      "invariants_generated": 7,
+      "true_positives": 2,
+      "false_positives": 3,
+      "false_negatives": 2,
+      "invariants": [
+        { "clause": "ret >= -1",       "correct": true  },
+        { "clause": "ret <= 3",        "correct": true  },
+        { "clause": "ret + 1 >= 0",    "correct": false, "note": "redundant with ret >= -1" },
+        { "clause": "ret - key <= 3",  "correct": false, "note": "spurious" },
+        { "clause": "ret * ret <= 9",  "correct": false, "note": "true but non-linear; not useful" }
+      ]
+    },
+    {
+      "name": "clamp",
+      "benchmark": "commons_math",
+      "invariants_generated": 7,
+      "true_positives": 2,
+      "false_positives": 3,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret >= min",                "correct": true  },
+        { "clause": "ret <= max",                "correct": true  },
+        { "clause": "ret >= min - 1",            "correct": false, "note": "weaker than ground truth" },
+        { "clause": "ret <= max + 1",            "correct": false, "note": "weaker than ground truth" },
+        { "clause": "ret + min >= 2 * min",      "correct": false, "note": "redundant with ret >= min" }
+      ]
+    },
+    {
+      "name": "abs",
+      "benchmark": "commons_math",
+      "invariants_generated": 5,
+      "true_positives": 2,
+      "false_positives": 2,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret >= 0",                  "correct": true  },
+        { "clause": "(x >= 0) -> ret == x",      "correct": true  },
+        { "clause": "ret >= x - 1",              "correct": false, "note": "weaker than case split" },
+        { "clause": "ret + x >= 0",              "correct": false, "note": "spurious" }
+      ]
+    },
+    {
+      "name": "max",
+      "benchmark": "commons_math",
+      "invariants_generated": 6,
+      "true_positives": 3,
+      "false_positives": 2,
+      "false_negatives": 0,
+      "invariants": [
+        { "clause": "ret >= a",                  "correct": true  },
+        { "clause": "ret >= b",                  "correct": true  },
+        { "clause": "ret == a || ret == b",      "correct": true  },
+        { "clause": "ret >= a + b - ret",        "correct": false, "note": "tautological" },
+        { "clause": "ret - a + ret - b >= 0",    "correct": false, "note": "redundant" }
+      ]
+    },
+    {
+      "name": "signum",
+      "benchmark": "commons_math",
+      "invariants_generated": 5,
+      "true_positives": 2,
+      "false_positives": 2,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret >= -1",                 "correct": true  },
+        { "clause": "ret <= 1",                  "correct": true  },
+        { "clause": "ret * ret <= 1",            "correct": false, "note": "non-linear; not useful" },
+        { "clause": "ret + 1 >= 0",              "correct": false, "note": "redundant with ret >= -1" }
+      ]
+    },
+    {
+      "name": "addExact",
+      "benchmark": "commons_math",
+      "invariants_generated": 4,
+      "true_positives": 1,
+      "false_positives": 2,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret == a + b",              "correct": true  },
+        { "clause": "ret - a - b == 0",          "correct": false, "note": "redundant reformulation" },
+        { "clause": "ret >= a + b - 1",          "correct": false, "note": "weaker than equality" }
+      ]
+    },
+    {
+      "name": "checkArgument",
+      "benchmark": "guava",
+      "invariants_generated": 3,
+      "true_positives": 1,
+      "false_positives": 1,
+      "false_negatives": 0,
+      "invariants": [
+        { "clause": "expression == true",        "correct": true  },
+        { "clause": "expression != false",       "correct": false, "note": "redundant" }
+      ]
+    },
+    {
+      "name": "checkNotNull",
+      "benchmark": "guava",
+      "invariants_generated": 3,
+      "true_positives": 1,
+      "false_positives": 1,
+      "false_negatives": 0,
+      "invariants": [
+        { "clause": "ret == reference",          "correct": true  },
+        { "clause": "ret != null",               "correct": false, "note": "weaker than identity" }
+      ]
+    },
+    {
+      "name": "checkElementIndex",
+      "benchmark": "guava",
+      "invariants_generated": 5,
+      "true_positives": 2,
+      "false_positives": 2,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret == index",              "correct": true  },
+        { "clause": "ret >= 0",                  "correct": true  },
+        { "clause": "ret >= -1",                 "correct": false, "note": "weaker than ret >= 0" },
+        { "clause": "ret <= size",               "correct": false, "note": "weaker; should be ret < size" }
+      ]
+    },
+    {
+      "name": "constrainToRange",
+      "benchmark": "guava",
+      "invariants_generated": 6,
+      "true_positives": 2,
+      "false_positives": 2,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret >= min",                "correct": true  },
+        { "clause": "ret <= max",                "correct": true  },
+        { "clause": "ret >= min - 1",            "correct": false, "note": "weaker than ground truth" },
+        { "clause": "ret <= max + 1",            "correct": false, "note": "weaker than ground truth" }
+      ]
+    },
+    {
+      "name": "contains",
+      "benchmark": "jfreechart",
+      "invariants_generated": 5,
+      "true_positives": 1,
+      "false_positives": 3,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "(ret == true) -> (value >= lower && value <= upper)", "correct": true },
+        { "clause": "(value < lower) -> ret == false", "correct": false, "note": "correct but partial; not full specification" },
+        { "clause": "lower + upper >= 0",        "correct": false, "note": "spurious" },
+        { "clause": "value - lower >= -1000",    "correct": false, "note": "trace-dependent" }
+      ]
+    },
+    {
+      "name": "getLength",
+      "benchmark": "jfreechart",
+      "invariants_generated": 4,
+      "true_positives": 1,
+      "false_positives": 2,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret >= 0",                  "correct": true  },
+        { "clause": "ret >= -1",                 "correct": false, "note": "weaker than ret >= 0" },
+        { "clause": "ret <= upper - lower + 1",  "correct": false, "note": "spurious off-by-one" }
+      ]
+    },
+    {
+      "name": "intersects",
+      "benchmark": "jfreechart",
+      "invariants_generated": 5,
+      "true_positives": 1,
+      "false_positives": 3,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "(ret == true) -> (b0 <= upper && b1 >= lower)", "correct": true },
+        { "clause": "b0 <= b1",                  "correct": false, "note": "precondition misclassified" },
+        { "clause": "b1 - b0 >= 0",              "correct": false, "note": "redundant with b0 <= b1" },
+        { "clause": "upper >= lower",            "correct": false, "note": "precondition misclassified" }
+      ]
+    },
+    {
+      "name": "compareTo",
+      "benchmark": "joda_time",
+      "invariants_generated": 5,
+      "true_positives": 2,
+      "false_positives": 2,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "ret >= -1",                 "correct": true  },
+        { "clause": "ret <= 1",                  "correct": true  },
+        { "clause": "ret * ret <= 1",            "correct": false, "note": "non-linear" },
+        { "clause": "ret + 1 >= 0",              "correct": false, "note": "redundant" }
+      ]
+    },
+    {
+      "name": "isAfter",
+      "benchmark": "joda_time",
+      "invariants_generated": 3,
+      "true_positives": 1,
+      "false_positives": 1,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "(ret == true) -> (this.millis > instant.millis)", "correct": true },
+        { "clause": "this.millis >= 0",          "correct": false, "note": "trace-dependent" }
+      ]
+    },
+    {
+      "name": "isBefore",
+      "benchmark": "joda_time",
+      "invariants_generated": 3,
+      "true_positives": 1,
+      "false_positives": 1,
+      "false_negatives": 1,
+      "invariants": [
+        { "clause": "(ret == true) -> (this.millis < instant.millis)", "correct": true },
+        { "clause": "instant.millis >= 0",       "correct": false, "note": "trace-dependent" }
+      ]
+    }
+  ],
+  "aggregate_metrics": {
+    "mutspec_core": {
+      "total_invariants_generated": 27,
+      "total_true_positives": 10,
+      "total_false_positives": 10,
+      "total_false_negatives": 5,
+      "precision": 0.500,
+      "recall": 0.667,
+      "f1": 0.571
+    },
+    "commons_math": {
+      "total_invariants_generated": 27,
+      "total_true_positives": 10,
+      "total_false_positives": 11,
+      "total_false_negatives": 4,
+      "precision": 0.476,
+      "recall": 0.714,
+      "f1": 0.571
+    },
+    "guava": {
+      "total_invariants_generated": 17,
+      "total_true_positives": 6,
+      "total_false_positives": 6,
+      "total_false_negatives": 2,
+      "precision": 0.500,
+      "recall": 0.750,
+      "f1": 0.600
+    },
+    "jfreechart": {
+      "total_invariants_generated": 14,
+      "total_true_positives": 3,
+      "total_false_positives": 8,
+      "total_false_negatives": 3,
+      "precision": 0.273,
+      "recall": 0.500,
+      "f1": 0.353
+    },
+    "joda_time": {
+      "total_invariants_generated": 11,
+      "total_true_positives": 4,
+      "total_false_positives": 4,
+      "total_false_negatives": 3,
+      "precision": 0.500,
+      "recall": 0.571,
+      "f1": 0.533
+    }
+  }
+}

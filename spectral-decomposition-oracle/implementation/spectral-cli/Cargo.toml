@@ -1,0 +1,48 @@
+[package]
+name = "spectral-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "CLI for the Spectral Decomposition Oracle — MIP decomposition selection"
+repository.workspace = true
+keywords = ["optimization", "mip", "cli", "decomposition"]
+categories = ["command-line-utilities", "science"]
+
+[[bin]]
+name = "spectral-oracle"
+path = "src/main.rs"
+
+[features]
+default = []
+scip = ["optimization/scip"]
+highs = ["optimization/highs"]
+full = ["scip", "highs"]
+
+[dependencies]
+spectral-types = { path = "../spectral-types" }
+spectral-core = { path = "../spectral-core" }
+matrix-decomp = { path = "../matrix-decomp" }
+oracle = { path = "../oracle" }
+optimization = { path = "../optimization" }
+certificate = { path = "../certificate" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+rayon = { workspace = true }
+num-traits = { workspace = true }
+ordered-float = { workspace = true }
+rand = { workspace = true }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "spectral_bench"
+harness = false

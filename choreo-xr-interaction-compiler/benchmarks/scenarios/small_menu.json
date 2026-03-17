@@ -1,0 +1,59 @@
+{
+  "name": "small_menu",
+  "description": "A simple 5-zone floating menu with button-press interactions. Typical AR HUD overlay scenario.",
+  "entity_count": 3,
+  "zone_count": 5,
+  "interaction_count": 6,
+  "entities": [
+    { "name": "left_hand", "position": [0.0, 1.2, 0.4], "type": "hand" },
+    { "name": "right_hand", "position": [0.3, 1.2, 0.4], "type": "hand" },
+    { "name": "head_gaze", "position": [0.15, 1.6, 0.0], "type": "gaze" }
+  ],
+  "zones": [
+    { "name": "menu_root", "center": [0.15, 1.4, 0.5], "radius": 0.25, "regions": ["sphere"] },
+    { "name": "btn_play", "center": [0.05, 1.45, 0.5], "radius": 0.04, "regions": ["sphere"] },
+    { "name": "btn_pause", "center": [0.15, 1.45, 0.5], "radius": 0.04, "regions": ["sphere"] },
+    { "name": "btn_stop", "center": [0.25, 1.45, 0.5], "radius": 0.04, "regions": ["sphere"] },
+    { "name": "btn_settings", "center": [0.15, 1.35, 0.5], "radius": 0.04, "regions": ["sphere"] }
+  ],
+  "interactions": [
+    {
+      "name": "gaze_activate_menu",
+      "type": "gaze_dwell",
+      "entities": ["head_gaze"],
+      "guards": ["inside(head_gaze, menu_root)", "dwell(head_gaze, menu_root, 500ms)"]
+    },
+    {
+      "name": "tap_play",
+      "type": "tap",
+      "entities": ["right_hand"],
+      "guards": ["inside(right_hand, btn_play)"]
+    },
+    {
+      "name": "tap_pause",
+      "type": "tap",
+      "entities": ["right_hand"],
+      "guards": ["inside(right_hand, btn_pause)"]
+    },
+    {
+      "name": "tap_stop",
+      "type": "tap",
+      "entities": ["right_hand"],
+      "guards": ["inside(right_hand, btn_stop)"]
+    },
+    {
+      "name": "tap_settings",
+      "type": "tap",
+      "entities": ["right_hand"],
+      "guards": ["inside(right_hand, btn_settings)"]
+    },
+    {
+      "name": "pinch_dismiss",
+      "type": "pinch",
+      "entities": ["left_hand", "right_hand"],
+      "guards": ["outside(left_hand, menu_root)", "outside(right_hand, menu_root)"]
+    }
+  ],
+  "expected_states": 342,
+  "expected_transitions": 1024
+}

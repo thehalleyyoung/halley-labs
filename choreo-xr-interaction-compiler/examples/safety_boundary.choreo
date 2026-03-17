@@ -1,0 +1,115 @@
+// safety_boundary.choreo
+// VR guardian / chaperone boundary system.  As the user approaches the
+// physical play-space boundary, the system emits escalating warnings
+// and eventually pauses the experience.  Demonstrates region
+// containment, proximity thresholds, and emit warnings.
+
+// ---------------------------------------------------------------------------
+// Regions
+// ---------------------------------------------------------------------------
+
+// Physical play-space (2.5 m x 2.5 m floor, 2.5 m ceiling).
+region play_space = box(vec3(0.0, 1.25, 0.0), vec3(1.25, 1.25, 1.25));
+
+// Warning shell — 30 cm inside the play-space boundary.
+region warning_shell = difference(
+    play_space,
+    box(vec3(0.0, 1.25, 0.0), vec3(95cm, 1.25, 95cm))
+);
+
+// Critical shell — last 15 cm before the wall.
+region critical_shell = difference(
+    play_space,
+    box(vec3(0.0, 1.25, 0.0), vec3(1.10, 1.25, 1.10))
+);
+
+// The ceiling proximity zone (for users who jump).
+region ceiling_zone = box(vec3(0.0, 2.35, 0.0), vec3(1.25, 0.15, 1.25));
+
+// ---------------------------------------------------------------------------
+// Entities
+// ---------------------------------------------------------------------------
+
+entity user : User {}
+
+entity head : Head {
+    position: vec3(0.0, 1.7, 0.0);
+}
+
+entity left_hand : Hand(Left) {
+    position: vec3(-0.2, 1.1, -0.3);
+}
+
+entity right_hand : Hand(Right) {
+    position: vec3(0.2, 1.1, -0.3);
+}
+
+entity guardian_grid : Object {
+    position: vec3(0.0, 1.25, 0.0);
+    visible: false;
+}
+
+// ---------------------------------------------------------------------------
+// Interactions — escalating boundary warnings
+// ---------------------------------------------------------------------------
+
+// Soft warning: any tracked point enters the 30-cm warning shell.
+interaction soft_warning {
+    when inside(head, warning_shell) or inside(left_hand, warning_shell) or inside(right_hand, warning_shell) then {
+        activate(guardian_grid);
+        emit(boundary_warning, "soft");
+    }
+}
+
+// Hard warning: any tracked point enters the 15-cm critical shell.
+interaction hard_warning {
+    when inside(head, critical_shell) or inside(left_hand, critical_shell) or inside(right_hand, critical_shell) then {
+        emit(boundary_warning, "hard");
+        emit(haptic_pulse, 200ms);
+    }
+}
+
+// Breach: head actually exits the play space — pause the experience.
+interaction boundary_breach {
+    when not inside(head, play_space) then {
+        emit(boundary_breach);
+        emit(pause_experience);
+        deactivate(guardian_grid);
+    }
+}
+
+// Ceiling proximity: warn if the user's head is too close to the ceiling.
+interaction ceiling_warning {
+    when inside(head, ceiling_zone) then {
+        emit(boundary_warning, "ceiling");
+    }
+}
+
+// All-clear: user returns well inside the safe zone.
+interaction boundary_clear {
+    when inside(head, play_space) and not inside(head, warning_shell) then {
+        deactivate(guardian_grid);
+        emit(boundary_clear);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Scene
+// ---------------------------------------------------------------------------
+
+scene safety_boundary_demo {
+    entity user;
+    entity head;
+    entity left_hand;
+    entity right_hand;
+    entity guardian_grid;
+    region play_space;
+    region warning_shell;
+    region critical_shell;
+    region ceiling_zone;
+    interaction soft_warning;
+    interaction hard_warning;
+    interaction boundary_breach;
+    interaction ceiling_warning;
+    interaction boundary_clear;
+}

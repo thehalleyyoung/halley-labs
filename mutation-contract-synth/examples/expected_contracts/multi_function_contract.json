@@ -1,0 +1,63 @@
+{
+  "functions": [
+    {
+      "function": "min",
+      "tier": 1,
+      "preconditions": [
+        { "formula": "true", "provenance": "min is total over all integer pairs" }
+      ],
+      "postconditions": [
+        { "formula": "ret <= a",              "provenance": "result is at most first argument; mutant M1 (a <= b → a < b) killed" },
+        { "formula": "ret <= b",              "provenance": "result is at most second argument" },
+        { "formula": "ret == a || ret == b",  "provenance": "result is one of the inputs" }
+      ],
+      "mutation_operators": ["ROR"],
+      "mutants_killed": 5,
+      "verified": true
+    },
+    {
+      "function": "max",
+      "tier": 1,
+      "preconditions": [
+        { "formula": "true", "provenance": "max is total over all integer pairs" }
+      ],
+      "postconditions": [
+        { "formula": "ret >= a",              "provenance": "result dominates first argument; mutant M2 (a >= b → a > b) killed" },
+        { "formula": "ret >= b",              "provenance": "result dominates second argument" },
+        { "formula": "ret == a || ret == b",  "provenance": "result is one of the inputs" }
+      ],
+      "mutation_operators": ["ROR"],
+      "mutants_killed": 5,
+      "verified": true
+    },
+    {
+      "function": "clamp_pair",
+      "tier": 1,
+      "preconditions": [
+        { "formula": "lo <= hi", "provenance": "range must be non-empty" }
+      ],
+      "postconditions": [
+        { "formula": "ret >= lo",                              "provenance": "lower-bound guarantee; mutant M5 (return lo → lo+1) killed" },
+        { "formula": "ret <= hi",                              "provenance": "upper-bound guarantee; mutant M6 (return hi → hi-1) killed" },
+        { "formula": "ret == x || ret == lo || ret == hi",     "provenance": "result is input or boundary" }
+      ],
+      "mutation_operators": ["ROR", "AOR"],
+      "mutants_killed": 6,
+      "verified": true
+    },
+    {
+      "function": "midpoint",
+      "tier": 2,
+      "preconditions": [
+        { "formula": "true", "provenance": "midpoint is total over all integer pairs" }
+      ],
+      "postconditions": [
+        { "formula": "(a <= b) -> (ret >= a && ret <= b)", "provenance": "result between inputs when a <= b" },
+        { "formula": "(a > b) -> (ret >= b && ret <= a)",  "provenance": "result between inputs when a > b" }
+      ],
+      "mutation_operators": ["ROR", "AOR", "UOI"],
+      "mutants_killed": 7,
+      "verified": true
+    }
+  ]
+}

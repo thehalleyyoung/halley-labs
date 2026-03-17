@@ -1,0 +1,120 @@
+{
+  "benchmark": "Commons Math",
+  "version": "3.6.1",
+  "description": "Ground-truth contracts for Commons Math functions used in MutSpec benchmarks.",
+  "functions": [
+    {
+      "name": "clamp",
+      "signature": "clamp(val: int, min: int, max: int) -> int",
+      "preconditions": [
+        { "formula": "min <= max", "provenance": "API contract: empty range is undefined" }
+      ],
+      "postconditions": [
+        { "formula": "ret >= min",                         "provenance": "lower-bound guarantee" },
+        { "formula": "ret <= max",                         "provenance": "upper-bound guarantee" },
+        { "formula": "ret == val || ret == min || ret == max", "provenance": "result is input or boundary" },
+        { "formula": "(val >= min && val <= max) -> ret == val", "provenance": "in-range identity" }
+      ],
+      "mutation_operators": ["ROR", "AOR"],
+      "expected_tier": 1
+    },
+    {
+      "name": "abs",
+      "signature": "abs(x: int) -> int",
+      "preconditions": [
+        { "formula": "true", "provenance": "abs is total over all integers" }
+      ],
+      "postconditions": [
+        { "formula": "ret >= 0",              "provenance": "non-negativity" },
+        { "formula": "(x >= 0) -> ret == x",  "provenance": "positive identity" },
+        { "formula": "(x < 0) -> ret == -x",  "provenance": "negation of negative" }
+      ],
+      "mutation_operators": ["ROR", "UOI"],
+      "expected_tier": 1
+    },
+    {
+      "name": "max",
+      "signature": "max(a: int, b: int) -> int",
+      "preconditions": [
+        { "formula": "true", "provenance": "max is total over all integer pairs" }
+      ],
+      "postconditions": [
+        { "formula": "ret >= a",              "provenance": "result dominates first argument" },
+        { "formula": "ret >= b",              "provenance": "result dominates second argument" },
+        { "formula": "ret == a || ret == b",  "provenance": "result is one of the inputs" }
+      ],
+      "mutation_operators": ["ROR"],
+      "expected_tier": 1
+    },
+    {
+      "name": "min",
+      "signature": "min(a: int, b: int) -> int",
+      "preconditions": [
+        { "formula": "true", "provenance": "min is total over all integer pairs" }
+      ],
+      "postconditions": [
+        { "formula": "ret <= a",              "provenance": "result is at most first argument" },
+        { "formula": "ret <= b",              "provenance": "result is at most second argument" },
+        { "formula": "ret == a || ret == b",  "provenance": "result is one of the inputs" }
+      ],
+      "mutation_operators": ["ROR"],
+      "expected_tier": 1
+    },
+    {
+      "name": "signum",
+      "signature": "signum(x: int) -> int",
+      "preconditions": [
+        { "formula": "true", "provenance": "signum is total" }
+      ],
+      "postconditions": [
+        { "formula": "ret >= -1",                    "provenance": "range lower bound" },
+        { "formula": "ret <= 1",                     "provenance": "range upper bound" },
+        { "formula": "(x > 0) -> ret == 1",          "provenance": "positive sign" },
+        { "formula": "(x < 0) -> ret == -1",         "provenance": "negative sign" },
+        { "formula": "(x == 0) -> ret == 0",         "provenance": "zero sign" }
+      ],
+      "mutation_operators": ["ROR", "AOR"],
+      "expected_tier": 1
+    },
+    {
+      "name": "copySign",
+      "signature": "copySign(magnitude: int, sign: int) -> int",
+      "preconditions": [
+        { "formula": "true", "provenance": "copySign is total" }
+      ],
+      "postconditions": [
+        { "formula": "ret >= 0 || ret < 0",                 "provenance": "totality" },
+        { "formula": "(sign >= 0) -> ret >= 0",             "provenance": "positive sign propagation" },
+        { "formula": "(sign < 0) -> ret <= 0",              "provenance": "negative sign propagation" },
+        { "formula": "ret == magnitude || ret == -magnitude", "provenance": "magnitude preserved" }
+      ],
+      "mutation_operators": ["ROR", "UOI"],
+      "expected_tier": 2
+    },
+    {
+      "name": "addExact",
+      "signature": "addExact(a: int, b: int) -> int",
+      "preconditions": [
+        { "formula": "true", "provenance": "throws ArithmeticException on overflow; total for non-overflowing inputs" }
+      ],
+      "postconditions": [
+        { "formula": "ret == a + b", "provenance": "exact addition identity" }
+      ],
+      "mutation_operators": ["AOR"],
+      "expected_tier": 1
+    },
+    {
+      "name": "floorMod",
+      "signature": "floorMod(x: int, y: int) -> int",
+      "preconditions": [
+        { "formula": "y != 0", "provenance": "division by zero is undefined" }
+      ],
+      "postconditions": [
+        { "formula": "(y > 0) -> (ret >= 0 && ret < y)", "provenance": "positive divisor: result in [0, y)" },
+        { "formula": "(y < 0) -> (ret <= 0 && ret > y)", "provenance": "negative divisor: result in (y, 0]" }
+      ],
+      "mutation_operators": ["ROR", "AOR"],
+      "expected_tier": 2
+    }
+  ]
+}

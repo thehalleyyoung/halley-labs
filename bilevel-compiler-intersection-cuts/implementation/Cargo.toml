@@ -1,0 +1,81 @@
+[workspace]
+members = [
+    "crates/bicut-types",
+    "crates/bicut-core",
+    "crates/bicut-lp",
+    "crates/bicut-value-function",
+    "crates/bicut-cuts",
+    "crates/bicut-compiler",
+    "crates/bicut-branch-cut",
+    "crates/bicut-bench",
+    "crates/bicut-cli",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["BiCut Contributors"]
+description = "Solver-agnostic bilevel optimization compiler with intersection cuts"
+repository = "https://github.com/bicut-project/bicut"
+keywords = ["optimization", "bilevel", "milp", "intersection-cuts", "compiler"]
+categories = ["mathematics", "science", "algorithms"]
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+anyhow = "1.0"
+log = "0.4"
+env_logger = "0.10"
+clap = { version = "4.0", features = ["derive"] }
+rand = "0.8"
+ordered-float = { version = "4.0", features = ["serde"] }
+indexmap = { version = "2.0", features = ["serde"] }
+petgraph = "0.6"
+sha2 = "0.10"
+hex = "0.4"
+uuid = { version = "1.0", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+rayon = "1.8"
+csv = "1.3"
+toml = "0.8"
+tempfile = "3.8"
+approx = "0.5"
+nalgebra = "0.32"
+criterion = { version = "0.5", features = ["html_reports"] }
+good_lp = { version = "1.8", default-features = false, features = ["highs"] }
+highs = "1.7"
+
+[package]
+name = "bicut-workspace"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Examples depend on multiple crates
+[[example]]
+name = "knapsack_interdiction"
+path = "examples/knapsack_interdiction.rs"
+
+[[example]]
+name = "toll_pricing"
+path = "examples/toll_pricing.rs"
+
+[[bench]]
+name = "bilevel_bench"
+harness = false
+
+[dependencies]
+bicut-types = { path = "crates/bicut-types" }
+bicut-core = { path = "crates/bicut-core" }
+bicut-lp = { path = "crates/bicut-lp" }
+bicut-value-function = { path = "crates/bicut-value-function" }
+bicut-cuts = { path = "crates/bicut-cuts" }
+bicut-compiler = { path = "crates/bicut-compiler" }
+bicut-branch-cut = { path = "crates/bicut-branch-cut" }
+bicut-bench = { path = "crates/bicut-bench" }
+
+[dev-dependencies]
+criterion = { workspace = true }

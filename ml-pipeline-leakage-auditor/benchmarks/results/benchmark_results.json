@@ -1,0 +1,544 @@
+{
+  "benchmark_suite": "taintflow_leakage_detection",
+  "version": "0.1.0",
+  "n_scenarios": 9,
+  "metrics_summary": {
+    "manual_review": {
+      "true_positives": 4,
+      "false_positives": 0,
+      "true_negatives": 2,
+      "false_negatives": 3,
+      "precision": 1.0,
+      "recall": 0.5714285714285714,
+      "f1": 0.7272727272727273,
+      "detection_rate": 0.5714285714285714,
+      "false_positive_rate": 0.0
+    },
+    "heuristic_checker": {
+      "true_positives": 6,
+      "false_positives": 0,
+      "true_negatives": 2,
+      "false_negatives": 1,
+      "precision": 1.0,
+      "recall": 0.8571428571428571,
+      "f1": 0.923076923076923,
+      "detection_rate": 0.8571428571428571,
+      "false_positive_rate": 0.0
+    },
+    "taintflow": {
+      "true_positives": 7,
+      "false_positives": 0,
+      "true_negatives": 2,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "detection_rate": 1.0,
+      "false_positive_rate": 0.0
+    }
+  },
+  "scenarios": [
+    {
+      "name": "scaler_before_split",
+      "category": "preprocessing",
+      "ground_truth": {
+        "has_leakage": true,
+        "category": "preprocessing",
+        "leaked_features": [
+          "x0",
+          "x1",
+          "x2",
+          "x3",
+          "x4",
+          "x5",
+          "x6",
+          "x7",
+          "x8",
+          "x9"
+        ],
+        "approximate_bit_bound": 1.61,
+        "description": "StandardScaler.fit_transform on full data before split"
+      },
+      "detection_results": [
+        {
+          "method": "manual_review",
+          "detected": true,
+          "features_flagged": [
+            "StandardScaler"
+          ],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 0.0010026249908842147,
+          "details": "Manual review found: ['StandardScaler']"
+        },
+        {
+          "method": "heuristic_checker",
+          "detected": true,
+          "features_flagged": [
+            "StandardScaler"
+          ],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 2.500019036233425e-06,
+          "details": "Pattern match: fit before split = ['StandardScaler']"
+        },
+        {
+          "method": "taintflow",
+          "detected": true,
+          "features_flagged": [
+            "x0",
+            "x1",
+            "x2",
+            "x3",
+            "x4",
+            "x5",
+            "x6",
+            "x7",
+            "x8",
+            "x9"
+          ],
+          "bit_bound_estimate": 1.6096404744368118,
+          "time_seconds": 1.550000160932541e-05,
+          "details": "Quantitative bound: 1.6096 bits across 10 features"
+        }
+      ]
+    },
+    {
+      "name": "minmax_before_split",
+      "category": "preprocessing",
+      "ground_truth": {
+        "has_leakage": true,
+        "category": "preprocessing",
+        "leaked_features": [
+          "x0",
+          "x1",
+          "x2",
+          "x3",
+          "x4"
+        ],
+        "approximate_bit_bound": 1.06,
+        "description": "MinMaxScaler.fit_transform on full data before split"
+      },
+      "detection_results": [
+        {
+          "method": "manual_review",
+          "detected": true,
+          "features_flagged": [
+            "MinMaxScaler"
+          ],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 0.0010020419829525054,
+          "details": "Manual review found: ['MinMaxScaler']"
+        },
+        {
+          "method": "heuristic_checker",
+          "detected": true,
+          "features_flagged": [
+            "MinMaxScaler"
+          ],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 2.874992787837982e-06,
+          "details": "Pattern match: fit before split = ['MinMaxScaler']"
+        },
+        {
+          "method": "taintflow",
+          "detected": true,
+          "features_flagged": [
+            "x0",
+            "x1",
+            "x2",
+            "x3",
+            "x4"
+          ],
+          "bit_bound_estimate": 1.2864329320743955,
+          "time_seconds": 4.291010554879904e-06,
+          "details": "Quantitative bound: 1.2864 bits across 5 features"
+        }
+      ]
+    },
+    {
+      "name": "pca_before_split",
+      "category": "preprocessing",
+      "ground_truth": {
+        "has_leakage": true,
+        "category": "preprocessing",
+        "leaked_features": [
+          "x0",
+          "x1",
+          "x2",
+          "x3",
+          "x4",
+          "x5",
+          "x6",
+          "x7",
+          "x8",
+          "x9",
+          "x10",
+          "x11",
+          "x12",
+          "x13",
+          "x14",
+          "x15",
+          "x16",
+          "x17",
+          "x18",
+          "x19",
+          "pc0",
+          "pc1",
+          "pc2",
+          "pc3",
+          "pc4",
+          "pc5",
+          "pc6",
+          "pc7",
+          "pc8",
+          "pc9",
+          "pc10",
+          "pc11",
+          "pc12",
+          "pc13",
+          "pc14",
+          "pc15",
+          "pc16",
+          "pc17",
+          "pc18",
+          "pc19"
+        ],
+        "approximate_bit_bound": 37.28,
+        "description": "StandardScaler + PCA on full data before split"
+      },
+      "detection_results": [
+        {
+          "method": "manual_review",
+          "detected": true,
+          "features_flagged": [
+            "StandardScaler"
+          ],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 0.0010015419791452587,
+          "details": "Manual review found: ['StandardScaler']"
+        },
+        {
+          "method": "heuristic_checker",
+          "detected": true,
+          "features_flagged": [
+            "StandardScaler",
+            "PCA"
+          ],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 1.374981366097927e-06,
+          "details": "Pattern match: fit before split = ['StandardScaler', 'PCA']"
+        },
+        {
+          "method": "taintflow",
+          "detected": true,
+          "features_flagged": [
+            "x0",
+            "x1",
+            "x2",
+            "x3",
+            "x4",
+            "x5",
+            "x6",
+            "x7",
+            "x8",
+            "x9",
+            "x10",
+            "x11",
+            "x12",
+            "x13",
+            "x14",
+            "x15",
+            "x16",
+            "x17",
+            "x18",
+            "x19",
+            "pc0",
+            "pc1",
+            "pc2",
+            "pc3",
+            "pc4",
+            "pc5",
+            "pc6",
+            "pc7",
+            "pc8",
+            "pc9",
+            "pc10",
+            "pc11",
+            "pc12",
+            "pc13",
+            "pc14",
+            "pc15",
+            "pc16",
+            "pc17",
+            "pc18",
+            "pc19"
+          ],
+          "bit_bound_estimate": 20.120505930460133,
+          "time_seconds": 5.312496796250343e-05,
+          "details": "Quantitative bound: 20.1205 bits across 40 features"
+        }
+      ]
+    },
+    {
+      "name": "selectkbest_before_split",
+      "category": "feature_selection",
+      "ground_truth": {
+        "has_leakage": true,
+        "category": "feature_selection",
+        "leaked_features": [
+          "selected_0",
+          "selected_1",
+          "selected_2",
+          "selected_3",
+          "selected_4"
+        ],
+        "approximate_bit_bound": 1.47,
+        "description": "SelectKBest on full dataset before split"
+      },
+      "detection_results": [
+        {
+          "method": "manual_review",
+          "detected": false,
+          "features_flagged": [],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 0.0010009589712135494,
+          "details": "Manual review found: []"
+        },
+        {
+          "method": "heuristic_checker",
+          "detected": true,
+          "features_flagged": [
+            "SelectKBest"
+          ],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 9.579816833138466e-07,
+          "details": "Pattern match: fit before split = ['SelectKBest']"
+        },
+        {
+          "method": "taintflow",
+          "detected": true,
+          "features_flagged": [
+            "selected_0",
+            "selected_1",
+            "selected_2",
+            "selected_3",
+            "selected_4"
+          ],
+          "bit_bound_estimate": 1.286432932074394,
+          "time_seconds": 2.834014594554901e-06,
+          "details": "Quantitative bound: 1.2864 bits across 5 features"
+        }
+      ]
+    },
+    {
+      "name": "rolling_on_full_data",
+      "category": "temporal",
+      "ground_truth": {
+        "has_leakage": true,
+        "category": "temporal",
+        "leaked_features": [
+          "feature_a_rolling_mean"
+        ],
+        "approximate_bit_bound": 0.74,
+        "description": "Rolling mean on full time series before temporal split"
+      },
+      "detection_results": [
+        {
+          "method": "manual_review",
+          "detected": false,
+          "features_flagged": [],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 0.0010006670015864074,
+          "details": "Manual review found: []"
+        },
+        {
+          "method": "heuristic_checker",
+          "detected": false,
+          "features_flagged": [],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 7.500057108700275e-07,
+          "details": "Pattern match: fit before split = []"
+        },
+        {
+          "method": "taintflow",
+          "detected": true,
+          "features_flagged": [
+            "feature_a_rolling_mean"
+          ],
+          "bit_bound_estimate": 0.8975105015834065,
+          "time_seconds": 3.7499703466892242e-06,
+          "details": "Quantitative bound: 0.8975 bits across 1 features"
+        }
+      ]
+    },
+    {
+      "name": "global_normalization_temporal",
+      "category": "temporal",
+      "ground_truth": {
+        "has_leakage": true,
+        "category": "temporal",
+        "leaked_features": [
+          "x0",
+          "x1",
+          "x2",
+          "x3",
+          "x4"
+        ],
+        "approximate_bit_bound": 1.61,
+        "description": "Global normalization on time series data"
+      },
+      "detection_results": [
+        {
+          "method": "manual_review",
+          "detected": true,
+          "features_flagged": [
+            "GlobalNorm"
+          ],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 0.001000709027517587,
+          "details": "Manual review found: ['GlobalNorm']"
+        },
+        {
+          "method": "heuristic_checker",
+          "detected": true,
+          "features_flagged": [
+            "GlobalNorm"
+          ],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 7.92031642049551e-07,
+          "details": "Pattern match: fit before split = ['GlobalNorm']"
+        },
+        {
+          "method": "taintflow",
+          "detected": true,
+          "features_flagged": [
+            "x0",
+            "x1",
+            "x2",
+            "x3",
+            "x4"
+          ],
+          "bit_bound_estimate": 0.8048202372184059,
+          "time_seconds": 2.207991201430559e-06,
+          "details": "Quantitative bound: 0.8048 bits across 5 features"
+        }
+      ]
+    },
+    {
+      "name": "target_encoding_before_split",
+      "category": "target",
+      "ground_truth": {
+        "has_leakage": true,
+        "category": "target",
+        "leaked_features": [
+          "city_encoded"
+        ],
+        "approximate_bit_bound": 3.46,
+        "description": "Target encoding on full dataset before split"
+      },
+      "detection_results": [
+        {
+          "method": "manual_review",
+          "detected": false,
+          "features_flagged": [],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 0.0010003749737516046,
+          "details": "Manual review found: []"
+        },
+        {
+          "method": "heuristic_checker",
+          "detected": true,
+          "features_flagged": [
+            "TargetEncoder"
+          ],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 7.500057108700275e-07,
+          "details": "Pattern match: fit before split = ['TargetEncoder']"
+        },
+        {
+          "method": "taintflow",
+          "detected": true,
+          "features_flagged": [
+            "city_encoded"
+          ],
+          "bit_bound_estimate": 3.4594316186372973,
+          "time_seconds": 1.541979145258665e-06,
+          "details": "Quantitative bound: 3.4594 bits across 1 features"
+        }
+      ]
+    },
+    {
+      "name": "correct_pipeline_after_split",
+      "category": "none",
+      "ground_truth": {
+        "has_leakage": false,
+        "category": "none",
+        "leaked_features": [],
+        "approximate_bit_bound": 0.0,
+        "description": "Correct pipeline: all fitting after split on train only"
+      },
+      "detection_results": [
+        {
+          "method": "manual_review",
+          "detected": false,
+          "features_flagged": [],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 0.001000458036083728,
+          "details": "Manual review found: []"
+        },
+        {
+          "method": "heuristic_checker",
+          "detected": false,
+          "features_flagged": [],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 5.41971530765295e-07,
+          "details": "Pattern match: fit before split = []"
+        },
+        {
+          "method": "taintflow",
+          "detected": false,
+          "features_flagged": [],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 4.169996827840805e-07,
+          "details": "Quantitative bound: 0.0000 bits across 0 features"
+        }
+      ]
+    },
+    {
+      "name": "sklearn_pipeline_correct",
+      "category": "none",
+      "ground_truth": {
+        "has_leakage": false,
+        "category": "none",
+        "leaked_features": [],
+        "approximate_bit_bound": 0.0,
+        "description": "sklearn Pipeline handles splitting correctly"
+      },
+      "detection_results": [
+        {
+          "method": "manual_review",
+          "detected": false,
+          "features_flagged": [],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 0.0010005000038072467,
+          "details": "Manual review found: []"
+        },
+        {
+          "method": "heuristic_checker",
+          "detected": false,
+          "features_flagged": [],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 4.169996827840805e-07,
+          "details": "Pattern match: fit before split = []"
+        },
+        {
+          "method": "taintflow",
+          "detected": false,
+          "features_flagged": [],
+          "bit_bound_estimate": 0.0,
+          "time_seconds": 4.1601015254855156e-07,
+          "details": "Quantitative bound: 0.0000 bits across 0 features"
+        }
+      ]
+    }
+  ]
+}

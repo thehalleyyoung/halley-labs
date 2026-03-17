@@ -1,0 +1,81 @@
+// SoniType Example: Temperature Time Series Sonification
+//
+// Maps global temperature anomaly data to audio. Suitable for climate
+// communication and accessibility applications.
+//
+// Run: cargo run --bin sonitype -- compile examples/temperature_sonification.soni
+
+sonification temperature_anomalies {
+    title: "Global Temperature Anomaly 1880–2024"
+    description: "Auditory display of NASA GISS global temperature anomalies"
+
+    data source: csv("data/temperature_anomaly.csv") {
+        time_column: "year"
+        sample_rate: 8 Hz  // 8 years per second → ~18 seconds for 144 years
+    }
+
+    // Primary stream: temperature anomaly → pitch
+    // Baseline (0°C anomaly) maps to middle C (261.6 Hz)
+    // Warming maps upward, cooling maps downward
+    stream temperature {
+        parameter: pitch
+        source: "anomaly_celsius"
+        mapping: linear
+        range: 130 Hz .. 523 Hz  // C3 to C5, 2 octaves centered on middle
+        center: 0.0 -> 261.6 Hz  // zero anomaly = middle C
+        timbre: triangle { harmonics: [1.0, 0.0, 0.11, 0.0, 0.04] }
+        pan: center
+    }
+
+    // Secondary stream: northern hemisphere anomaly → spatial position
+    stream northern_hemisphere {
+        parameter: pitch
+        source: "nh_anomaly"
+        mapping: linear
+        range: 400 Hz .. 1200 Hz  // higher register, separated from main
+        timbre: sine { harmonics: [1.0, 0.15] }
+        pan: left { azimuth: -30 deg }
+        loudness: 55 dB  // quieter than primary stream
+    }
+
+    // Tertiary stream: southern hemisphere anomaly
+    stream southern_hemisphere {
+        parameter: pitch
+        source: "sh_anomaly"
+        mapping: linear
+        range: 80 Hz .. 240 Hz  // low register for contrast
+        timbre: sine { harmonics: [1.0, 0.5, 0.2] }
+        pan: right { azimuth: 30 deg }
+        loudness: 55 dB
+    }
+
+    // Perceptual constraints ensuring all three streams are distinguishable
+    constraints {
+        segregation(temperature, northern_hemisphere): >= "moderate"
+        segregation(temperature, southern_hemisphere): >= "moderate"
+        segregation(northern_hemisphere, southern_hemisphere): >= "strong"
+
+        pitch_jnd_margin: >= 2.5
+        masking_clearance: >= 8 dB across all bark bands
+        cognitive_load: <= 3
+    }
+
+    // Accessibility features
+    accessibility {
+        audio_description {
+            temperature: "Rising pitch indicates warming; falling pitch indicates cooling"
+            northern_hemisphere: "Left channel: northern hemisphere trend"
+            southern_hemisphere: "Right channel: southern hemisphere trend"
+        }
+        landmarks {
+            at year(1998): spoken("1998 El Niño peak")
+            at year(2016): spoken("2016 record high")
+            at year(1991): spoken("Mount Pinatubo eruption cooling")
+        }
+    }
+
+    output {
+        format: wav { sample_rate: 44100, bit_depth: 16 }
+        midi_export: true  // also generate MIDI file
+    }
+}

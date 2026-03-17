@@ -1,0 +1,18 @@
+{
+  "function": "bounded_increment",
+  "tier": 1,
+  "preconditions": [
+    { "formula": "lo <= hi",   "provenance": "range must be non-empty for increment to be well-defined" },
+    { "formula": "val >= lo",  "provenance": "input within range lower bound" },
+    { "formula": "val <= hi",  "provenance": "input within range upper bound" }
+  ],
+  "postconditions": [
+    { "formula": "ret >= lo",       "provenance": "result stays within range lower bound" },
+    { "formula": "ret <= hi",       "provenance": "result stays within range upper bound; mutant M3 (val >= hi → val > hi) killed" },
+    { "formula": "ret >= val",      "provenance": "monotonicity: increment never decreases; mutant M6 (val+1 → val-1) killed" },
+    { "formula": "ret <= val + 1",  "provenance": "increment by at most 1; mutant M5 (val+1 → val+0) killed" }
+  ],
+  "mutation_operators": ["ROR", "AOR"],
+  "mutants_killed": 6,
+  "verified": true
+}

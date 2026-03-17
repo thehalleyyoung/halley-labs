@@ -1,0 +1,259 @@
+# Istio Bookinfo Example — Cascade Verification
+#
+# Classic Bookinfo topology adapted to demonstrate CascadeVerify analysis:
+#
+#   productpage → reviews → ratings
+#   productpage → details
+#
+# Risks:
+#   1. Retry amplification: productpage→reviews→ratings = (1+3)(1+2) = 12×
+#   2. Timeout chain: productpage deadline 10s, but worst-case path
+#      reviews(3×3s) + ratings(2×2s) = 13s > 10s deadline
+#   3. The details call has a tight 2s timeout that will fail under load
+#
+# Run: cascade-verify check examples/istio-bookinfo/
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: productpage
+  namespace: bookinfo
+  labels:
+    app: productpage
+    version: v1
+  annotations:
+    cascade-verify/capacity: "500"
+    cascade-verify/baseline-load: "200"
+    cascade-verify/deadline-ms: "10000"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: productpage
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: productpage
+        version: v1
+    spec:
+      containers:
+      - name: productpage
+        image: docker.io/istio/examples-bookinfo-productpage-v1:1.18.0
+        ports:
+        - containerPort: 9080
+          name: http
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reviews
+  namespace: bookinfo
+  labels:
+    app: reviews
+    version: v3
+  annotations:
+    cascade-verify/capacity: "300"
+    cascade-verify/baseline-load: "150"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: reviews
+      version: v3
+  template:
+    metadata:
+      labels:
+        app: reviews
+        version: v3
+    spec:
+      containers:
+      - name: reviews
+        image: docker.io/istio/examples-bookinfo-reviews-v3:1.18.0
+        ports:
+        - containerPort: 9080
+          name: http
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ratings
+  namespace: bookinfo
+  labels:
+    app: ratings
+    version: v1
+  annotations:
+    cascade-verify/capacity: "200"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ratings
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: ratings
+        version: v1
+    spec:
+      containers:
+      - name: ratings
+        image: docker.io/istio/examples-bookinfo-ratings-v1:1.18.0
+        ports:
+        - containerPort: 9080
+          name: http
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "250m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: details
+  namespace: bookinfo
+  labels:
+    app: details
+    version: v1
+  annotations:
+    cascade-verify/capacity: "400"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: details
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: details
+        version: v1
+    spec:
+      containers:
+      - name: details
+        image: docker.io/istio/examples-bookinfo-details-v1:1.18.0
+        ports:
+        - containerPort: 9080
+          name: http
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "250m"
+            memory: "256Mi"
+---
+# VirtualService: productpage → reviews
+# 3 retries with 3s per-try = worst-case 12s for this hop alone
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: productpage-to-reviews
+  namespace: bookinfo
+spec:
+  hosts:
+  - reviews
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 3s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 15s
+    route:
+    - destination:
+        host: reviews
+        port:
+          number: 9080
+---
+# VirtualService: reviews → ratings
+# 2 retries with 2s per-try = worst-case 6s for this hop
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: reviews-to-ratings
+  namespace: bookinfo
+spec:
+  hosts:
+  - ratings
+  http:
+  - retries:
+      attempts: 2
+      perTryTimeout: 2s
+      retryOn: 5xx,reset,connect-failure,retriable-4xx
+    timeout: 8s
+    route:
+    - destination:
+        host: ratings
+        port:
+          number: 9080
+---
+# VirtualService: productpage → details
+# Tight timeout that will cause failures under load — demonstrates
+# timeout violation when the caller (productpage) has a 10s deadline
+# but details itself is slow due to external API dependency.
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: productpage-to-details
+  namespace: bookinfo
+spec:
+  hosts:
+  - details
+  http:
+  - retries:
+      attempts: 1
+      perTryTimeout: 2s
+      retryOn: 5xx,connect-failure
+    timeout: 5s
+    route:
+    - destination:
+        host: details
+        port:
+          number: 9080
+---
+# DestinationRule: ratings circuit breaker
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: ratings-circuit-breaker
+  namespace: bookinfo
+spec:
+  host: ratings
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http1MaxPendingRequests: 50
+        http2MaxRequests: 100
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 60s
+      maxEjectionPercent: 30

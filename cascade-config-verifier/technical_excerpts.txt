@@ -1,0 +1,514 @@
+================================================================================
+TECHNICAL EXCERPTS FROM PROJECT BRAINSTORMS
+================================================================================
+
+SOURCE 1: ARCHITECT BRAINSTORM
+-------------------------------
+[Key Framing Summaries from architect_brainstorm.md]
+
+FRAMING 1: CascadeSMT — Monolithic SMT Approach
+- Single Z3 solver encodes entire service topology
+- Bounded model checking (BMC) for cascade reachability query
+- CEGIS loop (counterexample-guided inductive synthesis) for repair
+- Scalability: ~15-30 services before Z3 hits state explosion
+- Key challenge: Service state explosion grows combinatorially
+
+FRAMING 2: MeshCheck — Compositional Assume-Guarantee  
+- Each service has resilience contract (retry budget, timeout envelope, failure rates)
+- Compositional verification via Pnueli-style assume-guarantee reasoning
+- Contract inference using L* learning (Angluin, 1987)
+- Scalability: 100+ services possible via compositional approach
+- Risk: Automatically inferred contracts may be too coarse-grained
+
+FRAMING 3: RetryStorm — Retry Amplification Focused
+- Core object: Retry Amplification Graph (RAG)
+- Explicit modeling of retry × timeout × circuit-breaker interactions
+- Per-edge amplification factors (worst-case load multiplication)
+- Narrower scope = higher novelty ratio
+- Trade-off: Doesn't address all cascade mechanisms (rate limits, resource starvation)
+
+Architectural Comparison (from brainstorm):
+- Monolithic (CascadeSMT): Fast queries on small topologies, doesn't scale
+- Compositional (MeshCheck): Scales well, but verification per-component misses interactions?
+- Retry-focused (RetryStorm): Medium scale, laser-focused novelty, clearer contribution
+
+================================================================================
+
+SOURCE 2: MATH BRAINSTORM  
+--------------------------
+[Full excerpts from math_brainstorm.md]
+
+FRAMING A: TIMED AUTOMATA CASCADE REACHABILITY WITH SMT-GUIDED REPAIR SYNTHESIS
+
+Core Model:
+- Each service = Timed Automaton (TA): (Locations, initial_location, Clocks, Edges, Invariants)
+- Service locations encode: {healthy, degraded, open-circuit, unavailable}
+- Clocks Cᵢ encode: timeout countdowns, retry delay timers
+- Edges model transitions guarded by clock constraints + RPC synchronization
+- Network of Timed Automata (NTA) composition for service mesh
+
+Cascade Definition:
+- Does there exist an initial failure injection (subset S of services) of size ≤ k
+- Such that the NTA reaches a state where ≥ f fraction of services are degraded/unavailable?
+
+Technical Approach:
+1. Reduce parameterized reachability to quantified SMT formula over linear real arithmetic
+2. Avoid full TA model-checking (PSPACE-complete) by exploiting structural monotonicity
+3. If failure set S triggers cascade, then any superset S' ⊇ S also triggers it
+4. Use antichain-guided search to enumerate minimal failure sets
+
+Repair Synthesis:
+- Inverts analysis: given minimal failure set S of size k triggers cascade
+- Find minimal perturbation of config parameters (timeout values, retry counts, CB thresholds)
+- SMT formulation: ∃ config parameters, ∀ failure sets of size ≤ k, cascade state unreachable
+- Solve via CEGIS loop (∀-player proposes failures, ∃-player adjusts parameters)
+
+Load-Bearing Theorems Required:
+1. Soundness of BMC Encoding: If BMC depth d ≥ diameter(G) × max_retries finds no cascade, then none exists
+   - Requires proving cascade propagation is depth-bounded
+2. Completeness of Monotonicity: Every minimal failure set ≤ k enumerable via antichain search
+   - By Monotone Boolean Duality theorem (Fredman-Khachiyan, quasi-polynomial time)
+3. CEGIS Termination: Loop terminates in ≤ C(n,k) iterations (number of possible k-failure sets)
+4. Repair Minimality: Synthesized repair is Pareto-optimal wrt parameter changes
+
+Complexity Landscape:
+- Cascade Reachability (fixed topology): NP for realistic sizes (n ≤ 500, d ≤ 20, c ≤ 5)
+- Minimal Failure Set Enumeration: Hypergraph transversal problem; quasi-polynomial time (open whether P)
+  - Polynomial for bounded-treewidth service graphs
+- Repair Synthesis (∃∀ problem): Σ₂ᴾ-complete in general; CEGIS practical heuristic (no worst-case poly guarantee)
+- Full NTA Reachability: PSPACE-complete (Alur-Dill), but our BMC bounding makes NP per query
+
+Novel Contributions:
+- Structural monotonicity theorem for cascade propagation in retry-timeout NTAs
+  - Enables antichain-based search with exponential pruning
+  - Non-trivial because circuit breakers introduce non-monotone behavior
+- Cascade depth bound relating service graph properties (diameter, max retry fan-out) to BMC depth
+- CEGIS convergence acceleration exploiting monotonicity
+
+CRITICAL PROBLEM: Circuit Breakers Break Monotonicity
+- Pure retry-timeout model: Adding failures only makes things worse (monotone)
+- With circuit breakers: Larger failure set can PREVENT cascade by tripping breaker faster
+- Example: {A fails, B fails} → cascade | {A fails, B fails, D fails} → CB opens → no cascade
+- Function Cascade(S) is NON-MONOTONE
+
+Solutions to Non-Monotonicity:
+A) Restrict to configurations where monotonicity preserved (limits generality)
+B) Develop "quasi-monotone" Boolean function theory (novel, non-trivial)
+C) Abandon antichain enumeration, pay full exponential cost
+
+This is THE mathematical heart of the problem.
+
+Additional Challenges:
+- Real-valued clocks in TAs create uncountably infinite state space
+- BMC encoding discretizes to SMT; soundness requires bisimulation proof vs continuous-time TA
+- Potential Zeno-like behavior in cycles (service A → B → C → A with retries)
+- Adaptive retry behaviors (exponential backoff with jitter) don't map cleanly to deterministic TA
+
+---
+
+FRAMING B: ALGEBRAIC CASCADE POLYNOMIALS OVER WEIGHTED SERVICE DAGs
+
+Core Model:
+- Service mesh = Weighted directed graph G = (V, E, w)
+- Per-edge weight = cascade polynomial fᵢⱼ(x) in semiring ℝ₊[x]
+- If service j calls i with retry count rᵢⱼ, timeout tᵢⱼ, and i's failure prob = x
+- Then effective failure probability at j = cascade polynomial encoding retry amplification
+
+Technical Approach:
+1. Model per-edge polynomial composition along paths
+2. For cyclic graphs: System of polynomial fixpoint equations (one per service)
+3. Least fixpoint in [0,1]ⁿ gives steady-state failure probability vector
+4. Cascade occurs when fixpoint exceeds threshold
+
+Mathematical Foundations:
+- Monotone polynomial system F: [0,1]ⁿ → [0,1]ⁿ is ω-continuous on complete lattice [0,1]ⁿ
+- By Kleene's fixpoint theorem: unique least fixpoint μF exists
+- Cascade threshold = critical point where Jacobian ∂F/∂x at fixpoint has spectral radius = 1
+
+Key Theorems:
+1. Fixpoint Existence & Uniqueness (Kleene + Banach fixed-point theorem)
+2. Phase Transition Characterization via Implicit Function Theorem
+3. Tropical Criticality = Algebraic Criticality (most dangerous path in tropical semiring = dominant eigenvector)
+4. SOS Repair Soundness: Degree-2d SOS certificate proves cascade threshold above fault tolerance bound
+   - Completeness: By Putinar's Positivstellensatz, if strictly above bound, SOS cert exists at finite degree
+
+Computational Complexity:
+- Fixpoint computation: O(n · log(1/ε) / log(1/λ)) iterations (λ = contraction rate, λ→1 at threshold)
+- Phase transition detection: O(n³ log(1/ε)) via bisection + generalized eigenvalue
+- Minimal failure set (algebraic version): Sparse polynomial optimization; NP-hard generally, SOCP/SDP relaxations available
+- SOS repair synthesis: O(n^O(d)) for degree-d certificates (tractable for d=4, n≤200)
+
+Novel Contributions:
+- Cascade polynomials as compositional abstraction (retry combinatorics + timeout + CB in single algebraic object)
+- Tropical-spectral duality for cascades (connects combinatorial "most dangerous path" to analytic "most unstable mode")
+- SOS certificates for fixpoint boundedness (not applied to distributed systems before)
+
+Core Difficulty: Real service graphs have cycles
+- DAGs: Cascade function is explicit polynomial composition
+- Cyclic graphs: Fixpoint only implicitly defined as F(x)=x solution
+- Cascade threshold is bifurcation point of implicit equation
+- Near bifurcation: Perturbation theory breaks down, Implicit Function Theorem fails (Jacobian becomes singular)
+- Exhibits critical phenomena: critical slowing-down of iteration, sensitivity divergence, multiple fixpoints possible
+
+Additional Challenges:
+- Rational functions fₑ(x) from retry-timeout interactions, not polynomials
+- Terms like (1-x)^r and min(·, timeout) need careful polynomial approximation
+- SOS hierarchy may require high degree for tight bounds
+- At critical threshold: λ→1 and convergence explodes (critical slowing-down)
+
+---
+
+FRAMING C: Petri Nets + MaxSAT (implied in implementation section)
+
+Core Model:
+- Service interactions = Petri net with colored tokens (service states, request counts)
+- Configuration parameters = arc weights and transition guards
+- Cascade = token reachability to "cascade" marking
+
+Technical Approach:
+1. Encode configuration as Petri net structure
+2. Cascade reachability as reachability analysis
+3. Minimal failure set = minimal token configuration at initial marking enabling cascade
+4. Repair = MinUnsat problem (find minimal unsatisfiable subset of constraints)
+
+Advantages:
+- MaxSAT solvers handle partial satisfaction + optimization well
+- Direct encoding of retry amplification as arc weights
+- Established connection between Petri nets and SAT/SMT
+
+Complexity:
+- MinUnsat: Σ₂ᴾ-complete in general
+- MaxSAT approximations: heuristic but practical
+
+Novelty: Medium (combines known techniques in new domain)
+
+================================================================================
+
+SOURCE 3: IMPLEMENTATION SCOPE BRAINSTORM
+-------------------------------------------
+[From impl_brainstorm.md]
+
+Proposed 6-Layer Architecture (≈150K LoC total)
+
+Layer 1: Configuration Parsing (~20K LoC)
+├── YAML/JSON parsing
+│   ├── Kubernetes manifests (Pod, Service, Deployment, StatefulSet specs)
+│   ├── Istio DestinationRule, VirtualService, Gateway, ServiceEntry CRDs
+│   ├── Envoy bootstrap, route, cluster, listener configuration
+│   └── Service Mesh Interface (SMI) standard specs
+├── Template expansion
+│   ├── Helm chart templating (Go template syntax)
+│   ├── Kustomize overlays + patches
+│   ├── Jsonnet (if used)
+│   └── VALUE substitution with defaults
+├── Validation
+│   ├── Schema validation against Kubernetes/Istio OpenAPI specs
+│   ├── Reference resolution (service names → service definitions)
+│   └── Circular dependency detection in composition
+└── Internal Representation (IR) generation
+    ├── ServiceMesh graph (vertices=services, edges=RPCs)
+    ├── Per-service config extraction:
+    │   ├── retry policies (retry_count, backoff, jitter)
+    │   ├── timeout values (initial, max, per-try)
+    │   ├── circuit breaker config (consecutive_errors, min_request_volume, max_requests)
+    │   ├── rate limit rules (requests_per_second, burst_size)
+    │   └── resource limits (CPU, memory, connection pools)
+    └── Per-edge config extraction:
+        ├── RPC call patterns (sync/async, fire-and-forget)
+        ├── Load balancing policy
+        ├── Connection settings (timeout, pool size, keepalive)
+        └── Failure mode behaviors (fallback, hedging, mirroring)
+
+Layer 2: Core Verifier (~40K LoC)
+├── SMT Constraint Generation (~12K)
+│   ├── State variable encoding (service state, request queues, CB state, clock values)
+│   ├── Timeout/retry constraint generation (linear constraints over clock variables)
+│   ├── Circuit breaker state machine encoding (finite automata within SMT)
+│   ├── Synchronization constraints (RPC call/return matching)
+│   └── Initial condition encoding (failure injection specification)
+├── Z3 Integration (~8K)
+│   ├── Model construction from constraints
+│   ├── Solver initialization + parameter tuning
+│   ├── Query execution + timeout handling
+│   ├── Model extraction (if satisfiable)
+│   └── Unsatisfiable core analysis
+├── Cascade Reachability Analysis (~15K)
+│   ├── Bounded model checking (BMC) loop (depth d = diameter(G) × max_retries)
+│   ├── Query formulation: "Does there exist initial failure of size k reaching cascade state?"
+│   ├── Reachability proof extraction (execution trace)
+│   ├── State space pruning (symmetry reduction, predicate abstraction)
+│   └── Complexity analysis + timeout management
+├── Minimal Failure Set Discovery (~5K)
+│   ├── MinUnsat-based search for minimal failure combinations
+│   ├── Antichain enumeration (for monotone configs)
+│   ├── Incremental constraint relaxation
+│   └── Result ranking by severity (network position, dependency count)
+
+Layer 3: Repair Synthesis (~35K LoC)
+├── CEGIS Loop for Complex Repairs (~12K)
+│   ├── ∀-phase: Solver finds counter-example failure set violating new configuration
+│   ├── ∃-phase: Parameter adjustment to prevent counter-example
+│   ├── Convergence detection + termination criteria
+│   ├── Intermediate solution collection (track best-so-far)
+│   └── Loop unrolling with lemma learning
+├── MaxSAT Formulation (~15K)
+│   ├── Soft constraint generation from parameter ranges
+│   ├── Hard constraint generation from cascade prevention requirements
+│   ├── Clause weighting for optimization priorities
+│   ├── MaxSAT solver integration (Open-WBO, Glucose, or equiv)
+│   ├── Solution quality metrics
+│   └── Multiple solution generation (Pareto frontier)
+├── Domain-Specific Heuristics (~5K)
+│   ├── Retry budget allocation (distribute across service layers)
+│   ├── Timeout cascading check (t_upstream ≥ sum(t_downstream, retries) + buffer)
+│   ├── Circuit breaker tuning (thresholds relative to baseline SLOs)
+│   ├── Rate limit configuration consistency
+│   └── Feasibility checking (proposed params must respect deployment constraints)
+├── Parameter Search Space Management (~3K)
+│   ├── Bounds on parameters (retry_count ∈ [1,10], timeout ∈ [100ms, 30s], etc.)
+│   ├── Constraint interaction analysis
+│   └── Search space pruning (eliminate dominated parameter combinations)
+
+Layer 4: Compositional Decomposition (~20K LoC)
+├── Service Graph Partitioning (~8K)
+│   ├── Critical path identification (latency-sensitive services)
+│   ├── Partition into verification-tractable subgraphs
+│   ├── Interface contract extraction for cross-partition calls
+│   └── Partition ordering (topological sort for sequential verification)
+├── Per-Component Contract Inference (~7K)
+│   ├── Assume (input assumption from callers): failure probability envelope
+│   ├── Guarantee (output guarantee to callers): steady-state failure rate, latency bounds
+│   ├── L* learning for contract generation (from SMT queries on bounded subgraph)
+│   └── Contract refinement loop (CEGAR-style)
+├── Assume-Guarantee Proof Composition (~5K)
+│   ├── Interface composition operator (merge contracts across partitions)
+│   ├── Proof-by-parts (verify each partition independently)
+│   └── Soundness of decomposition (no cascade can span partitions without violating contracts)
+
+Layer 5: Interface (~20K LoC)
+├── CLI (~8K)
+│   ├── Command-line argument parsing
+│   ├── Configuration file specification (path, format, template overrides)
+│   ├── Output format selection (JSON, YAML, text, HTML)
+│   ├── Filtering options (by service, by failure type, by severity)
+│   └── Batch verification mode (multiple configs)
+├── Result Visualization (~6K)
+│   ├── Cascade path rendering (DAG of failure propagation)
+│   ├── Minimal failure sets displayed with dependency chains
+│   ├── Configuration diff highlighting (which parameters trigger cascade)
+│   ├── Repair suggestions with before/after parameter values
+│   └── Risk metrics (how many services affected, blast radius)
+├── CI/CD Integration (~3K)
+│   ├── GitHub Actions workflow (trigger on PR with config changes)
+│   ├── GitLab CI / ArgoCD integration
+│   ├── Exit codes for CI pipeline (fail/warn/pass)
+│   └── Artifact generation (reports for archival)
+├── IDE Integration (~3K)
+│   ├── VS Code extension for inline warnings
+│   ├── Hover-over explanations of cascade risks
+│   └── Quick-fix suggestions (parameter adjustments)
+
+Layer 6: Testing & Validation (~15K LoC)
+├── Property-Based Testing (~4K)
+│   ├── QuickCheck-style config generators
+│   ├── Invariant checking (verify tool doesn't claim false cascades)
+│   ├── Mutation testing (perturb configs, check results change appropriately)
+│   └── Regression tests against known bad configs
+├── Public Postmortem Suite (~4K)
+│   ├── Extracted configurations from published outage reports
+│   │   ├── AWS S3 2017 cascade (retry storms + timeout chains)
+│   │   ├── Twitter cascading failure incident
+│   │   ├── Facebook DNS cascade
+│   │   └── Various cloud provider documented incidents
+│   ├── Configuration reconstruction from incident descriptions
+│   ├── Ground truth: tool should flag exact failure conditions from postmortem
+│   └── Regression prevention
+├── Benchmark Suite (~4K)
+│   ├── Synthetic topology generation (5, 10, 20, 50, 100, 200 service meshes)
+│   ├── Parameter variation (high/medium/low retry counts, tight/loose timeouts)
+│   ├── Runtime measurement (verification time vs topology size)
+│   ├── Scalability analysis (extrapolation to larger deployments)
+│   └── Memory profiling
+├── Comparison Harness (~2K)
+│   ├── kube-score invocation + result parsing
+│   ├── Istio Analyze invocation + result parsing
+│   ├── OPA/Rego policy evaluation (if applicable)
+│   ├── Side-by-side result comparison
+│   └── Metrics: precision, recall, false positive rate
+└── Soundness Validation (~1K)
+    ├── Injected bug suite (known cascade-triggering configs)
+    ├── Coverage: must detect all injected bugs
+    └── Reporting: false negative analysis
+
+Technical Decisions:
+- Language: TypeScript/JavaScript (for rapid development + cross-platform tooling)
+- SMT backend: Z3 (via node-z3 or subprocess)
+- MaxSAT backend: Open-WBO or Glucose
+- Configuration parsing: Custom YAML parser + existing K8s/Istio schema libraries
+- Storage: Immutable result snapshots for audit trail
+- Architecture: Modular design allows swapping SMT backend if needed
+
+Key Challenges:
+1. Configuration template expansion (Helm, Kustomize) adds 30% complexity
+   - Go template semantics in YAML/JSON context
+   - Value resolution with defaults and nested lookups
+   - Circular dependency handling (templates can reference each other)
+
+2. State explosion in SMT solver
+   - Addressed via predicate abstraction + CEGAR refinement
+   - Timeout/retry loops encoded as bounded depth
+   - Symmetry reduction (equivalent services modulo their parameters)
+
+3. Repair parameter space is high-dimensional
+   - 50+ parameters per configuration (retry counts, timeouts, limits)
+   - MaxSAT + CEGIS needed for non-trivial repairs
+   - Heuristic domain knowledge needed to prune search space
+
+4. Handling Helm/Kustomize template expansion
+   - Configuration files in practice contain Go templates
+   - Values.yaml + overrides + environment-specific patches
+   - Tool must support -f (files) flag to specify value sets
+   - Or defer to user: "Run helm template before verifying"
+
+5. Practical production configs are complex
+   - Multiple namespaces, multiple deployment strategies
+   - Ingress controllers, service mesh control planes, observability sidecars
+   - Tool must filter to "core" services for analysis
+   - Documentation on "what to verify" is critical
+
+Estimated Development Effort:
+- Layer 1 (parsing): 3-4 weeks
+- Layer 2 (verifier): 5-6 weeks
+- Layer 3 (repair): 4-5 weeks
+- Layer 4 (compositional): 2-3 weeks (or 6-8 if from scratch)
+- Layer 5 (interface): 2-3 weeks
+- Layer 6 (testing): 3-4 weeks
+- Integration + documentation: 2-3 weeks
+Total: ~25-30 weeks (~6-7 months) for a team of 3-4 full-time engineers
+
+Quality Gates:
+- All tests pass (including regression + postmortem suite)
+- Code coverage >80% (layers 2-4)
+- Soundness validation: 100% detection of injected bugs
+- Scalability benchmarks meet targets (sub-minute for 50 services)
+- Documentation complete (user guide, architecture, API reference)
+
+================================================================================
+
+SOURCE 4: ADVERSARIAL CRITIQUE (EXCERPT)
+-------------------------------------------
+[Selected high-impact findings from adversarial_critique.md]
+
+CHALLENGE 1: Scalability Reality Check
+Verdict: Almost certainly not in naive encoding.
+
+State explosion facts:
+- 200-service topology with 3 retries each, 5-deep call chains
+- Creates ~200 × 3^5 ≈ 48,600 symbolic states PER TIME STEP
+- Z3 comfortable with 10K-50K constraints; beyond that = minutes-to-hours per query
+
+Empirical evidence:
+- Amazon P (Desai et al., PLDI 2013): ~10-20 components max
+- Jepsen tests: 3-5 nodes standard
+- No existing SMT tool scales to 200-service topologies
+
+Realistic ceiling: 15-30 services with full retry/timeout modeling
+
+CHALLENGE 2: SMT Encoding Novelty
+- Not novel: Z3 for BMC, CEGIS for repair, QF_LIA constraints (all textbook)
+- Somewhat novel: Domain encoding (retry amplification as multiplicative load factors)
+- Requirement: Prove something is decidable that wasn't formalized before
+
+Novelty ratio: ~30% novel formalization, ~70% careful engineering
+
+CHALLENGE 3: Comparison with LDFI (Alvaro et al., SIGMOD 2015)
+Critical baseline: LDFI already uses SAT to find minimal failure sets in distributed systems
+- Core claim "using SMT to find minimal component-failure sets" = LDFI + different encoding
+- Differentiation: LDFI on execution traces; this on static configuration manifests
+- But: requires clear story why static config analysis beats dynamic trace analysis
+
+Monolithic SMT approaches borderline on novelty unless this differentiation is crystal clear.
+
+CHALLENGE 4: Gap vs Circuit Breakers
+Problem: Fault-tolerant mechanisms designed to halt cascades introduce non-monotonicity
+- {A fails, B fails} → cascade
+- {A fails, B fails, D fails} → D's failure trips C's CB first → no cascade (false positive risk!)
+
+This breaks structural monotonicity needed for antichain-based minimal set search.
+
+Solutions:
+A) Restrict configs (loses generality)
+B) Develop "quasi-monotone" theory (novel, risky)
+C) Pay exponential cost (scales worse)
+
+Recommendation: Must address this in formalization or lose claim to correctness.
+
+CHALLENGE 5: Non-Obvious Bugs Requirement
+Existing tools (kube-score, istio-analyze, OPA) catch many config errors.
+
+Gap: No tool models MULTIPLICATIVE retry amplification across service boundaries
+- But must demonstrate this gap matters in practice
+- Evaluation requirement: ≥5 real production incidents where tool catches bug that linters miss
+
+Without this evidence, "we catch things linters don't" is not compelling.
+
+================================================================================
+
+SOURCE 5: PRIOR ART CRITIQUE (EXCERPT)
+----------------------------------------
+[Selected prior art baseline comparisons from prior_art_critique.md]
+
+LDFI (Alvaro et al., SIGMOD 2015) — CRITICAL BASELINE
+What: Uses SAT solvers to find minimal fault sets causing safety violations
+How: Lineage-driven fault injection — models system behavior as boolean lineage
+      Finds minimal input-output dependencies explaining a failure
+Overlap: CORE CLAIM "minimal failure sets via SMT" already done by LDFI in 2015
+Differentiation: LDFI analyzes execution traces post-hoc; this analyzes configs pre-deployment
+Challenge: Must articulate why pre-deployment static analysis is harder/more valuable than post-hoc trace analysis
+
+Verdict: ~25-30% novelty ratio if differentiation is clear; <15% if not
+
+---
+
+Other Direct Competitors:
+
+| Paper | Venue | What | Relevance |
+|-------|-------|------|-----------|
+| Leners et al., "Failure Informers" | NSDI 2013 | Timeout-based failure detection formal model | Partial overlap on timeout-chain modeling |
+| Gunawi et al., "FATE and DESTINI" | NSDI 2011 | Systematic exploration of failure recovery paths | Similar goal (finding cascades), different method (testing vs formal analysis) |
+| Killian et al., "Finding Liveness Bugs" | NSDI 2007 | Model checking for timeout/retry bugs in systems code | Directly relevant — model checking for similar bugs |
+| Yang et al., "MODIST" | NSDI 2009 | Model checking unmodified distributed systems | "Model checking configs" well-explored |
+| Leesatapornwongsa et al., "SAMC" | OSDI 2014 | Semantic-aware model checking for distributed systems | Semantic-guided failure space exploration |
+
+Existing Configuration Linting Tools:
+- **kube-score:** Single-resource checks only
+- **Istio Analyze:** Consistency checks, no cascade modeling
+- **OPA/Rego:** User must write cross-service policies manually
+- **TLA+:** User must encode domain knowledge; no automatic config extraction
+
+No existing tool combines:
+1. Automatic extraction from Kubernetes/Istio/Envoy configs
+2. Cross-manifest cascade reachability reasoning
+3. Formal bounds on retry amplification interactions
+4. Automated repair synthesis
+
+This is the genuine gap, if properly formalized.
+
+---
+
+Tool Ecosystem Assessment:
+
+Runtime Solutions (not static):
+- **Envoy proxy:** Adaptive retry budget enforcement (solves at runtime)
+- **AWS internal tooling:** Retry amplification detection (not published; exists but not academic)
+- **Hystrix/Resilience4j:** Circuit breaker libraries (runtime mitigation)
+
+Reviewer will ask: "Why verify statically when you can test dynamically or enforce at runtime?"
+
+Answer must be: "Static analysis catches rare multi-failure scenarios chaos engineering unlikely to trigger; runtime budgets can fail if initial config is misspecified; formal verification provides bulletproof guarantees."
+
+Evaluation must demonstrate this.
+
+================================================================================
+END OF TECHNICAL EXCERPTS
+================================================================================

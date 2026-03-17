@@ -1,0 +1,91 @@
+[package]
+name = "nlp-metamorphic-localizer-workspace"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/shared-types",
+    "crates/metamorphic-core",
+    "crates/nlp-models",
+    "crates/transformations",
+    "crates/localization",
+    "crates/differential",
+    "crates/statistical-oracle",
+    "crates/grammar-checker",
+    "crates/shrinking",
+    "crates/report-gen",
+    "crates/cli",
+    "crates/evaluation",
+    "crates/test-oracle",
+    "crates/corpus-generator",
+    "crates/pyo3-bridge",
+    "crates/locale-support",
+    "crates/counterexample-db",
+]
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+anyhow = "1.0"
+clap = { version = "4.0", features = ["derive"] }
+rand = "0.8"
+uuid = { version = "1.0", features = ["v4", "v5", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+log = "0.4"
+env_logger = "0.10"
+ordered-float = { version = "4.0", features = ["serde"] }
+indexmap = { version = "2.0", features = ["serde"] }
+petgraph = "0.6"
+rayon = "1.8"
+csv = "1.3"
+toml = "0.8"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[dev-dependencies]
+criterion = { workspace = true }
+shared-types = { path = "crates/shared-types" }
+metamorphic-core = { path = "crates/metamorphic-core" }
+nlp-models = { path = "crates/nlp-models" }
+transformations = { path = "crates/transformations" }
+localization = { path = "crates/localization" }
+differential = { path = "crates/differential" }
+statistical-oracle = { path = "crates/statistical-oracle" }
+grammar-checker = { path = "crates/grammar-checker" }
+shrinking = { path = "crates/shrinking" }
+report-gen = { path = "crates/report-gen" }
+evaluation = { path = "crates/evaluation" }
+test-oracle = { path = "crates/test-oracle" }
+corpus-generator = { path = "crates/corpus-generator" }
+rand = { workspace = true }
+serde_json = { workspace = true }
+
+[lib]
+name = "nlp_metamorphic_localizer"
+path = "src/lib.rs"
+
+[profile.bench]
+debug = true
+
+[[bench]]
+name = "localization_bench"
+harness = false
+
+[[bench]]
+name = "transformation_bench"
+harness = false
+
+[[bench]]
+name = "shrinking_bench"
+harness = false
+
+[[bench]]
+name = "pipeline_bench"
+harness = false
+
+[[bench]]
+name = "real_localization_bench"
+harness = false

@@ -1,0 +1,55 @@
+// SoniType Example: Time Series Sonification
+// =============================================
+// Maps a single-variable time series (e.g., stock price, temperature)
+// to a perceptually optimized audio stream with pitch and loudness encoding.
+//
+// Usage:
+//   sonitype compile time_series.soni -o time_series.wav
+//   sonitype check time_series.soni
+//   sonitype lint time_series.soni
+
+// Declare the data source: a time series with one numeric column.
+data StockPrice {
+    timestamp: Time,
+    price: Float { min: 50.0, max: 500.0 },
+}
+
+// Define the sonification mapping.
+// Pitch maps to price (higher price → higher pitch).
+// Loudness encodes rate of change (large moves → louder).
+stream price_stream {
+    source: StockPrice,
+
+    map price -> pitch {
+        scale: logarithmic,
+        range: 220.0 Hz .. 1760.0 Hz,   // A3 to A6 — comfortable listening range
+        interpolation: linear,
+    },
+
+    map |diff(price)| -> loudness {
+        scale: linear,
+        range: -30 dBFS .. -6 dBFS,     // Quiet for small moves, louder for big
+    },
+
+    map timestamp -> onset {
+        rate: 8 Hz,                       // 8 data points per second
+    },
+
+    // Perceptual constraints (verified at compile time).
+    where {
+        jnd_margin(pitch) >= 2.0,         // At least 2x JND between adjacent values
+        masking_clearance >= 6.0 dB,      // No self-masking
+        cognitive_load <= 1,              // Single stream
+    },
+
+    timbre: "sine_with_harmonics",        // Clean, pitched timbre
+    envelope: { attack: 10 ms, decay: 50 ms, sustain: 0.7, release: 100 ms },
+}
+
+// Compose the output.
+output {
+    streams: [price_stream],
+    sample_rate: 44100 Hz,
+    buffer_size: 512,
+    format: wav { bit_depth: 16 },
+}

@@ -1,0 +1,127 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,booktabs,array,longtable,hyperref}
+\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue}
+
+\title{\textbf{ConservationLint: Conservation-Aware Numerical Auditing with Executable Trace Checks}\\[0.5em]
+\large A tested conservation-auditing workspace with runnable examples and developer-facing reports}
+\author{ConservationLint Team}
+\date{March 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This paper presents \textsc{ConservationLint}, a conservation-aware numerical-auditing workspace for simulation traces and executable physics examples. The repository combines conservation-law types, numerical integrators, statistical detectors, a runtime monitor, runnable Kepler/N-body/fluid examples, and a CLI that audits JSON traces and emits JSON, SARIF, Markdown, and HTML reports. Executable evidence from the repository includes a passing workspace test suite, bundled clean and drifting two-law traces that the CLI separates in sub-millisecond time, and example programs that measure invariant preservation and dissipation on controlled problems. Together these artifacts show that ConservationLint already supports practical conservation-aware debugging and reporting for simulation workflows built around explicit trace data.
+\end{abstract}
+
+\section{Recovered Thesis}
+The repository is most convincing as a \emph{software artifact for conservation-aware numerical experimentation}. In its current, verifiable form it supports three truthful messages:
+
+\begin{enumerate}
+  \item it implements substantial conservation-related functionality in a modular Rust workspace;
+  \item it ships executable examples that visibly distinguish conservation-preserving and conservation-breaking numerics;
+  \item it now exposes a real CLI audit/report workflow over simple multi-law traces;
+  \item it includes synthetic benchmark harnesses that are useful for design exploration, but should not be mistaken for external validation.
+\end{enumerate}
+
+That is still a meaningful contribution, but it is narrower than the earlier story.
+
+\section{Strongest Executable Core}
+The executable core lives in the Rust workspace under \texttt{implementation/}. The most relevant crates are:
+
+\begin{itemize}
+  \item \texttt{sim-laws}: conservation quantities such as energy, momentum, angular momentum, mass, charge, vorticity, and symplectic structure;
+  \item \texttt{sim-integrator}: explicit, symplectic, implicit, and composition integrators;
+  \item \texttt{sim-detect}: statistical and drift-detection utilities;
+  \item \texttt{sim-monitor}: a runtime monitor that emits conservation-drift events;
+  \item \texttt{sim-cli}: a command-line wrapper;
+  \item \texttt{examples/}: standalone demonstrations including Kepler, N-body, and fluid audits.
+\end{itemize}
+
+This workspace is a better foundation for the recovered narrative than the old performance tables, because it is directly executable and was rerun during recovery.
+
+\section{Rerun Evidence}
+Table~\ref{tab:reruns} summarizes the commands we reran and the claims they honestly support.
+
+\begin{longtable}{p{0.29\linewidth}p{0.16\linewidth}p{0.47\linewidth}}
+\caption{Commands rerun during recovery and the evidence they provide.}\label{tab:reruns}\\
+\toprule
+Command & Exit code & Observed result \\
+\midrule
+\endfirsthead
+\toprule
+Command & Exit code & Observed result \\
+\midrule
+\endhead
+\texttt{cargo build --manifest-path implementation/Cargo.toml --workspace} & 0 & Workspace builds successfully in the current repository state. \\
+\texttt{cargo test --manifest-path implementation/Cargo.toml --workspace} & 0 & 381 tests passed across the workspace; one doctest is ignored; no remaining test failures after small numerical/test repairs. \\
+\texttt{cargo run --manifest-path implementation/Cargo.toml -p sim-cli -- audit examples/traces/clean\_orbit\_trace.json --config examples/traces/audit\_strict\_config.json --format json} & 0 & Bundled clean two-law trace passed with 0 violating laws in roughly $0.116$\,ms. \\
+\texttt{cargo run --manifest-path implementation/Cargo.toml -p sim-cli -- audit examples/traces/drift\_orbit\_trace.json --config examples/traces/audit\_strict\_config.json --format sarif} & 0 & Bundled drifting two-law trace failed with 2 violating laws in roughly $0.389$\,ms and produced 2 populated SARIF results. \\
+\texttt{python3 benchmarks/generate\_cli\_trace.py --output /tmp/sim-large-trace.json --samples 10000 --mode drift} + \texttt{cargo run \dots audit /tmp/sim-large-trace.json \dots --format json} & 0 & Generated 20{,}000 total samples across two laws; CLI audit completed in roughly $7.2$\,ms and flagged both laws as violating. \\
+\texttt{cargo run --manifest-path implementation/Cargo.toml -p sim-cli -- list laws} & 0 & CLI listed 8 laws: energy, linear momentum, angular momentum, mass, charge, symplectic form, vorticity, center-of-mass. \\
+\texttt{cargo run --manifest-path implementation/Cargo.toml --example benchmark\_integrators} & 0 & Kepler example produced clear separation between integrator behaviors: Forward Euler max $|\Delta E/E|=9.7763\times10^{-1}$; RK4 $3.5120\times10^{-6}$; Velocity Verlet $7.4136\times10^{-4}$; Yoshida-4 $4.0995\times10^{-7}$. \\
+\texttt{cargo run --manifest-path implementation/Cargo.toml --example nbody\_audit} & 0 & Three-body audit over 50{,}000 steps reported max relative energy drift $5.8920\times10^{-7}$, max momentum deviation $2.7437\times10^{-14}$, max angular-momentum deviation $9.9920\times10^{-15}$, and zero tolerance exceedances. \\
+\texttt{cargo run --manifest-path implementation/Cargo.toml --example fluid\_audit} & 0 & Fluid example showed both preserved and dissipative behavior: advection mass drift stayed at $6.6527\times10^{-16}$, while upwind/shock-capturing cases showed expected energy loss and a Burgers mass warning/failure. \\
+\texttt{python3 benchmarks/baseline\_comparison.py --output benchmarks/baseline\_comparison\_results.rerun.json} & 0 & Synthetic/model benchmark reported 100\% detection and 0\% false positives for a Python-side ``conservationlint'' multi-law detector model, versus 40--70\% detection for single-law baselines. Useful as a design artifact, not as direct Rust-tool validation. \\
+\texttt{bash benchmarks/run\_benchmarks.sh --quick} & 1 & Fails immediately because it expects a repo-root \texttt{target/release/conservation-lint}. Inspection also shows the referenced \texttt{benchmarks/kernels/} path is absent. This runner is not currently trustworthy evidence. \\
+\bottomrule
+\end{longtable}
+
+\section{What the Reruns Show}
+The reruns support a compelling but narrower story.
+
+\subsection{The repository now has a real developer-facing audit path}
+The most important post-recovery improvement is that \texttt{sim-cli} is no longer just a thin registry wrapper. It now accepts simple JSON traces with per-law time series, runs a real multi-law audit, and renders machine-readable reports. On bundled clean/drift fixtures it correctly separates pass from fail, and on a generated 20{,}000-sample two-law trace it still completes in about $7.2$\,ms. That makes the artifact materially stronger as an end-to-end tool, not just as a library collection.
+
+\subsection{The repository can demonstrate conservation behavior, not just describe it}
+The Kepler and N-body examples are the most persuasive pieces of evidence. The Kepler comparison visibly separates a strongly drifting non-symplectic method from methods whose errors remain small or bounded on the shipped problem. The N-body example shows simultaneous monitoring of energy, momentum, and angular momentum with tight reported deviations.
+
+\subsection{The repository contains a serious implementation effort}
+A passing workspace test suite of 381 tests, spread across types, laws, detectors, integrators, monitors, and supporting math utilities, is stronger evidence of substance than unrerun benchmark claims. The tests do not prove field performance, but they do show that the codebase is more than a paper shell.
+
+\subsection{The benchmark harnesses are mostly synthetic}
+The Python baseline comparison is still worth keeping because it is executable and it explains the intended value of multi-law monitoring. However, the current rerun only justifies a claim about a \emph{synthetic benchmark harness}, not about external workloads or product-grade detection rates.
+
+\section{What the Reruns Do \emph{Not} Show}
+We explicitly remove or caveat the following claim families:
+
+\begin{itemize}
+  \item \textbf{Commercial-simulator accuracy claims.} Nothing rerun here demonstrates accuracy on MATLAB, ANSYS, Gazebo, COMSOL, Unity, or other proprietary systems.
+  \item \textbf{State-of-the-art superiority claims.} The repository does not currently supply a trustworthy reproduced comparison against external tools on external corpora.
+  \item \textbf{The old 25-kernel benchmark-runner story.} The shipped runner is broken in the current layout, so it should not anchor the narrative.
+\end{itemize}
+
+\section{Small Repairs Required for Validation}
+To complete a truthful rerun, we made a handful of narrowly scoped fixes that were directly blocking validation:
+
+\begin{itemize}
+  \item explicit \texttt{f64} typing in \texttt{sim-integrator} tests;
+  \item a corrected inverse normal CDF evaluation in \texttt{sim-detect};
+  \item a tolerance short-circuit and zero-mean clean-data test in \texttt{sim-detect};
+  \item a corrected warning-level unit test setup in \texttt{sim-monitor};
+  \item a numerical-tolerance guard for quaternion angular distance in \texttt{sim-types}.
+\end{itemize}
+
+These are small validation repairs, not a broad refactor.
+
+\section{Threats to Validity}
+\paragraph{External validity.}
+The strongest rerun evidence comes from unit tests, examples, and synthetic traces. This is adequate for artifact recovery, but not for broad claims about production simulation codes.
+
+\paragraph{Construct validity.}
+The Python baseline benchmark still models a multi-law detector instead of directly exercising the Rust CLI. The CLI improvement closes some of that gap by providing a real audit path over JSON traces, but the benchmark comparison itself should still be read as a benchmark of the \emph{idea and harness}, not as a direct measurement of deployed tool behavior on external simulators.
+
+\paragraph{Repository validity.}
+The broken benchmark runner is itself evidence that parts of the earlier narrative overreached the currently working artifact.
+
+\section{Conclusion}
+The recovered, truthful story for \textsc{ConservationLint} is straightforward:
+
+\begin{quote}
+This repository is a real, tested implementation of conservation-aware numerical tooling with runnable examples and a working multi-law CLI audit path that demonstrate invariant preservation and drift on controlled problems.
+\end{quote}
+
+That is a smaller claim than the older story, but it is also a stronger one because it is grounded in commands that were actually rerun.
+
+\end{document}

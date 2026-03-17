@@ -1,0 +1,312 @@
+{
+  "project": "SpecOracle Spectral Decomposition Oracle",
+  "version": "1.0.0",
+  "paper": "tool_paper.tex",
+  "claims": [
+    {
+      "id": "E1",
+      "type": "empirical",
+      "claim": "SpecOracle achieves mean conductance 0.098 across 20 instances vs 0.394 for KaHyPar and 0.260 for SATzilla-RF",
+      "evidence": "benchmarks/sota_comparison_results.json field summary: specorc.avg_conductance=0.098, kahypar.avg_conductance=0.394, satzilla.avg_conductance=0.260",
+      "paper_location": "Table 4, Section 5.3",
+      "confidence": 0.95
+    },
+    {
+      "id": "E2",
+      "type": "empirical",
+      "claim": "SpecOracle handles 20/20 instances (100%), KaHyPar 17/20 (85%), SATzilla-RF 17/20 (85%)",
+      "evidence": "benchmarks/sota_comparison_results.json field summary: specorc.success_rate=1.0, kahypar.success_rate=0.85, satzilla.success_rate=0.85",
+      "paper_location": "Table 4, Section 5.3",
+      "confidence": 0.95
+    },
+    {
+      "id": "E3",
+      "type": "empirical",
+      "claim": "SpecOracle avg runtime 2320ms, KaHyPar 476ms, SATzilla-RF 1058ms",
+      "evidence": "benchmarks/sota_comparison_results.json field summary: specorc.avg_runtime_ms=2319, kahypar.avg_runtime_ms=476, satzilla.avg_runtime_ms=1057",
+      "paper_location": "Table 4",
+      "confidence": 0.9
+    },
+    {
+      "id": "E4",
+      "type": "empirical",
+      "claim": "SpecOracle avg memory 97MB, KaHyPar 7.2MB, SATzilla-RF 500MB",
+      "evidence": "benchmarks/sota_comparison_results.json field summary: specorc.avg_memory_mb=96.7, kahypar.avg_memory_mb=7.2, satzilla.avg_memory_mb=500",
+      "paper_location": "Table 4",
+      "confidence": 0.9
+    },
+    {
+      "id": "E5",
+      "type": "empirical",
+      "claim": "Block balance: SpecOracle 0.32, KaHyPar 1.00, SATzilla 0.36",
+      "evidence": "benchmarks/sota_comparison_results.json field summary: specorc.avg_block_balance=0.318, kahypar.avg_block_balance=1.0, satzilla.avg_block_balance=0.361",
+      "paper_location": "Table 4",
+      "confidence": 0.95
+    },
+    {
+      "id": "E6",
+      "type": "empirical",
+      "claim": "scipy ARPACK: 100% success, 0.243s avg, 37.5MB, residual 1.03e-12",
+      "evidence": "benchmarks/real_benchmark_results.json field summary.methods.scipy_arpack: success_rate=1.0, avg_runtime=0.243, avg_memory=37.5, avg_residual=1.03e-12",
+      "confidence": 0.99,
+      "paper_location": "Table 3"
+    },
+    {
+      "id": "E7",
+      "type": "empirical",
+      "claim": "scipy LAPACK: 85% success, 0.144s avg, 2.0MB, residual 2.42e-13",
+      "evidence": "benchmarks/real_benchmark_results.json field summary.methods.scipy_lapack: success_rate=0.85, avg_runtime=0.144, avg_memory=2.0, avg_residual=2.42e-13",
+      "confidence": 0.99,
+      "paper_location": "Table 3"
+    },
+    {
+      "id": "E8",
+      "type": "empirical",
+      "claim": "SpecOracle: 100% success, 2.195s avg, 47.4MB, residual 1.13e-2",
+      "evidence": "benchmarks/real_benchmark_results.json field summary.methods.spectral_oracle: success_rate=1.0, avg_runtime=2.195, avg_memory=47.4, avg_residual=0.0113",
+      "confidence": 0.98,
+      "paper_location": "Table 3"
+    },
+    {
+      "id": "E9",
+      "type": "empirical",
+      "claim": "Eigenvalue error tracks O(eps_mach * kappa) from kappa=1 to 10^15; oracle agreement 100% for kappa>=10",
+      "evidence": "benchmarks/stability_results/numerical_stability_results.json: per-kappa trials confirm linear scaling of eigenvalue error and stable oracle predictions",
+      "paper_location": "Table 6, Figure 4, Section 6",
+      "confidence": 0.92
+    },
+    {
+      "id": "E10",
+      "type": "empirical",
+      "claim": "Oracle agreement at kappa=1 is 92.8% (near-degenerate spectral gap)",
+      "evidence": "benchmarks/stability_results/numerical_stability_results.json: kappa=1 trials mean agreement=0.928",
+      "paper_location": "Table 6",
+      "confidence": 0.9
+    },
+    {
+      "id": "E11",
+      "type": "empirical",
+      "claim": "20-instance suite covers 5 matrix types and 3 size ranges (small n=10-50, medium n=100-500, large n=1000-5000)",
+      "evidence": "benchmarks/real_benchmark_results.json field summary.size_categories and summary.matrix_types: 5 small, 10 medium, 5 large; types: sparse_random, graph_laplacian, covariance, toeplitz, tridiagonal",
+      "paper_location": "Section 5",
+      "confidence": 0.99
+    },
+    {
+      "id": "E12",
+      "type": "empirical",
+      "claim": "75% lower conductance (0.098 vs 0.394 and 0.260) \u2014 stated in conclusion",
+      "evidence": "Computed: 1 - 0.098/0.394 = 0.75 (75% lower than KaHyPar); benchmarks/sota_comparison_results.json",
+      "paper_location": "Conclusion",
+      "confidence": 0.95
+    },
+    {
+      "id": "T1",
+      "type": "theorem",
+      "claim": "Block Detection via Spectral Gap (Theorem 1): if A has k decoupled blocks then lambda_1=...=lambda_k=0 and lambda_{k+1}>0; approximate case bounded by Weyl's inequality",
+      "proof_status": "proven",
+      "proof_location": "Appendix A",
+      "references": [
+        "Fiedler 1973",
+        "Weyl 1912"
+      ],
+      "paper_location": "Theorem 1",
+      "confidence": 0.99
+    },
+    {
+      "id": "T2",
+      "type": "theorem",
+      "claim": "Fiedler Vector Partition Quality (Lemma 1): sign partition cuts at most 2*lambda_2*|E|/d_max edges",
+      "proof_status": "proven",
+      "proof_location": "Appendix B",
+      "references": [
+        "Cheeger 1970",
+        "Alon-Milman 1985",
+        "Chung 1997"
+      ],
+      "paper_location": "Lemma 1",
+      "confidence": 0.99
+    },
+    {
+      "id": "T3",
+      "type": "theorem",
+      "claim": "Spectral Feature Stability (Theorem 2): eigenvalue error bounded by eps_mach*kappa*sqrt(n); Fiedler stability via Davis-Kahan; oracle invariance under sufficient gap",
+      "proof_status": "proven",
+      "proof_location": "Appendix C",
+      "references": [
+        "Demmel 1997",
+        "Weyl 1912",
+        "Davis-Kahan 1970"
+      ],
+      "paper_location": "Theorem 2",
+      "confidence": 0.97
+    },
+    {
+      "id": "I1",
+      "type": "implementation",
+      "claim": "75,761 lines of Rust across 7 crates",
+      "evidence": "tool_paper.tex Table 1: spectral-types 7283 + spectral-core 11552 + matrix-decomp 16693 + oracle 12481 + optimization 17159 + certificate 9595 + spectral-cli 998 = 75761",
+      "paper_location": "Table 1, Section 4",
+      "confidence": 0.95
+    },
+    {
+      "id": "R1",
+      "type": "recommendation",
+      "claim": "For kappa > 10^11 apply Ruiz equilibration before spectral analysis",
+      "evidence": "benchmarks/stability_results/numerical_stability_results.json: eigenvalue errors exceed 10^-5 at kappa=10^12",
+      "paper_location": "Section 6",
+      "confidence": 0.93
+    }
+  ],
+  "citations": [
+    {
+      "key": "dw1960",
+      "status": "verified",
+      "notes": "Dantzig & Wolfe 1960, Oper Res 8(1):101-111"
+    },
+    {
+      "key": "benders1962",
+      "status": "verified",
+      "notes": "Benders 1962, Numer Math 4(1):238-252"
+    },
+    {
+      "key": "fisher1981",
+      "status": "verified",
+      "notes": "Fisher 1981, Mgmt Sci 27(1):1-18"
+    },
+    {
+      "key": "gcg",
+      "status": "verified",
+      "notes": "Gamrath & L\u00fcbbecke 2010, SEA"
+    },
+    {
+      "key": "kahypar",
+      "status": "verified",
+      "notes": "Schlag et al. 2023, ACM JEA 28:1-39"
+    },
+    {
+      "key": "dip",
+      "status": "verified",
+      "notes": "Ralphs & Galati 2005, INFORMS"
+    },
+    {
+      "key": "xu2008",
+      "status": "verified",
+      "notes": "Xu et al. 2008, JAIR 32:565-606"
+    },
+    {
+      "key": "hmetis",
+      "status": "verified",
+      "notes": "Karypis et al. 1997, DAC"
+    },
+    {
+      "key": "bengio2021",
+      "status": "verified",
+      "notes": "Bengio et al. 2021, EJOR 290(2):405-421"
+    },
+    {
+      "key": "gasse2019",
+      "status": "verified",
+      "notes": "Gasse et al. 2019, NeurIPS"
+    },
+    {
+      "key": "tang2020",
+      "status": "verified",
+      "notes": "Tang et al. 2020, ICML"
+    },
+    {
+      "key": "scip",
+      "status": "verified",
+      "notes": "Bestuzheva et al. 2023, ZIB Tech Rep"
+    },
+    {
+      "key": "fiedler1973",
+      "status": "verified",
+      "notes": "Fiedler 1973, Czech Math J 23(2):298-305"
+    },
+    {
+      "key": "shi2000",
+      "status": "verified",
+      "notes": "Shi & Malik 2000, IEEE TPAMI 22(8):888-905"
+    },
+    {
+      "key": "ng2002",
+      "status": "verified",
+      "notes": "Ng, Jordan, Weiss 2002, NeurIPS"
+    },
+    {
+      "key": "spielman2004",
+      "status": "verified",
+      "notes": "Spielman & Teng 2004, STOC"
+    },
+    {
+      "key": "newman2006",
+      "status": "verified",
+      "notes": "Newman 2006, PNAS 103(23):8577-8582"
+    },
+    {
+      "key": "lubbecke2005",
+      "status": "verified",
+      "notes": "L\u00fcbbecke & Desrosiers 2005, Oper Res 53(6):1007-1023"
+    },
+    {
+      "key": "magnanti1981",
+      "status": "verified",
+      "notes": "Magnanti & Wong 1981, Oper Res 29(3):464-484"
+    },
+    {
+      "key": "lemarechal2001",
+      "status": "verified",
+      "notes": "Lemar\u00e9chal 2001, Springer Comp Comb Opt"
+    },
+    {
+      "key": "demmel1997",
+      "status": "verified",
+      "notes": "Demmel 1997, Applied Numerical Linear Algebra, SIAM"
+    },
+    {
+      "key": "gurobi",
+      "status": "verified",
+      "notes": "Gurobi Optimization LLC, 2024"
+    },
+    {
+      "key": "gurobi-benders",
+      "status": "verified",
+      "notes": "Gurobi Benders example documentation"
+    },
+    {
+      "key": "ibm-cplex",
+      "status": "verified",
+      "notes": "IBM CPLEX V22.1 User Manual"
+    },
+    {
+      "key": "ruiz2001",
+      "status": "verified",
+      "notes": "Ruiz 2001, RAL-TR-2001-034"
+    },
+    {
+      "key": "weyl1912",
+      "status": "verified",
+      "notes": "Weyl 1912, Math Ann 71(4):441-479"
+    },
+    {
+      "key": "daviskahan1970",
+      "status": "verified",
+      "notes": "Davis & Kahan 1970, SIAM J Numer Anal 7(1):1-46"
+    },
+    {
+      "key": "cheeger1970",
+      "status": "verified",
+      "notes": "Cheeger 1970, Problems in Analysis, Princeton"
+    },
+    {
+      "key": "alon1985",
+      "status": "verified",
+      "notes": "Alon & Milman 1985, J Combin Theory B 38(1):73-88"
+    },
+    {
+      "key": "chung1997",
+      "status": "verified",
+      "notes": "Chung 1997, Spectral Graph Theory, AMS"
+    }
+  ]
+}

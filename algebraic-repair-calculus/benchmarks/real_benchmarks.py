@@ -429,7 +429,7 @@ _DBT_SCHEMA_EVOLUTIONS = [
         "description": "Rename status → order_status in stg_orders",
         "model": "stg_orders",
         "delta": SchemaOperation(op_type=SchemaOpType.RENAME_COLUMN,
-                                  column_name="status", new_name="order_status"),
+                                  column_name="status", new_column_name="order_status"),
     },
     {
         "description": "Retype amount from REAL to DECIMAL in stg_payments",

@@ -1,0 +1,86 @@
+# Strategic Bidding in an Electricity Market
+#
+# A strategic producer (leader) chooses bid prices for two generators to
+# maximize profit, anticipating that the market operator (follower) will
+# clear the market by minimizing total procurement cost.
+#
+# Leader (strategic producer):
+#   Owns Generator 1 (capacity 100 MW, marginal cost $20/MWh)
+#   Owns Generator 2 (capacity  80 MW, marginal cost $30/MWh)
+#   Chooses bid prices b1, b2 ($/MWh)
+#   Profit = (b1 - 20) * p1 + (b2 - 30) * p2
+#
+# Follower (market operator):
+#   Minimizes total cost: b1*p1 + b2*p2 + 50*p3
+#   Subject to demand = 150 MW
+#   Generator 3 (competitor): capacity 120 MW, cost $50/MWh
+#   0 <= p1 <= 100, 0 <= p2 <= 80, 0 <= p3 <= 120
+#
+# The strategic producer bids above marginal cost to increase profit,
+# constrained by the competitor's price ($50/MWh).
+
+[problem]
+name = "strategic_bidding"
+description = "Two-generator strategic bidding in a simple electricity market"
+type = "bilevel-lp"
+
+[leader]
+objective = "maximize"
+description = "Maximize profit: (bid - cost) * dispatch for each owned generator"
+
+[leader.variables]
+b1 = { lower = 20.0, upper = 100.0, description = "Bid price for generator 1 ($/MWh)" }
+b2 = { lower = 30.0, upper = 100.0, description = "Bid price for generator 2 ($/MWh)" }
+
+# Leader objective is nonlinear: (b1 - 20)*p1 + (b2 - 30)*p2
+# We introduce auxiliary variables for the bilinear terms.
+# revenue1 = b1 * p1,  revenue2 = b2 * p2
+# profit = revenue1 - 20*p1 + revenue2 - 30*p2
+[leader.objective_expression]
+type = "bilinear"
+terms = [
+    { coeff = 1.0,  var1 = "b1", var2 = "p1" },
+    { coeff = -20.0, var1 = "p1" },
+    { coeff = 1.0,  var1 = "b2", var2 = "p2" },
+    { coeff = -30.0, var1 = "p2" },
+]
+
+[[leader.constraints]]
+name = "bid1_above_cost"
+description = "Generator 1 bid must be at or above marginal cost"
+coefficients = { b1 = 1.0 }
+sense = ">="
+rhs = 20.0
+
+[[leader.constraints]]
+name = "bid2_above_cost"
+description = "Generator 2 bid must be at or above marginal cost"
+coefficients = { b2 = 1.0 }
+sense = ">="
+rhs = 30.0
+
+[follower]
+objective = "minimize"
+description = "Market clearing: minimize total procurement cost to meet demand"
+
+[follower.variables]
+p1 = { lower = 0.0, upper = 100.0, description = "Dispatch of generator 1 (MW)" }
+p2 = { lower = 0.0, upper =  80.0, description = "Dispatch of generator 2 (MW)" }
+p3 = { lower = 0.0, upper = 120.0, description = "Dispatch of generator 3 — competitor (MW)" }
+
+# Follower objective: b1*p1 + b2*p2 + 50*p3
+# b1, b2 are parameters from the leader
+[follower.objective_expression]
+type = "parametric_linear"
+terms = [
+    { coeff_var = "b1", var = "p1" },
+    { coeff_var = "b2", var = "p2" },
+    { coeff = 50.0,     var = "p3" },
+]
+
+[[follower.constraints]]
+name = "demand_balance"
+description = "Total dispatch must equal demand of 150 MW"
+coefficients = { p1 = 1.0, p2 = 1.0, p3 = 1.0 }
+sense = "="
+rhs = 150.0

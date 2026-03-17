@@ -1,0 +1,87 @@
+// SoniType Example: Medical Alarm Palette
+//
+// Demonstrates the safety-critical use case: designing a set of
+// medical alarms that are guaranteed to be perceptually discriminable.
+// Based on IEC 60601-1-8 alarm categories.
+//
+// Run: cargo run --bin sonitype -- compile examples/medical_alarms.soni
+
+sonification icu_alarms {
+    title: "ICU Medical Alarm Palette"
+    description: "Perceptually optimized alarm set for intensive care monitoring"
+
+    // Each alarm is a distinct stream with guaranteed discriminability.
+
+    stream cardiac_alarm {
+        parameter: pitch
+        mapping: constant
+        frequency: 880 Hz  // A5, high register for urgency
+        timbre: square { duty_cycle: 0.5 }
+        pattern: rhythmic { on: 150 ms, off: 150 ms, repeat: 3 }
+        priority: high
+        loudness: 75 dB
+    }
+
+    stream respiratory_alarm {
+        parameter: pitch
+        mapping: constant
+        frequency: 440 Hz  // A4, mid register
+        timbre: triangle
+        pattern: rhythmic { on: 200 ms, off: 300 ms, repeat: 2 }
+        priority: high
+        loudness: 72 dB
+    }
+
+    stream spo2_alarm {
+        parameter: pitch
+        mapping: constant
+        frequency: 1320 Hz  // E6, high-mid register
+        timbre: sine
+        pattern: continuous { duration: 500 ms }
+        priority: medium
+        loudness: 68 dB
+    }
+
+    stream blood_pressure_alarm {
+        parameter: pitch
+        mapping: constant
+        frequency: 220 Hz  // A3, low register
+        timbre: sawtooth { rolloff: -6 dB/octave }
+        pattern: rhythmic { on: 100 ms, off: 200 ms, repeat: 4 }
+        priority: medium
+        loudness: 70 dB
+    }
+
+    stream infusion_alarm {
+        parameter: pitch
+        mapping: constant
+        frequency: 587 Hz  // D5
+        timbre: sine { harmonics: [1.0, 0.0, 0.3] }
+        pattern: rhythmic { on: 250 ms, off: 750 ms, repeat: 1 }
+        priority: low
+        loudness: 60 dB
+    }
+
+    // Strict perceptual constraints for safety-critical application
+    constraints {
+        // All pairs must be strongly segregated
+        segregation(*): >= "strong"
+
+        // Generous JND margins for noisy ICU environment
+        pitch_jnd_margin: >= 3.0
+        loudness_jnd_margin: >= 2.5
+        temporal_jnd_margin: >= 2.0
+
+        // Masking protection across all Bark bands
+        masking_clearance: >= 10 dB across all bark bands
+
+        // Working memory budget
+        cognitive_load: <= 5  // 5 alarms at Cowan's limit
+    }
+
+    output {
+        format: wav { sample_rate: 44100, bit_depth: 24 }
+        // Generate individual alarm files and combined palette
+        individual_files: true
+    }
+}

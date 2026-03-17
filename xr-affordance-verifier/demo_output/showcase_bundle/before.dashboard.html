@@ -1,0 +1,2008 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XR Accessibility Remediation Showcase — Before Remediation</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --panel: rgba(9, 18, 34, 0.84);
+      --panel-strong: rgba(10, 22, 42, 0.96);
+      --line: rgba(148, 163, 184, 0.16);
+      --text: #e5eefc;
+      --muted: #9bb0cc;
+      --green: #22c55e;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+      --blue: #38bdf8;
+      --violet: #8b5cf6;
+      --cyan: #2dd4bf;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+      --radius: 20px;
+      --grid: minmax(0, 1fr);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background:
+      radial-gradient(circle at top right, rgba(45, 212, 191, 0.12), transparent 30%),
+      radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 28%),
+      linear-gradient(180deg, #08101d 0%, #030712 100%);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100%;
+    }
+    body { padding: 28px; }
+    .shell { max-width: 1520px; margin: 0 auto; display: grid; gap: 22px; }
+    .hero {
+      background: linear-gradient(135deg, rgba(14, 27, 52, 0.95), rgba(4, 10, 24, 0.96));
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      padding: 28px 30px;
+      box-shadow: var(--shadow);
+      display: grid;
+      grid-template-columns: 1.7fr 1fr;
+      gap: 20px;
+      overflow: hidden;
+      position: relative;
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: -80px -40px auto auto;
+      width: 320px;
+      height: 320px;
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.18), transparent 70%);
+      pointer-events: none;
+    }
+    .eyebrow {
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-size: 12px;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+    h1 { margin: 0 0 12px; font-size: clamp(30px, 4vw, 46px); line-height: 1.02; }
+    .subhead { color: var(--muted); font-size: 15px; line-height: 1.6; max-width: 72ch; }
+    .hero-stats { display: grid; gap: 12px; align-content: start; }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .pill {
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.05);
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .grade-pill { font-weight: 800; color: white; }
+    .grade-full { background: rgba(34,197,94,0.18); border-color: rgba(34,197,94,0.35); }
+    .grade-partial { background: rgba(245,158,11,0.18); border-color: rgba(245,158,11,0.35); }
+    .grade-weak { background: rgba(239,68,68,0.18); border-color: rgba(239,68,68,0.35); }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+    .metric-card, .panel {
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .metric-card { padding: 18px 18px 16px; }
+    .metric-label { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+    .metric-value { margin-top: 10px; font-size: 30px; font-weight: 800; }
+    .metric-note { margin-top: 8px; color: var(--muted); font-size: 13px; }
+    .presentation-panel { padding: 20px; }
+    .presentation-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 18px; }
+    .presentation-copy { max-width: 70ch; }
+    .presentation-head .eyebrow { margin-bottom: 8px; }
+    .presentation-head h2 { margin: 0 0 6px; font-size: 24px; }
+    .presentation-head p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .presentation-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: flex-end; }
+    .demo-dock { padding: 18px 20px; }
+    .demo-dock-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; align-items: start; }
+    .dock-copy h2 { margin: 0 0 6px; font-size: 22px; }
+    .dock-copy p { margin: 0; color: var(--muted); line-height: 1.6; }
+    .control-cluster { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+    .control-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-width: 132px;
+      padding: 11px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.045);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+    }
+    .control-btn:hover { transform: translateY(-1px); border-color: rgba(56,189,248,0.34); }
+    .control-btn.active { background: rgba(56,189,248,0.18); border-color: rgba(56,189,248,0.42); }
+    .control-btn.warn { background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.28); }
+    .control-strip { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .status-chip strong { color: var(--text); }
+    body.presenter-mode { padding: 12px; }
+    body.presenter-mode .shell { max-width: none; gap: 16px; }
+    body.presenter-mode .hero,
+    body.presenter-mode .panel,
+    body.presenter-mode .metric-card { box-shadow: 0 28px 70px rgba(0, 0, 0, 0.45); }
+    body.presenter-mode .slide-title { font-size: clamp(34px, 4vw, 52px); }
+    body.presenter-mode .presentation-stage { grid-template-columns: 1.5fr 0.85fr; }
+    .nav-btn { min-width: 96px; justify-content: center; display: inline-flex; align-items: center; gap: 8px; }
+    .slide-counter { color: var(--muted); font-size: 13px; min-width: 84px; text-align: center; }
+    .presentation-stage { display: grid; grid-template-columns: 1.35fr 0.9fr; gap: 18px; }
+    .slide-card, .slide-side {
+      border-radius: 22px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: linear-gradient(180deg, rgba(14, 24, 45, 0.98), rgba(6, 11, 24, 0.95));
+      overflow: hidden;
+      position: relative;
+    }
+    .slide-card::after {
+      content: "";
+      position: absolute;
+      inset: auto -60px -90px auto;
+      width: 260px;
+      height: 260px;
+      background: radial-gradient(circle, rgba(139,92,246,0.16), transparent 68%);
+      pointer-events: none;
+    }
+    .slide-inner { padding: 24px; position: relative; z-index: 1; }
+    .slide-kicker { color: var(--cyan); text-transform: uppercase; letter-spacing: 0.16em; font-size: 12px; font-weight: 800; margin-bottom: 10px; }
+    .slide-title { margin: 0 0 10px; font-size: clamp(28px, 3vw, 40px); line-height: 1.05; }
+    .slide-summary { color: var(--muted); font-size: 15px; line-height: 1.7; max-width: 64ch; }
+    .slide-columns { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 18px; margin-top: 22px; }
+    .bullet-list { margin: 0; padding-left: 18px; display: grid; gap: 10px; }
+    .bullet-list li { color: var(--text); line-height: 1.55; }
+    .bullet-list li span { color: var(--muted); }
+    .slide-callout {
+      border-radius: 18px;
+      padding: 16px;
+      background: rgba(255,255,255,0.035);
+      border: 1px solid rgba(255,255,255,0.06);
+      margin-top: 18px;
+    }
+    .slide-callout strong { display: block; margin-bottom: 8px; }
+    .cta-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+    .cta-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 12px;
+      padding: 10px 14px;
+      background: rgba(56, 189, 248, 0.16);
+      border: 1px solid rgba(56, 189, 248, 0.32);
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .slide-side { padding: 18px; display: grid; gap: 14px; align-content: start; }
+    .stats-grid { display: grid; gap: 12px; }
+    .stat-card { border-radius: 16px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.06); padding: 14px; }
+    .stat-card .label { font-size: 11px; }
+    .stat-card .value { font-size: 24px; margin-top: 8px; }
+    .stat-card .metric-note { margin-top: 6px; }
+    .notes-card, .command-card { border-radius: 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); padding: 14px; }
+    .notes-card h3, .command-card h3 { margin: 0 0 8px; font-size: 16px; }
+    .notes-card p { margin: 0; color: var(--muted); line-height: 1.6; }
+    .command-list { display: grid; gap: 10px; }
+    .command-item {
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(2, 6, 23, 0.72);
+      padding: 12px;
+      overflow: auto;
+    }
+    .command-item .cmd-label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; }
+    .command-item code { color: #c9e9ff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre-wrap; }
+    .slide-progress { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .slide-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.08);
+      cursor: pointer;
+      transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+    }
+    .slide-dot.active { background: var(--blue); border-color: rgba(56, 189, 248, 0.5); transform: scale(1.08); }
+    .grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; }
+    .stack { display: grid; gap: 20px; }
+    .panel { padding: 18px; overflow: hidden; }
+    .panel h2 { margin: 0 0 4px; font-size: 19px; }
+    .panel p.lead { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .form-field { display: grid; gap: 8px; }
+    .form-field.full { grid-column: 1 / -1; }
+    .form-field label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+    .form-field input,
+    .form-field select,
+    .form-field textarea {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 11px 12px;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    .form-field textarea { min-height: 92px; resize: vertical; }
+    .checkbox-row { display: flex; align-items: center; gap: 10px; padding-top: 8px; }
+    .checkbox-row input { width: 16px; height: 16px; accent-color: var(--blue); }
+    .form-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    .eval-shell { display: grid; gap: 16px; }
+    .eval-summary {
+      border-radius: 18px;
+      padding: 18px;
+      background: linear-gradient(135deg, rgba(14, 27, 52, 0.96), rgba(6, 12, 25, 0.96));
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .eval-title { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 10px; }
+    .eval-title h3 { margin: 0; font-size: 22px; }
+    .eval-badge { border-radius: 999px; padding: 8px 12px; font-size: 12px; font-weight: 800; }
+    .eval-badge.pass { background: rgba(34,197,94,0.16); color: #86efac; }
+    .eval-badge.warn { background: rgba(245,158,11,0.14); color: #fde68a; }
+    .eval-badge.fail { background: rgba(239,68,68,0.16); color: #fca5a5; }
+    .eval-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .eval-card { border-radius: 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); padding: 14px; }
+    .eval-card h4 { margin: 0 0 8px; font-size: 15px; }
+    .eval-card ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
+    .score-row { display: grid; gap: 8px; }
+    .score-row .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+    .score-row .value { font-size: 26px; font-weight: 800; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; align-items: center; }
+    .toolbar button, .toolbar select, .toolbar input {
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+    .toolbar button.active { background: rgba(56, 189, 248, 0.18); border-color: rgba(56, 189, 248, 0.42); }
+    .scene-stage {
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: linear-gradient(180deg, rgba(11,20,36,0.98), rgba(7,12,22,0.92));
+      padding: 10px;
+    }
+    canvas { width: 100%; display: block; border-radius: 12px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; font-size: 12px; color: var(--muted); }
+    .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 999px; margin-right: 8px; vertical-align: baseline; }
+    .legend .full::before { background: var(--green); }
+    .legend .partial::before { background: var(--yellow); }
+    .legend .weak::before { background: var(--red); }
+    .legend .neutral::before { background: var(--blue); }
+    .split { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 16px; }
+    .detail-card {
+      border-radius: 18px;
+      background: var(--panel-strong);
+      border: 1px solid rgba(255,255,255,0.06);
+      padding: 16px;
+    }
+    .detail-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .kv { display: grid; grid-template-columns: 110px 1fr; row-gap: 8px; column-gap: 10px; font-size: 13px; }
+    .kv .k { color: var(--muted); }
+    .scorebar { height: 10px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; margin-top: 12px; }
+    .scorebar > div { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--violet), var(--blue)); }
+    .list { display: grid; gap: 10px; max-height: 560px; overflow: auto; padding-right: 4px; }
+    .list-item {
+      border: 1px solid rgba(255,255,255,0.07);
+      background: rgba(255,255,255,0.035);
+      border-radius: 16px;
+      padding: 14px;
+      cursor: pointer;
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+    }
+    .list-item:hover { transform: translateY(-1px); border-color: rgba(56,189,248,0.35); }
+    .list-item.selected { background: rgba(56,189,248,0.10); border-color: rgba(56,189,248,0.42); }
+    .row { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+    .row strong { font-size: 15px; }
+    .muted { color: var(--muted); }
+    .tiny { font-size: 12px; }
+    .badge { border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 700; }
+    .badge.pass { background: rgba(34,197,94,0.16); color: #86efac; }
+    .badge.warn { background: rgba(245,158,11,0.14); color: #fcd34d; }
+    .badge.fail { background: rgba(239,68,68,0.16); color: #fca5a5; }
+    .mini-bar { margin-top: 10px; height: 8px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; }
+    .mini-bar > div { height: 100%; border-radius: inherit; }
+    .svg-wrap {
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: linear-gradient(180deg, rgba(8,14,26,0.96), rgba(5,8,18,0.96));
+      min-height: 240px;
+      overflow: hidden;
+    }
+    svg text { fill: var(--text); font-family: inherit; }
+    .violation { border-left: 3px solid var(--red); padding-left: 14px; margin-bottom: 14px; }
+    .empty { color: var(--muted); padding: 14px 2px; font-style: italic; }
+    .footer { text-align: center; color: var(--muted); font-size: 12px; padding: 8px 0 18px; }
+    @media (max-width: 1180px) {
+      .presentation-stage, .slide-columns,
+      .hero, .grid, .split { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 720px) {
+      body { padding: 16px; }
+      .metrics { grid-template-columns: 1fr; }
+      .kv { grid-template-columns: 1fr; }
+      .presentation-head { align-items: stretch; }
+      .presentation-controls { justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">XR Affordance Verifier • Demo Dashboard</div>
+        <h1 id="hero-title">Loading scene…</h1>
+        <div class="subhead" id="hero-description"></div>
+        <div class="pill-row" id="hero-pills"></div>
+      </div>
+      <div class="hero-stats" id="hero-highlights"></div>
+    </section>
+
+    <section class="panel demo-dock">
+      <div class="demo-dock-grid">
+        <div class="dock-copy">
+          <div class="eyebrow">Live Demo Controls</div>
+          <h2>Run this like a polished product demo</h2>
+          <p>Drive the dashboard from the keyboard or the control dock. Start an autoplay tour, switch into presenter mode, reset the spotlight, and jump straight into the interactive explorer without leaving the app.</p>
+          <div class="control-strip" id="demo-status-strip"></div>
+        </div>
+        <div>
+          <div class="control-cluster">
+            <button id="tour-toggle" class="control-btn">Start tour</button>
+            <button id="presenter-toggle" class="control-btn">Presenter mode</button>
+            <button id="fullscreen-toggle" class="control-btn">Fullscreen</button>
+            <button id="focus-reset" class="control-btn warn">Reset focus</button>
+            <button id="jump-scene" class="control-btn">Jump to explorer</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel presentation-panel">
+      <div class="presentation-head">
+        <div class="presentation-copy">
+          <div class="eyebrow">Presentation Mode</div>
+          <h2>Built-in talk track for a flashy live demo</h2>
+          <p>Use these slide-style panels to explain the motivation, the verification method, the scene story, and the live walkthrough without leaving the dashboard.</p>
+        </div>
+        <div class="presentation-controls">
+          <button id="slide-prev" class="nav-btn">← Prev</button>
+          <div id="slide-counter" class="slide-counter">1 / 1</div>
+          <button id="slide-next" class="nav-btn">Next →</button>
+          <button id="slide-notes-toggle" class="nav-btn">Hide notes</button>
+        </div>
+      </div>
+      <div class="presentation-stage">
+        <div id="slide-card" class="slide-card"></div>
+        <div id="slide-side" class="slide-side"></div>
+      </div>
+      <div id="slide-progress" class="slide-progress"></div>
+    </section>
+
+    <section class="metrics" id="metric-grid"></section>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>Interactive Evaluation Form</h2>
+        <p class="lead">Fill out a live review form, choose the affordance and acceptance thresholds, and let the app evaluate scene readiness from the loaded evidence.</p>
+        <form id="evaluation-form">
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="reviewer-name">Reviewer</label>
+              <input id="reviewer-name" name="reviewerName" type="text" placeholder="Demo presenter" />
+            </div>
+            <div class="form-field">
+              <label for="review-goal">Review goal</label>
+              <select id="review-goal" name="reviewGoal">
+                <option value="launch-readiness">Launch readiness</option>
+                <option value="remediation">Remediation planning</option>
+                <option value="compliance">Compliance evidence</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label for="target-element">Target affordance</label>
+              <select id="target-element" name="targetElement"></select>
+            </div>
+            <div class="form-field">
+              <label for="interaction-target">Interaction focus</label>
+              <select id="interaction-target" name="interactionTarget"></select>
+            </div>
+            <div class="form-field">
+              <label for="min-coverage">Minimum coverage (%)</label>
+              <input id="min-coverage" name="minCoverage" type="number" min="0" max="100" step="0.1" value="95" />
+            </div>
+            <div class="form-field">
+              <label for="max-violations">Maximum violations</label>
+              <input id="max-violations" name="maxViolations" type="number" min="0" step="1" value="0" />
+            </div>
+            <div class="form-field full">
+              <label for="review-notes">Presenter notes</label>
+              <textarea id="review-notes" name="reviewNotes" placeholder="Optional context for this evaluation run"></textarea>
+            </div>
+            <div class="form-field full">
+              <div class="checkbox-row">
+                <input id="protect-critical" name="protectCritical" type="checkbox" checked />
+                <label for="protect-critical">Require high-priority affordances to be violation-free</label>
+              </div>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="control-btn active">Evaluate scene</button>
+            <button type="button" id="evaluation-fill-focus" class="control-btn">Use current focus</button>
+            <button type="button" id="evaluation-reset" class="control-btn">Reset form</button>
+          </div>
+        </form>
+      </div>
+      <div class="panel">
+        <h2>Evaluation Result</h2>
+        <p class="lead">Every submission produces a concrete verdict and a breakdown of the evidence used to reach it.</p>
+        <div id="evaluation-results" class="eval-shell"></div>
+      </div>
+    </section>
+
+    <section id="scene-explorer" class="grid">
+      <div class="stack">
+        <div class="panel">
+          <h2>Interactive Scene Explorer</h2>
+          <p class="lead">Top, front, and side projections with accessibility-aware coloring. Click any element to inspect its affordance story.</p>
+          <div class="toolbar">
+            <button data-projection="top" class="projection-btn active">Top</button>
+            <button data-projection="front" class="projection-btn">Front</button>
+            <button data-projection="side" class="projection-btn">Side</button>
+            <select id="interaction-filter"></select>
+            <input id="search-box" type="search" placeholder="Search elements…" />
+          </div>
+          <div class="scene-stage">
+            <canvas id="scene-canvas" width="980" height="520"></canvas>
+          </div>
+          <div class="legend">
+            <span class="full">High coverage</span>
+            <span class="partial">Moderate coverage</span>
+            <span class="weak">Needs work</span>
+            <span class="neutral">No certificate yet</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Dependency Flow</h2>
+          <p class="lead">A visual storyline for sequencing, enablement, and gating constraints across the scene.</p>
+          <div class="svg-wrap">
+            <svg id="dependency-graph" viewBox="0 0 1000 360" preserveAspectRatio="xMidYMid meet"></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="stack">
+        <div class="panel">
+          <h2>Selected Element</h2>
+          <p class="lead">Coverage, actuator, interaction mode, and demo-relevant context for the current focus element.</p>
+          <div class="split">
+            <div class="detail-card">
+              <div class="detail-title" id="selected-title">Choose an element</div>
+              <div class="kv" id="selected-kv"></div>
+              <div class="scorebar"><div id="selected-coverage-bar" style="width:0%"></div></div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-title">Accessibility Notes</div>
+              <div id="selected-notes" class="muted">Select an element to reveal targeted insights.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Element Coverage</h2>
+          <p class="lead">Sorted list for demo triage and storytelling. Great for finding the strongest and weakest affordances fast.</p>
+          <div class="list" id="element-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>Verification Insights</h2>
+        <p class="lead">What the current certificate or pipeline run says about scene readiness, uncertainty, and failure hotspots.</p>
+        <div id="insights"></div>
+      </div>
+      <div class="panel">
+        <h2>Violations & Risk Callouts</h2>
+        <p class="lead">Most important issues to show or fix before the live demo.</p>
+        <div id="violations"></div>
+      </div>
+    </section>
+
+    <div class="footer">Self-contained dashboard generated by XR Affordance Verifier. No external assets or network fetches required.</div>
+  </div>
+
+  <script id="xr-data" type="application/json">{
+  "certificate": {
+    "delta": 0.050000000000000044,
+    "epsilonAnalytical": 0.01,
+    "epsilonEstimated": 0.016845176105008942,
+    "grade": "Weak",
+    "id": "cd10404f-a739-40bd-86f0-bf2ba6e82ab1",
+    "kappa": 0.4306153846153846,
+    "passCount": 2799,
+    "sampleCount": 6500,
+    "totalTimeS": 0.011397708,
+    "verifiedRegions": 0,
+    "violations": 9
+  },
+  "dependencies": [],
+  "elements": [
+    {
+      "actuator": "Hand",
+      "coverage": 0.0,
+      "depth": 0,
+      "feedbackType": "Visual",
+      "hasViolation": true,
+      "id": "c750b983-1d1c-42cc-bf9e-d5546a894898",
+      "incoming": 0,
+      "interactionType": "Click",
+      "interactionTypeDescription": "Click/press interaction",
+      "label": "Floor Button",
+      "minDuration": 0.0,
+      "name": "too_low_btn",
+      "outgoing": 0,
+      "position": [
+        0.0,
+        0.1,
+        -0.5
+      ],
+      "priority": 1,
+      "shortLabel": "TLB",
+      "sustained": false,
+      "tags": [],
+      "violations": [
+        "Element 'too_low_btn' unreachable for 100.0% of population"
+      ]
+    },
+    {
+      "actuator": "Hand",
+      "coverage": 0.0,
+      "depth": 0,
+      "feedbackType": "Visual",
+      "hasViolation": true,
+      "id": "0adac0db-2272-409d-939b-965a6bd038c4",
+      "incoming": 0,
+      "interactionType": "Click",
+      "interactionTypeDescription": "Click/press interaction",
+      "label": "Ceiling Button",
+      "minDuration": 0.0,
+      "name": "too_high_btn",
+      "outgoing": 0,
+      "position": [
+        0.0,
+        2.8,
+        -0.5
+      ],
+      "priority": 1,
+      "shortLabel": "THB",
+      "sustained": false,
+      "tags": [],
+      "violations": [
+        "Element 'too_high_btn' unreachable for 100.0% of population"
+      ]
+    },
+    {
+      "actuator": "Hand",
+      "coverage": 0.488,
+      "depth": 0,
+      "feedbackType": "Visual",
+      "hasViolation": true,
+      "id": "4f6b8828-5d50-4a4b-bd03-7af500de5528",
+      "incoming": 0,
+      "interactionType": "Click",
+      "interactionTypeDescription": "Click/press interaction",
+      "label": "Close A",
+      "minDuration": 0.0,
+      "name": "close_a",
+      "outgoing": 0,
+      "position": [
+        0.5,
+        1.2,
+        -0.5
+      ],
+      "priority": 1,
+      "shortLabel": "CA",
+      "sustained": false,
+      "tags": [],
+      "violations": [
+        "Element 'close_a' unreachable for 51.2% of population"
+      ]
+    },
+    {
+      "actuator": "Hand",
+      "coverage": 0.382,
+      "depth": 0,
+      "feedbackType": "Visual",
+      "hasViolation": true,
+      "id": "2777476e-237b-4278-a0e3-49bca6e5899c",
+      "incoming": 0,
+      "interactionType": "Click",
+      "interactionTypeDescription": "Click/press interaction",
+      "label": "Close B",
+      "minDuration": 0.0,
+      "name": "close_b",
+      "outgoing": 0,
+      "position": [
+        0.51,
+        1.2,
+        -0.5
+      ],
+      "priority": 1,
+      "shortLabel": "CB",
+      "sustained": false,
+      "tags": [],
+      "violations": [
+        "Element 'close_b' unreachable for 61.8% of population"
+      ]
+    },
+    {
+      "actuator": "Hand",
+      "coverage": 0.488,
+      "depth": 0,
+      "feedbackType": "Visual",
+      "hasViolation": true,
+      "id": "61b54ee6-d422-49ca-bfef-e8a76fff0fad",
+      "incoming": 0,
+      "interactionType": "Click",
+      "interactionTypeDescription": "Click/press interaction",
+      "label": "Tiny Button",
+      "minDuration": 0.0,
+      "name": "tiny_btn",
+      "outgoing": 0,
+      "position": [
+        -0.5,
+        1.2,
+        -0.5
+      ],
+      "priority": 1,
+      "shortLabel": "TB",
+      "sustained": false,
+      "tags": [],
+      "violations": [
+        "Element 'tiny_btn' unreachable for 51.2% of population"
+      ]
+    },
+    {
+      "actuator": "Hand",
+      "coverage": 0.0,
+      "depth": 0,
+      "feedbackType": "Visual",
+      "hasViolation": true,
+      "id": "96b89b3c-5d2d-4bae-89e9-a924663998d2",
+      "incoming": 0,
+      "interactionType": "Click",
+      "interactionTypeDescription": "Click/press interaction",
+      "label": "Outside Button",
+      "minDuration": 0.0,
+      "name": "outside_btn",
+      "outgoing": 0,
+      "position": [
+        10.0,
+        1.2,
+        10.0
+      ],
+      "priority": 1,
+      "shortLabel": "OB",
+      "sustained": false,
+      "tags": [],
+      "violations": [
+        "Element 'outside_btn' unreachable for 100.0% of population"
+      ]
+    },
+    {
+      "actuator": "Hand",
+      "coverage": 1.0,
+      "depth": 0,
+      "feedbackType": "Visual",
+      "hasViolation": false,
+      "id": "6bb57825-223d-4e79-9f35-288ad1f95241",
+      "incoming": 0,
+      "interactionType": "Click",
+      "interactionTypeDescription": "Click/press interaction",
+      "label": null,
+      "minDuration": 0.0,
+      "name": "no_label_btn",
+      "outgoing": 0,
+      "position": [
+        -0.3,
+        1.2,
+        -0.5
+      ],
+      "priority": 1,
+      "shortLabel": "NLB",
+      "sustained": false,
+      "tags": [],
+      "violations": []
+    },
+    {
+      "actuator": "Hand",
+      "coverage": 1.0,
+      "depth": 0,
+      "feedbackType": "None",
+      "hasViolation": false,
+      "id": "d26ccf2c-e61a-46c8-9be0-8627d307098a",
+      "incoming": 0,
+      "interactionType": "Click",
+      "interactionTypeDescription": "Click/press interaction",
+      "label": "No Feedback",
+      "minDuration": 0.0,
+      "name": "no_feedback_btn",
+      "outgoing": 0,
+      "position": [
+        0.3,
+        1.2,
+        -0.3
+      ],
+      "priority": 1,
+      "shortLabel": "NFB",
+      "sustained": false,
+      "tags": [],
+      "violations": []
+    },
+    {
+      "actuator": "Hand",
+      "coverage": 1.0,
+      "depth": 0,
+      "feedbackType": "Visual",
+      "hasViolation": false,
+      "id": "f9b4e5cb-3691-4d90-8117-4ace17f35aaa",
+      "incoming": 0,
+      "interactionType": "TwoHanded",
+      "interactionTypeDescription": "Two-handed interaction",
+      "label": "Bad TwoHanded",
+      "minDuration": 0.0,
+      "name": "bad_twohanded",
+      "outgoing": 0,
+      "position": [
+        0.0,
+        1.0,
+        -0.4
+      ],
+      "priority": 1,
+      "shortLabel": "BT",
+      "sustained": false,
+      "tags": [],
+      "violations": []
+    },
+    {
+      "actuator": "Hand",
+      "coverage": 1.0,
+      "depth": 0,
+      "feedbackType": "All",
+      "hasViolation": false,
+      "id": "3a66412e-7f5e-490d-aed3-55ad5cc1e86f",
+      "incoming": 0,
+      "interactionType": "Click",
+      "interactionTypeDescription": "Click/press interaction",
+      "label": "Good Button",
+      "minDuration": 0.0,
+      "name": "good_btn",
+      "outgoing": 0,
+      "position": [
+        0.0,
+        1.2,
+        -0.5
+      ],
+      "priority": 1,
+      "shortLabel": "GB",
+      "sustained": false,
+      "tags": [],
+      "violations": []
+    },
+    {
+      "actuator": "Eye",
+      "coverage": 0.0,
+      "depth": 0,
+      "feedbackType": "Visual",
+      "hasViolation": true,
+      "id": "f366d8c0-81fb-4d6e-b1b7-422d1ae39f0d",
+      "incoming": 0,
+      "interactionType": "Gaze",
+      "interactionTypeDescription": "Gaze-based interaction",
+      "label": "Gaze Only",
+      "minDuration": 0.0,
+      "name": "gaze_only",
+      "outgoing": 0,
+      "position": [
+        0.0,
+        1.5,
+        -1.0
+      ],
+      "priority": 1,
+      "shortLabel": "GO",
+      "sustained": false,
+      "tags": [],
+      "violations": [
+        "Element 'gaze_only' unreachable for 100.0% of population"
+      ]
+    },
+    {
+      "actuator": "Head",
+      "coverage": 0.0,
+      "depth": 0,
+      "feedbackType": "VisualAudio",
+      "hasViolation": true,
+      "id": "00e89328-2d2f-4064-abb9-3cab5b9335ed",
+      "incoming": 0,
+      "interactionType": "Voice",
+      "interactionTypeDescription": "Voice-activated interaction",
+      "label": "Voice Command",
+      "minDuration": 0.0,
+      "name": "voice_cmd",
+      "outgoing": 0,
+      "position": [
+        0.0,
+        1.5,
+        -0.8
+      ],
+      "priority": 1,
+      "shortLabel": "VC",
+      "sustained": false,
+      "tags": [],
+      "violations": [
+        "Element 'voice_cmd' unreachable for 100.0% of population"
+      ]
+    },
+    {
+      "actuator": "Hand",
+      "coverage": 0.24,
+      "depth": 0,
+      "feedbackType": "Visual",
+      "hasViolation": true,
+      "id": "6d47b967-e92a-4654-8145-e14a376ba605",
+      "incoming": 0,
+      "interactionType": "Gesture",
+      "interactionTypeDescription": "Gesture-based interaction",
+      "label": "Wave Gesture",
+      "minDuration": 0.0,
+      "name": "gesture_wave",
+      "outgoing": 0,
+      "position": [
+        -0.5,
+        1.3,
+        -0.6
+      ],
+      "priority": 1,
+      "shortLabel": "GW",
+      "sustained": false,
+      "tags": [],
+      "violations": [
+        "Element 'gesture_wave' unreachable for 76.0% of population"
+      ]
+    }
+  ],
+  "focus": {
+    "demoReadiness": "This scene needs more work before a polished demo: 43.1% coverage and 9 violation surface(s). Use this dashboard to focus remediation.",
+    "priorityLabel": "None tagged",
+    "priorityNote": "Consider tagging one or two hero affordances with higher priority.",
+    "verificationHeadline": "Promising but risky",
+    "verificationNote": "Use the dashboard to narrow in on weak interactions before putting this in front of an audience."
+  },
+  "heroSummary": "accessibility_showcase combines 13 affordances across 5 interaction modes and currently demonstrates 43.1% verified accessibility coverage with a weak certificate.",
+  "interactionBreakdown": {
+    "Click": 9,
+    "Gaze": 1,
+    "Gesture": 1,
+    "TwoHanded": 1,
+    "Voice": 1
+  },
+  "metrics": {
+    "highPriorityCount": 0,
+    "highPriorityNote": "No priority-8+ affordances are tagged yet.",
+    "samplePass": 2799,
+    "sampleTotal": 6500,
+    "verifiedRegions": 0,
+    "violations": 9
+  },
+  "pipeline": {
+    "finalStage": "Done",
+    "stageTimings": [
+      {
+        "duration": "0 ms",
+        "stage": "Validate"
+      },
+      {
+        "duration": "0 ms",
+        "stage": "Lint"
+      },
+      {
+        "duration": "0 ms",
+        "stage": "SpatialVerify"
+      },
+      {
+        "duration": "10 ms",
+        "stage": "Sample"
+      },
+      {
+        "duration": "2 ms",
+        "stage": "SmtVerify"
+      }
+    ]
+  },
+  "presentation": {
+    "heroSummary": "accessibility_showcase combines 13 affordances across 5 interaction modes and currently demonstrates 43.1% verified accessibility coverage with a weak certificate.",
+    "slides": [
+      {
+        "audienceTakeaway": "The problem is not only whether an interaction exists, but whether it remains reachable and understandable across the intended body-parameter population.",
+        "bullets": [
+          "XR scenes can fail because controls are too high, too low, too far away, or require motion patterns that exclude part of the target population.",
+          "Manual playtesting does not cover the continuous pose space or a realistic anthropometric envelope.",
+          "This scene already contains 13 interactable elements across 5 interaction modes: Gaze (1) · Voice (1) · Gesture (1) · TwoHanded (1) · Click (9)."
+        ],
+        "callout": {
+          "body": "Start with the human problem: an XR training flow can look polished and still be inaccessible to a meaningful slice of its intended users.",
+          "title": "What to say"
+        },
+        "commands": [
+          {
+            "command": "xr-verify demo control-room -o control_room.json",
+            "label": "Generate a showpiece scene"
+          },
+          {
+            "command": "xr-verify webapp control_room.json -n 2000 --confidence 0.99 -o control_room.dashboard.html",
+            "label": "Open the live dashboard"
+          },
+          {
+            "command": "xr-verify certify control_room.json -n 2000 --confidence 0.99 --svg -o control_room.cert.json",
+            "label": "Produce the certificate artifact"
+          }
+        ],
+        "kicker": "Motivation",
+        "scrollTarget": "scene-explorer",
+        "speakerNotes": "Open with a story: imagine a critical emergency stop or onboarding step that some users simply cannot reach. Position the verifier as a design-review and CI artifact, not just a research prototype.",
+        "stats": [
+          {
+            "detail": "Interactive elements present in the scene.",
+            "label": "Affordances",
+            "value": 13
+          },
+          {
+            "detail": "Gaze (1) · Voice (1) · Gesture (1) · TwoHanded (1) · Click (9)",
+            "label": "Interaction modes",
+            "value": 5
+          },
+          {
+            "detail": "Scene flow is acyclic and easy to narrate.",
+            "label": "Dependency edges",
+            "value": 0
+          }
+        ],
+        "summary": "Traditional UI accessibility checks do not tell you whether a real person can physically reach, see, sustain, or sequence an interaction in 3D space. This demo shows how the verifier turns that risk into visible evidence.",
+        "title": "XR accessibility is spatial, physical, and too easy to miss"
+      },
+      {
+        "audienceTakeaway": "The tool is both an analysis pipeline and a presentation artifact: it helps teams find issues and explain readiness.",
+        "bullets": [
+          "Tier 1 linting catches obvious geometry and ergonomics issues quickly enough for rapid iteration.",
+          "Tier 2 certification adds population sampling, confidence bounds, and violation surfaces that can be shown on-screen.",
+          "Current verification posture: Use the dashboard to narrow in on weak interactions before putting this in front of an audience.."
+        ],
+        "callout": {
+          "body": "Pause here and point at the certificate grade, κ coverage, uncertainty bars, and any remaining violation callouts.",
+          "title": "Demo move"
+        },
+        "commands": [
+          {
+            "command": "xr-verify demo control-room -o control_room.json",
+            "label": "Generate a showpiece scene"
+          },
+          {
+            "command": "xr-verify webapp control_room.json -n 2000 --confidence 0.99 -o control_room.dashboard.html",
+            "label": "Open the live dashboard"
+          },
+          {
+            "command": "xr-verify certify control_room.json -n 2000 --confidence 0.99 --svg -o control_room.cert.json",
+            "label": "Produce the certificate artifact"
+          }
+        ],
+        "kicker": "Method",
+        "scrollTarget": "metric-grid",
+        "speakerNotes": "Explain that the dashboard is self-contained. You can use it as a research demo, a design review, or a handoff artifact for product teams.",
+        "stats": [
+          {
+            "detail": "High-level signal for demo readiness.",
+            "label": "Certificate grade",
+            "value": "Weak"
+          },
+          {
+            "detail": "Population-wide coverage estimate.",
+            "label": "κ coverage",
+            "value": "43.1%"
+          },
+          {
+            "detail": "Validate: 0 ms · Lint: 0 ms · SpatialVerify: 0 ms · Sample: 10 ms · SmtVerify: 2 ms",
+            "label": "Pipeline timing",
+            "value": "Captured"
+          }
+        ],
+        "summary": "For a live demo, the strongest moment is showing that formal verification is not hidden math: it becomes an explorable artifact with coverage, uncertainty, sequencing, and hotspots.",
+        "title": "The verifier turns an XR scene into a story you can prove"
+      },
+      {
+        "audienceTakeaway": "Every important interaction gets a concrete, inspectable story: where it is, how it is activated, and what confidence the tool has in its accessibility.",
+        "bullets": [
+          "Highlight `gesture_wave` as the hero affordance for the walkthrough.",
+          "Use the top/front/side projections to show that spatial placement is part of the proof story, not decoration.",
+          "Use the dependency graph to explain which interactions unlock others and why sequence correctness matters."
+        ],
+        "callout": {
+          "body": "Click the highlighted affordance, then show its coverage, actuator, and dependency counts in the right-hand details panel.",
+          "title": "Live cue"
+        },
+        "commands": [
+          {
+            "command": "xr-verify demo control-room -o control_room.json",
+            "label": "Generate a showpiece scene"
+          },
+          {
+            "command": "xr-verify webapp control_room.json -n 2000 --confidence 0.99 -o control_room.dashboard.html",
+            "label": "Open the live dashboard"
+          },
+          {
+            "command": "xr-verify certify control_room.json -n 2000 --confidence 0.99 --svg -o control_room.cert.json",
+            "label": "Produce the certificate artifact"
+          }
+        ],
+        "focusElementId": "6d47b967-e92a-4654-8145-e14a376ba605",
+        "kicker": "Scene Story",
+        "scrollTarget": "scene-explorer",
+        "speakerNotes": "Transition from abstract method to a specific object the audience can track. Explain why this is the interaction a product team would care about first.",
+        "stats": [
+          {
+            "detail": "Chosen by priority and narrative importance.",
+            "label": "Hero affordance",
+            "value": "gesture_wave"
+          },
+          {
+            "detail": "Approximate depth of the interaction workflow.",
+            "label": "Scene depth",
+            "value": 0
+          },
+          {
+            "detail": "Available device configurations in the scene.",
+            "label": "Devices modeled",
+            "value": 1
+          }
+        ],
+        "summary": "The most compelling live moment is to pick a hero affordance and show its reachability, dependencies, feedback mode, and whether it is a strong or weak part of the interaction flow.",
+        "title": "Walk the audience through gesture_wave"
+      },
+      {
+        "audienceTakeaway": "The demo app is not separate from the core verifier; it is a flashier interface around the same verification evidence.",
+        "bullets": [
+          "Demo readiness assessment: This scene needs more work before a polished demo: 43.1% coverage and 9 violation surface(s). Use this dashboard to focus remediation.",
+          "If the grade is strong, emphasize confidence and explainability. If not, use the violation panel as an honest roadmap.",
+          "Point out that this web dashboard can travel as a standalone artifact to PMs, designers, auditors, and accessibility reviewers."
+        ],
+        "callout": {
+          "body": "XR accessibility should be something teams can see, explore, and ship with confidence — not something discovered after deployment.",
+          "title": "Final message"
+        },
+        "commands": [
+          {
+            "command": "xr-verify demo control-room -o control_room.json",
+            "label": "Generate a showpiece scene"
+          },
+          {
+            "command": "xr-verify webapp control_room.json -n 2000 --confidence 0.99 -o control_room.dashboard.html",
+            "label": "Open the live dashboard"
+          },
+          {
+            "command": "xr-verify certify control_room.json -n 2000 --confidence 0.99 --svg -o control_room.cert.json",
+            "label": "Produce the certificate artifact"
+          }
+        ],
+        "kicker": "Close",
+        "scrollTarget": "violations",
+        "speakerNotes": "Close by tying the live explorer, certificate, and scene generator together into one end-to-end workflow: generate scene, verify scene, present evidence.",
+        "stats": [
+          {
+            "detail": "Remaining hotspots to remediate before a high-stakes demo.",
+            "label": "Violations",
+            "value": 9
+          },
+          {
+            "detail": "Formally or statistically resolved regions in the analysis.",
+            "label": "Verified regions",
+            "value": 0
+          },
+          {
+            "detail": "Empirical support for the certified coverage estimate.",
+            "label": "Pass samples",
+            "value": 2799
+          }
+        ],
+        "summary": "A great finish is to show that the same artifact supports both showmanship and engineering action: it reveals whether the scene is demo-ready and where to improve if it is not.",
+        "title": "End with readiness, risk, and what happens next"
+      }
+    ],
+    "tagline": "Demo story, motivation, and speaker notes built into the verifier UI"
+  },
+  "scene": {
+    "bounds": {
+      "max": [
+        10.03,
+        2.8299999999999996,
+        10.03
+      ],
+      "min": [
+        -0.65,
+        0.07,
+        -1.1
+      ]
+    },
+    "dependencyCount": 0,
+    "description": "Showcase scene designed to trigger all lint rules for testing",
+    "deviceCount": 1,
+    "elementCount": 13,
+    "isDag": true,
+    "maxDepth": 0,
+    "name": "accessibility_showcase",
+    "version": "0.1.0"
+  },
+  "title": "XR Accessibility Remediation Showcase — Before Remediation",
+  "violations": [
+    {
+      "description": "Element 'close_b' unreachable for 61.8% of population",
+      "elementId": "2777476e-237b-4278-a0e3-49bca6e5899c",
+      "elementName": "close_b",
+      "estimatedMeasure": 0.0,
+      "sampleCount": 309,
+      "severity": "Medium"
+    },
+    {
+      "description": "Element 'close_a' unreachable for 51.2% of population",
+      "elementId": "4f6b8828-5d50-4a4b-bd03-7af500de5528",
+      "elementName": "close_a",
+      "estimatedMeasure": 0.0,
+      "sampleCount": 256,
+      "severity": "Medium"
+    },
+    {
+      "description": "Element 'too_high_btn' unreachable for 100.0% of population",
+      "elementId": "0adac0db-2272-409d-939b-965a6bd038c4",
+      "elementName": "too_high_btn",
+      "estimatedMeasure": 0.0,
+      "sampleCount": 500,
+      "severity": "Medium"
+    },
+    {
+      "description": "Element 'tiny_btn' unreachable for 51.2% of population",
+      "elementId": "61b54ee6-d422-49ca-bfef-e8a76fff0fad",
+      "elementName": "tiny_btn",
+      "estimatedMeasure": 0.0,
+      "sampleCount": 256,
+      "severity": "Medium"
+    },
+    {
+      "description": "Element 'voice_cmd' unreachable for 100.0% of population",
+      "elementId": "00e89328-2d2f-4064-abb9-3cab5b9335ed",
+      "elementName": "voice_cmd",
+      "estimatedMeasure": 0.0,
+      "sampleCount": 500,
+      "severity": "Medium"
+    },
+    {
+      "description": "Element 'too_low_btn' unreachable for 100.0% of population",
+      "elementId": "c750b983-1d1c-42cc-bf9e-d5546a894898",
+      "elementName": "too_low_btn",
+      "estimatedMeasure": 0.0,
+      "sampleCount": 500,
+      "severity": "Medium"
+    },
+    {
+      "description": "Element 'outside_btn' unreachable for 100.0% of population",
+      "elementId": "96b89b3c-5d2d-4bae-89e9-a924663998d2",
+      "elementName": "outside_btn",
+      "estimatedMeasure": 0.0,
+      "sampleCount": 500,
+      "severity": "Medium"
+    },
+    {
+      "description": "Element 'gesture_wave' unreachable for 76.0% of population",
+      "elementId": "6d47b967-e92a-4654-8145-e14a376ba605",
+      "elementName": "gesture_wave",
+      "estimatedMeasure": 0.0,
+      "sampleCount": 380,
+      "severity": "Medium"
+    },
+    {
+      "description": "Element 'gaze_only' unreachable for 100.0% of population",
+      "elementId": "f366d8c0-81fb-4d6e-b1b7-422d1ae39f0d",
+      "elementName": "gaze_only",
+      "estimatedMeasure": 0.0,
+      "sampleCount": 500,
+      "severity": "Medium"
+    }
+  ]
+}</script>
+  <script>
+    const data = JSON.parse(document.getElementById('xr-data').textContent);
+    const state = {
+      projection: 'top',
+      selectedId: (data.elements[0] && data.elements[0].id) || null,
+      slideIndex: 0,
+      showNotes: true,
+      tourPlaying: false,
+      presenterMode: false,
+      interaction: 'All',
+      search: ''
+    };
+
+    const canvas = document.getElementById('scene-canvas');
+    const ctx = canvas.getContext('2d');
+
+    const gradeClass = grade => grade === 'Full' ? 'grade-full' : grade === 'Partial' ? 'grade-partial' : 'grade-weak';
+    const coverageClass = cov => cov >= 0.95 ? 'pass' : cov >= 0.80 ? 'warn' : 'fail';
+    const coverageColor = cov => cov == null ? '#38bdf8' : cov >= 0.95 ? '#22c55e' : cov >= 0.80 ? '#f59e0b' : '#ef4444';
+    const fmtPct = v => v == null ? '—' : `${(v * 100).toFixed(1)}%`;
+    const fmtNum = v => typeof v === 'number' ? v.toLocaleString(undefined, { maximumFractionDigits: 3 }) : '—';
+    const elById = id => data.elements.find(e => e.id === id);
+    const escapeAttr = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+    let tourTimer = null;
+
+    function renderDemoStatus() {
+      const strip = document.getElementById('demo-status-strip');
+      const slides = (data.presentation && data.presentation.slides) || [];
+      const selected = elById(state.selectedId);
+      strip.innerHTML = [
+        `<span class="status-chip"><strong>Tour</strong> ${state.tourPlaying ? 'Autoplaying' : 'Manual'}</span>`,
+        `<span class="status-chip"><strong>View</strong> ${state.presenterMode ? 'Presenter' : 'Dashboard'}</span>`,
+        `<span class="status-chip"><strong>Slide</strong> ${slides.length ? `${state.slideIndex + 1} / ${slides.length}` : '—'}</span>`,
+        `<span class="status-chip"><strong>Focus</strong> ${selected ? selected.name : 'None selected'}</span>`,
+        `<span class="status-chip"><strong>Shortcuts</strong> T tour · F fullscreen · P presenter · R reset · N notes</span>`
+      ].join('');
+
+      document.getElementById('tour-toggle').textContent = state.tourPlaying ? 'Pause tour' : 'Start tour';
+      document.getElementById('tour-toggle').classList.toggle('active', state.tourPlaying);
+      document.getElementById('presenter-toggle').classList.toggle('active', state.presenterMode);
+      document.getElementById('presenter-toggle').textContent = state.presenterMode ? 'Exit presenter' : 'Presenter mode';
+      document.getElementById('fullscreen-toggle').classList.toggle('active', !!document.fullscreenElement);
+      document.getElementById('fullscreen-toggle').textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
+    }
+
+    function stopTour() {
+      state.tourPlaying = false;
+      if (tourTimer) {
+        clearInterval(tourTimer);
+        tourTimer = null;
+      }
+      renderDemoStatus();
+    }
+
+    function startTour() {
+      const slides = (data.presentation && data.presentation.slides) || [];
+      if (slides.length <= 1) return;
+      stopTour();
+      state.tourPlaying = true;
+      tourTimer = setInterval(() => {
+        const nextIndex = state.slideIndex >= slides.length - 1 ? 0 : state.slideIndex + 1;
+        setSlide(nextIndex);
+      }, 5000);
+      renderDemoStatus();
+    }
+
+    function toggleTour() {
+      if (state.tourPlaying) stopTour();
+      else startTour();
+    }
+
+    async function toggleFullscreen() {
+      try {
+        if (document.fullscreenElement) await document.exitFullscreen();
+        else await document.documentElement.requestFullscreen();
+      } catch (_err) {}
+      renderDemoStatus();
+    }
+
+    function togglePresenterMode() {
+      state.presenterMode = !state.presenterMode;
+      document.body.classList.toggle('presenter-mode', state.presenterMode);
+      renderDemoStatus();
+    }
+
+    function resetFocus() {
+      state.selectedId = (data.elements[0] && data.elements[0].id) || null;
+      state.slideIndex = 0;
+      state.projection = 'top';
+      state.interaction = 'All';
+      state.search = '';
+      const search = document.getElementById('search-box');
+      if (search) search.value = '';
+      const interaction = document.getElementById('interaction-filter');
+      if (interaction) interaction.value = 'All';
+      document.querySelectorAll('.projection-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.projection === 'top'));
+      renderPresentation();
+      renderFilters();
+      rerender();
+    }
+
+    function filteredElements() {
+      return data.elements.filter(e =>
+        (state.interaction === 'All' || e.interactionType === state.interaction) &&
+        (!state.search || e.name.toLowerCase().includes(state.search) || (e.label || '').toLowerCase().includes(state.search))
+      );
+    }
+
+    function populateEvaluationForm() {
+      const elementSelect = document.getElementById('target-element');
+      const interactionSelect = document.getElementById('interaction-target');
+      elementSelect.innerHTML = data.elements
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(e => `<option value="${e.id}">${e.name} · ${e.interactionType}</option>`)
+        .join('');
+      if (state.selectedId) elementSelect.value = state.selectedId;
+
+      const options = ['All', ...Object.keys(data.interactionBreakdown).sort()];
+      interactionSelect.innerHTML = options.map(o => `<option value="${o}">${o}</option>`).join('');
+      interactionSelect.value = 'All';
+    }
+
+    function evaluationTone(verdict) {
+      if (verdict === 'Pass') return 'pass';
+      if (verdict === 'Conditional pass') return 'warn';
+      return 'fail';
+    }
+
+    function evaluateFormSubmission() {
+      const form = document.getElementById('evaluation-form');
+      const formData = new FormData(form);
+      const selected = elById(formData.get('targetElement')) || elById(state.selectedId) || data.elements[0];
+      const interactionTarget = formData.get('interactionTarget');
+      const reviewGoal = formData.get('reviewGoal');
+      const reviewerName = String(formData.get('reviewerName') || '').trim() || 'Presenter';
+      const notes = String(formData.get('reviewNotes') || '').trim();
+      const minCoverage = Number(formData.get('minCoverage') || 95) / 100;
+      const maxViolations = Number(formData.get('maxViolations') || 0);
+      const protectCritical = formData.get('protectCritical') != null;
+
+      const scopedElements = data.elements.filter(e => interactionTarget === 'All' || e.interactionType === interactionTarget);
+      const scopedCoverage = scopedElements.length
+        ? scopedElements.reduce((sum, e) => sum + (e.coverage ?? 0), 0) / scopedElements.length
+        : 0;
+      const scopedViolations = scopedElements.filter(e => e.hasViolation).length;
+      const criticalViolations = data.elements.filter(e => e.priority >= 8 && e.hasViolation).length;
+      const sceneCoverage = data.certificate ? data.certificate.kappa : scopedCoverage;
+      const elementCoverage = selected ? (selected.coverage ?? 0) : 0;
+
+      let verdict = 'Needs remediation';
+      if (sceneCoverage >= minCoverage && scopedViolations <= maxViolations && elementCoverage >= minCoverage && (!protectCritical || criticalViolations === 0)) {
+        verdict = 'Pass';
+      } else if (sceneCoverage >= Math.max(minCoverage - 0.1, 0) && scopedViolations <= maxViolations + 1) {
+        verdict = 'Conditional pass';
+      }
+
+      const evidence = [];
+      if (sceneCoverage < minCoverage) evidence.push(`Scene coverage is ${fmtPct(sceneCoverage)}, below the target ${fmtPct(minCoverage)}.`);
+      else evidence.push(`Scene coverage clears the target at ${fmtPct(sceneCoverage)}.`);
+      if (selected) {
+        if (elementCoverage < minCoverage) evidence.push(`${selected.name} is below target with ${fmtPct(elementCoverage)} coverage.`);
+        else evidence.push(`${selected.name} meets the selected threshold with ${fmtPct(elementCoverage)} coverage.`);
+        if (selected.hasViolation) evidence.push(`${selected.name} still has recorded violation surfaces.`);
+        if (selected.incoming > 0 || selected.outgoing > 0) evidence.push(`${selected.name} participates in ${selected.incoming} incoming and ${selected.outgoing} outgoing dependencies.`);
+      }
+      if (protectCritical && criticalViolations > 0) evidence.push(`There are ${criticalViolations} high-priority affordance(s) with active violations.`);
+      if (scopedViolations > maxViolations) evidence.push(`The selected interaction scope contains ${scopedViolations} violating affordance(s), above the allowed maximum of ${maxViolations}.`);
+      if (notes) evidence.push(`Presenter note: ${notes}`);
+
+      const result = {
+        verdict,
+        tone: evaluationTone(verdict),
+        reviewerName,
+        reviewGoal,
+        selected,
+        interactionTarget,
+        minCoverage,
+        maxViolations,
+        protectCritical,
+        scopedCoverage,
+        scopedViolations,
+        criticalViolations,
+        sceneCoverage,
+        elementCoverage,
+        evidence,
+      };
+
+      renderEvaluation(result);
+      if (selected) {
+        state.selectedId = selected.id;
+        rerender();
+      }
+      return result;
+    }
+
+    function renderEvaluation(result) {
+      const host = document.getElementById('evaluation-results');
+      const selected = result.selected;
+      const pipelineStages = (data.pipeline && data.pipeline.stageTimings) || [];
+      const focusSummary = selected
+        ? ' with focus on <strong>' + selected.name + '</strong>'
+        : '';
+      const selectedSummary = selected
+        ? selected.interactionType + ' · priority ' + selected.priority + ' · ' + selected.actuator
+        : 'No affordance selected';
+      const evidenceList = result.evidence.map(item => `<li>${item}</li>`).join('');
+      host.innerHTML = `
+        <div class="eval-summary">
+          <div class="eval-title">
+            <h3>${result.reviewGoal.replace('-', ' ')} evaluation</h3>
+            <span class="eval-badge ${result.tone}">${result.verdict}</span>
+          </div>
+          <div class="muted">Reviewed by ${result.reviewerName} for the <strong>${result.interactionTarget}</strong> interaction scope${focusSummary}.</div>
+        </div>
+        <div class="eval-grid">
+          <div class="eval-card">
+            <div class="score-row">
+              <div class="label">Scene coverage</div>
+              <div class="value">${fmtPct(result.sceneCoverage)}</div>
+              <div class="muted">Target ≥ ${fmtPct(result.minCoverage)} · Violations in scope: ${result.scopedViolations}</div>
+            </div>
+          </div>
+          <div class="eval-card">
+            <div class="score-row">
+              <div class="label">Selected affordance</div>
+              <div class="value">${selected ? fmtPct(result.elementCoverage) : '—'}</div>
+              <div class="muted">${selectedSummary}</div>
+            </div>
+          </div>
+          <div class="eval-card">
+            <h4>Evidence summary</h4>
+            <ul>${evidenceList}</ul>
+          </div>
+          <div class="eval-card">
+            <h4>Certificate and pipeline</h4>
+            <ul>
+              <li>Certificate grade: ${data.certificate ? data.certificate.grade : 'Scene only'}</li>
+              <li>Confidence bound δ: ${data.certificate ? data.certificate.delta.toFixed(4) : '—'}</li>
+              <li>Analytical ε: ${data.certificate ? data.certificate.epsilonAnalytical.toFixed(6) : '—'}</li>
+              <li>Estimated ε: ${data.certificate ? data.certificate.epsilonEstimated.toFixed(6) : '—'}</li>
+              <li>Pipeline stages: ${pipelineStages.length ? pipelineStages.map(stage => `${stage.stage} (${stage.duration})`).join(' · ') : 'No timing data available'}</li>
+            </ul>
+          </div>
+          <div class="eval-card">
+            <h4>Affordance breakdown</h4>
+            <ul>
+              <li>Name: ${selected ? selected.name : '—'}</li>
+              <li>Feedback: ${selected ? selected.feedbackType : '—'}</li>
+              <li>Dependencies: ${selected ? `${selected.incoming} incoming / ${selected.outgoing} outgoing` : '—'}</li>
+              <li>Minimum duration: ${selected ? `${selected.minDuration.toFixed(2)}s` : '—'}</li>
+              <li>Violation flag: ${selected ? (selected.hasViolation ? 'Yes' : 'No') : '—'}</li>
+            </ul>
+          </div>
+          <div class="eval-card">
+            <h4>Scope diagnostics</h4>
+            <ul>
+              <li>Scoped average coverage: ${fmtPct(result.scopedCoverage)}</li>
+              <li>Scoped violations: ${result.scopedViolations}</li>
+              <li>Critical violations: ${result.criticalViolations}</li>
+              <li>Critical protection: ${result.protectCritical ? 'Enabled' : 'Disabled'}</li>
+              <li>Allowed violations: ${result.maxViolations}</li>
+            </ul>
+          </div>
+        </div>
+      `;
+    }
+
+    function setSlide(index) {
+      const slides = (data.presentation && data.presentation.slides) || [];
+      if (!slides.length) return;
+      state.slideIndex = Math.max(0, Math.min(index, slides.length - 1));
+      const slide = slides[state.slideIndex];
+      if (slide && slide.focusElementId) {
+        state.selectedId = slide.focusElementId;
+      }
+      renderPresentation();
+      renderDemoStatus();
+      rerender();
+    }
+
+    function renderPresentation() {
+      const deck = data.presentation || { slides: [] };
+      const slides = deck.slides || [];
+      const slide = slides[state.slideIndex] || slides[0];
+      const card = document.getElementById('slide-card');
+      const side = document.getElementById('slide-side');
+      const progress = document.getElementById('slide-progress');
+      const counter = document.getElementById('slide-counter');
+      const notesToggle = document.getElementById('slide-notes-toggle');
+      const prev = document.getElementById('slide-prev');
+      const next = document.getElementById('slide-next');
+
+      if (!slide) {
+        card.innerHTML = '<div class="slide-inner"><div class="slide-kicker">Presentation Mode</div><h3 class="slide-title">No slides available</h3><p class="slide-summary">Generate the dashboard from a scene to populate presentation content.</p></div>';
+        side.innerHTML = '';
+        progress.innerHTML = '';
+        counter.textContent = '0 / 0';
+        return;
+      }
+
+      counter.textContent = `${state.slideIndex + 1} / ${slides.length}`;
+      notesToggle.textContent = state.showNotes ? 'Hide notes' : 'Show notes';
+      prev.disabled = state.slideIndex === 0;
+      next.disabled = state.slideIndex === slides.length - 1;
+
+      const bullets = (slide.bullets || []).map(item => `<li>${item}</li>`).join('');
+      const stats = (slide.stats || []).map(stat => `
+        <div class="stat-card">
+          <div class="label">${stat.label}</div>
+          <div class="value">${stat.value}</div>
+          <div class="metric-note">${stat.detail}</div>
+        </div>
+      `).join('');
+      const commands = (slide.commands || []).map(command => `
+        <div class="command-item">
+          <span class="cmd-label">${command.label}</span>
+          <code>${command.command}</code>
+        </div>
+      `).join('');
+
+      const ctas = [];
+      if (slide.focusElementId) {
+        ctas.push(`<button class="cta-btn" data-focus="${escapeAttr(slide.focusElementId)}">Focus highlighted affordance</button>`);
+      }
+      if (slide.scrollTarget) {
+        ctas.push(`<button class="cta-btn" data-scroll="${escapeAttr(slide.scrollTarget)}">Jump to live panel</button>`);
+      }
+
+      card.innerHTML = `
+        <div class="slide-inner">
+          <div class="slide-kicker">${slide.kicker || deck.tagline || 'Presentation Mode'}</div>
+          <h3 class="slide-title">${slide.title}</h3>
+          <div class="slide-summary">${slide.summary}</div>
+          <div class="slide-columns">
+            <div>
+              <ul class="bullet-list">${bullets}</ul>
+              ${slide.callout ? `<div class="slide-callout"><strong>${slide.callout.title}</strong><div class="muted">${slide.callout.body}</div></div>` : ''}
+            </div>
+            <div class="detail-card">
+              <div class="detail-title">Audience takeaway</div>
+              <div class="muted">${slide.audienceTakeaway || 'Use the dashboard to connect accessibility motivation, formal verification, and scene-level evidence.'}</div>
+            </div>
+          </div>
+          <div class="cta-row">${ctas.join('')}</div>
+        </div>
+      `;
+
+      side.innerHTML = `
+        <div class="stats-grid">${stats}</div>
+        ${commands ? `<div class="command-card"><h3>Live commands</h3><div class="command-list">${commands}</div></div>` : ''}
+        ${state.showNotes ? `<div class="notes-card"><h3>Speaker notes</h3><p>${slide.speakerNotes || 'Narrate why this scene matters, then pivot into what the verifier proves and how the audience should read the explorer.'}</p></div>` : ''}
+      `;
+
+      progress.innerHTML = slides.map((item, index) => `
+        <button class="slide-dot ${index === state.slideIndex ? 'active' : ''}" title="${escapeAttr(item.title)}" data-index="${index}"></button>
+      `).join('');
+
+      card.querySelectorAll('[data-focus]').forEach(button => button.addEventListener('click', () => {
+        state.selectedId = button.dataset.focus;
+        document.getElementById('scene-explorer').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        rerender();
+      }));
+      card.querySelectorAll('[data-scroll]').forEach(button => button.addEventListener('click', () => {
+        const target = document.getElementById(button.dataset.scroll);
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }));
+      progress.querySelectorAll('[data-index]').forEach(button => button.addEventListener('click', () => setSlide(Number(button.dataset.index))));
+      renderDemoStatus();
+    }
+
+    function renderHero() {
+      document.getElementById('hero-title').textContent = data.scene.name;
+      const heroSummary = data.presentation && data.presentation.heroSummary;
+      document.getElementById('hero-description').textContent = heroSummary || data.scene.description || 'No scene description available.';
+
+      const pills = [];
+      if (data.certificate) {
+        pills.push(`<span class="pill grade-pill ${gradeClass(data.certificate.grade)}">${data.certificate.grade.toUpperCase()} certificate</span>`);
+        pills.push(`<span class="pill">κ coverage · ${fmtPct(data.certificate.kappa)}</span>`);
+      } else {
+        pills.push('<span class="pill">Scene-only dashboard</span>');
+      }
+      pills.push(`<span class="pill">${data.scene.elementCount} elements</span>`);
+      pills.push(`<span class="pill">${data.scene.dependencyCount} dependencies</span>`);
+      pills.push(`<span class="pill">${data.scene.deviceCount} devices</span>`);
+      document.getElementById('hero-pills').innerHTML = pills.join('');
+
+      const highlights = [
+        ['Interaction mix', `${Object.keys(data.interactionBreakdown).length} modes`, 'Diverse affordance set for a richer live demo.'],
+        ['Dependency depth', String(data.scene.maxDepth), data.scene.isDag ? 'Acyclic dependency structure.' : 'Contains dependency cycles.'],
+        ['Top priority target', data.focus.priorityLabel, data.focus.priorityNote],
+      ];
+      if (data.certificate) {
+        highlights.unshift(['Verification posture', data.focus.verificationHeadline, data.focus.verificationNote]);
+      }
+
+      document.getElementById('hero-highlights').innerHTML = highlights.map(([label, value, note]) => `
+        <div class="metric-card">
+          <div class="metric-label">${label}</div>
+          <div class="metric-value">${value}</div>
+          <div class="metric-note">${note}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderMetrics() {
+      const metrics = data.metrics;
+      const cards = [
+        ['Coverage κ', data.certificate ? fmtPct(data.certificate.kappa) : '—', data.certificate ? `Grade: ${data.certificate.grade}` : 'Generate a certificate to unlock this metric.'],
+        ['Verified regions', fmtNum(metrics.verifiedRegions), `${fmtNum(metrics.violations)} violation surfaces remain.`],
+        ['Sample pass rate', metrics.sampleTotal ? fmtPct(metrics.samplePass / metrics.sampleTotal) : '—', `${fmtNum(metrics.samplePass)} pass / ${fmtNum(metrics.sampleTotal)} total samples`],
+        ['Critical affordances', fmtNum(metrics.highPriorityCount), metrics.highPriorityNote],
+      ];
+      document.getElementById('metric-grid').innerHTML = cards.map(([label, value, note]) => `
+        <div class="metric-card">
+          <div class="metric-label">${label}</div>
+          <div class="metric-value">${value}</div>
+          <div class="metric-note">${note}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderFilters() {
+      const select = document.getElementById('interaction-filter');
+      const options = ['All', ...Object.keys(data.interactionBreakdown).sort()];
+      select.innerHTML = options.map(o => `<option value="${o}">${o}</option>`).join('');
+      select.value = state.interaction;
+    }
+
+    function project(position) {
+      if (state.projection === 'top') return [position[0], position[2]];
+      if (state.projection === 'front') return [position[0], position[1]];
+      return [position[2], position[1]];
+    }
+
+    function projectionBounds(elements) {
+      const pts = elements.map(e => project(e.position));
+      const xs = pts.map(p => p[0]);
+      const ys = pts.map(p => p[1]);
+      const minX = Math.min(...xs, -1), maxX = Math.max(...xs, 1);
+      const minY = Math.min(...ys, -1), maxY = Math.max(...ys, 1);
+      return { minX, maxX, minY, maxY };
+    }
+
+    function renderCanvas() {
+      const elements = filteredElements();
+      const { width, height } = canvas;
+      ctx.clearRect(0, 0, width, height);
+      const g = ctx.createLinearGradient(0, 0, 0, height);
+      g.addColorStop(0, 'rgba(15, 23, 42, 0.92)');
+      g.addColorStop(1, 'rgba(2, 6, 23, 0.98)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, width, height);
+
+      const bounds = projectionBounds(data.elements);
+      const pad = 54;
+      const sx = (width - pad * 2) / Math.max(bounds.maxX - bounds.minX, 0.001);
+      const sy = (height - pad * 2) / Math.max(bounds.maxY - bounds.minY, 0.001);
+
+      for (let i = 0; i < 10; i++) {
+        const x = pad + (i / 9) * (width - pad * 2);
+        const y = pad + (i / 9) * (height - pad * 2);
+        ctx.strokeStyle = 'rgba(148,163,184,0.08)';
+        ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, height - pad); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(width - pad, y); ctx.stroke();
+      }
+
+      const nodePositions = new Map();
+      data.elements.forEach(e => {
+        const [px, py] = project(e.position);
+        const x = pad + (px - bounds.minX) * sx;
+        const y = height - pad - (py - bounds.minY) * sy;
+        nodePositions.set(e.id, [x, y]);
+      });
+
+      data.dependencies.forEach(dep => {
+        const src = nodePositions.get(dep.sourceId);
+        const dst = nodePositions.get(dep.targetId);
+        if (!src || !dst) return;
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.22)';
+        ctx.lineWidth = 1.25;
+        ctx.beginPath();
+        ctx.moveTo(src[0], src[1]);
+        ctx.lineTo(dst[0], dst[1]);
+        ctx.stroke();
+      });
+
+      data.elements.forEach(e => {
+        const [x, y] = nodePositions.get(e.id);
+        const visible = elements.some(fe => fe.id === e.id);
+        const selected = state.selectedId === e.id;
+        const pulse = 18 + Math.sin(performance.now() / 260) * 6;
+        ctx.save();
+        ctx.globalAlpha = visible ? 1 : 0.13;
+        ctx.fillStyle = coverageColor(e.coverage);
+        ctx.beginPath();
+        ctx.arc(x, y, selected ? 12 : 8, 0, Math.PI * 2);
+        ctx.fill();
+        if (selected) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(x, y, 18, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.38)';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(x, y, pulse, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.fillStyle = '#d9ecff';
+        ctx.font = '12px Inter, sans-serif';
+        ctx.fillText(e.shortLabel, x + 14, y - 10);
+        ctx.restore();
+      });
+    }
+
+    function renderDependencyGraph() {
+      const svg = document.getElementById('dependency-graph');
+      const width = 1000;
+      const height = 360;
+      const depths = [...new Set(data.elements.map(e => e.depth))].sort((a, b) => a - b);
+      const cols = new Map(depths.map((d, i) => [d, i]));
+      const grouped = new Map();
+      data.elements.forEach(e => {
+        if (!grouped.has(e.depth)) grouped.set(e.depth, []);
+        grouped.get(e.depth).push(e);
+      });
+
+      const positions = new Map();
+      depths.forEach((depth, colIdx) => {
+        const group = grouped.get(depth) || [];
+        group.sort((a, b) => a.name.localeCompare(b.name));
+        group.forEach((e, rowIdx) => {
+          const x = 110 + colIdx * ((width - 220) / Math.max(depths.length - 1, 1));
+          const y = 60 + rowIdx * Math.min(54, (height - 90) / Math.max(group.length, 1));
+          positions.set(e.id, [x, y]);
+        });
+      });
+
+      const edges = data.dependencies.map(dep => {
+        const s = positions.get(dep.sourceId);
+        const t = positions.get(dep.targetId);
+        if (!s || !t) return '';
+        return `<path d="M ${s[0]} ${s[1]} C ${(s[0]+t[0])/2} ${s[1]}, ${(s[0]+t[0])/2} ${t[1]}, ${t[0]} ${t[1]}" stroke="rgba(45, 212, 191, 0.35)" fill="none" stroke-width="1.7" />`;
+      }).join('');
+
+      const nodes = data.elements.map(e => {
+        const [x, y] = positions.get(e.id) || [40, 40];
+        const selected = state.selectedId === e.id;
+        const fill = coverageColor(e.coverage);
+        return `
+          <g class="dep-node" data-id="${e.id}" style="cursor:pointer">
+            <rect x="${x-56}" y="${y-18}" rx="12" ry="12" width="112" height="36" fill="${selected ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.78)'}" stroke="${selected ? '#ffffff' : fill}" stroke-width="${selected ? 2.1 : 1.3}" />
+            <circle cx="${x-40}" cy="${y}" r="6" fill="${fill}" />
+            <text x="${x-28}" y="${y+4}" font-size="12">${e.shortLabel}</text>
+          </g>`;
+      }).join('');
+
+      svg.innerHTML = `<rect x="0" y="0" width="1000" height="360" fill="transparent" />${edges}${nodes}`;
+      svg.querySelectorAll('.dep-node').forEach(node => node.addEventListener('click', () => {
+        state.selectedId = node.dataset.id;
+        rerender();
+      }));
+    }
+
+    function renderElementList() {
+      const list = document.getElementById('element-list');
+      const elements = filteredElements().sort((a, b) => (b.coverage ?? -1) - (a.coverage ?? -1) || b.priority - a.priority);
+      list.innerHTML = elements.map(e => `
+        <div class="list-item ${state.selectedId === e.id ? 'selected' : ''}" data-id="${e.id}">
+          <div class="row"><strong>${e.name}</strong><span class="badge ${coverageClass(e.coverage ?? 0)}">${fmtPct(e.coverage)}</span></div>
+          <div class="row tiny muted"><span>${e.interactionType} • ${e.actuator}</span><span>Priority ${e.priority}</span></div>
+          <div class="tiny muted">${e.label || 'No label'} • [${e.position.map(n => n.toFixed(2)).join(', ')}]</div>
+          <div class="mini-bar"><div style="width:${(e.coverage ?? 0) * 100}%; background:${coverageColor(e.coverage)}"></div></div>
+        </div>
+      `).join('') || '<div class="empty">No elements match the current filters.</div>';
+      list.querySelectorAll('.list-item').forEach(item => item.addEventListener('click', () => {
+        state.selectedId = item.dataset.id;
+        rerender();
+      }));
+    }
+
+    function renderSelected() {
+      const element = elById(state.selectedId) || data.elements[0];
+      if (!element) return;
+      document.getElementById('selected-title').textContent = element.name;
+      document.getElementById('selected-kv').innerHTML = [
+        ['Interaction', element.interactionType],
+        ['Actuator', element.actuator],
+        ['Coverage', fmtPct(element.coverage)],
+        ['Priority', String(element.priority)],
+        ['Position', element.position.map(n => n.toFixed(2)).join(', ')],
+        ['Dependencies', `${element.incoming} in / ${element.outgoing} out`],
+        ['Feedback', element.feedbackType],
+        ['Duration', `${element.minDuration.toFixed(2)}s`],
+      ].map(([k, v]) => `<div class="k">${k}</div><div>${v}</div>`).join('');
+      document.getElementById('selected-coverage-bar').style.width = `${(element.coverage ?? 0) * 100}%`;
+      document.getElementById('selected-coverage-bar').style.background = coverageColor(element.coverage);
+
+      const bulletNotes = [];
+      if (element.coverage != null) bulletNotes.push(`Coverage is currently ${fmtPct(element.coverage)} for this affordance.`);
+      if (element.priority >= 8) bulletNotes.push('This is a high-priority interaction target and a strong candidate for the live demo walkthrough.');
+      if (element.hasViolation) bulletNotes.push('This element is associated with at least one recorded violation surface and deserves targeted remediation.');
+      if (element.incoming > 0) bulletNotes.push(`It is gated by ${element.incoming} upstream dependency edge(s), which can be shown in a narrative demo.`);
+      if (element.outgoing > 0) bulletNotes.push(`It unlocks or sequences ${element.outgoing} downstream interaction(s).`);
+      bulletNotes.push(`Interaction mode: ${element.interactionTypeDescription}`);
+
+      document.getElementById('selected-notes').innerHTML = `<ul>${bulletNotes.map(note => `<li>${note}</li>`).join('')}</ul>`;
+      renderDemoStatus();
+    }
+
+    function renderInsights() {
+      const blocks = [];
+      blocks.push(`
+        <div class="detail-card">
+          <div class="detail-title">Demo readiness</div>
+          <div class="muted">${data.focus.demoReadiness}</div>
+        </div>
+      `);
+      if (data.certificate) {
+        blocks.push(`
+          <div class="detail-card">
+            <div class="detail-title">Statistical confidence</div>
+            <div class="muted">δ = ${data.certificate.delta.toFixed(4)} · εₐ = ${data.certificate.epsilonAnalytical.toFixed(6)} · εₑ = ${data.certificate.epsilonEstimated.toFixed(6)}</div>
+          </div>
+        `);
+      }
+      blocks.push(`
+        <div class="detail-card">
+          <div class="detail-title">Interaction mix</div>
+          <div class="muted">${Object.entries(data.interactionBreakdown).map(([k, v]) => `${k} (${v})`).join(' · ')}</div>
+        </div>
+      `);
+      if (data.pipeline) {
+        blocks.push(`
+          <div class="detail-card">
+            <div class="detail-title">Pipeline stages</div>
+            <div class="muted">${data.pipeline.stageTimings.map(s => `${s.stage}: ${s.duration}`).join(' · ') || 'No timing data available.'}</div>
+          </div>
+        `);
+      }
+      document.getElementById('insights').innerHTML = blocks.join('');
+    }
+
+    function renderViolations() {
+      const host = document.getElementById('violations');
+      if (!data.violations.length) {
+        host.innerHTML = '<div class="empty">No violation surfaces are present in the current certificate. This scene is in excellent shape for a polished demo.</div>';
+        return;
+      }
+      host.innerHTML = data.violations.map(v => `
+        <div class="violation">
+          <div class="row"><strong>${v.elementName}</strong><span class="badge fail">${v.severity}</span></div>
+          <div class="tiny muted">${v.description}</div>
+          <div class="tiny muted">Samples: ${v.sampleCount} · Estimated measure: ${fmtNum(v.estimatedMeasure)}</div>
+        </div>
+      `).join('');
+    }
+
+    function rerender() {
+      renderCanvas();
+      renderDependencyGraph();
+      renderElementList();
+      renderSelected();
+    }
+
+    document.querySelectorAll('.projection-btn').forEach(btn => btn.addEventListener('click', () => {
+      state.projection = btn.dataset.projection;
+      document.querySelectorAll('.projection-btn').forEach(b => b.classList.toggle('active', b === btn));
+      renderCanvas();
+    }));
+    document.getElementById('tour-toggle').addEventListener('click', toggleTour);
+    document.getElementById('presenter-toggle').addEventListener('click', togglePresenterMode);
+    document.getElementById('fullscreen-toggle').addEventListener('click', toggleFullscreen);
+    document.getElementById('focus-reset').addEventListener('click', resetFocus);
+    document.getElementById('jump-scene').addEventListener('click', () => document.getElementById('scene-explorer').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    document.getElementById('slide-prev').addEventListener('click', () => setSlide(state.slideIndex - 1));
+    document.getElementById('slide-next').addEventListener('click', () => setSlide(state.slideIndex + 1));
+    document.getElementById('slide-notes-toggle').addEventListener('click', () => {
+      state.showNotes = !state.showNotes;
+      renderPresentation();
+    });
+    document.getElementById('interaction-filter').addEventListener('change', e => { state.interaction = e.target.value; rerender(); });
+    document.getElementById('search-box').addEventListener('input', e => { state.search = e.target.value.trim().toLowerCase(); rerender(); });
+    document.getElementById('evaluation-form').addEventListener('submit', event => {
+      event.preventDefault();
+      evaluateFormSubmission();
+    });
+    document.getElementById('evaluation-fill-focus').addEventListener('click', () => {
+      if (state.selectedId) document.getElementById('target-element').value = state.selectedId;
+      evaluateFormSubmission();
+    });
+    document.getElementById('evaluation-reset').addEventListener('click', () => {
+      document.getElementById('evaluation-form').reset();
+      if (state.selectedId) document.getElementById('target-element').value = state.selectedId;
+      document.getElementById('interaction-target').value = 'All';
+      evaluateFormSubmission();
+    });
+    canvas.addEventListener('click', event => {
+      const rect = canvas.getBoundingClientRect();
+      const x = (event.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (event.clientY - rect.top) * (canvas.height / rect.height);
+      let winner = null;
+      let best = Infinity;
+      filteredElements().forEach(e => {
+        const bounds = projectionBounds(data.elements);
+        const pad = 54;
+        const sx = (canvas.width - pad * 2) / Math.max(bounds.maxX - bounds.minX, 0.001);
+        const sy = (canvas.height - pad * 2) / Math.max(bounds.maxY - bounds.minY, 0.001);
+        const [px, py] = project(e.position);
+        const ex = pad + (px - bounds.minX) * sx;
+        const ey = canvas.height - pad - (py - bounds.minY) * sy;
+        const dist = Math.hypot(ex - x, ey - y);
+        if (dist < best && dist < 24) { winner = e; best = dist; }
+      });
+      if (winner) { state.selectedId = winner.id; rerender(); }
+    });
+
+    document.addEventListener('keydown', event => {
+      if (event.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) return;
+      if (event.key === 'ArrowRight' || event.key === 'PageDown') {
+        event.preventDefault();
+        setSlide(state.slideIndex + 1);
+      } else if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
+        event.preventDefault();
+        setSlide(state.slideIndex - 1);
+      } else if (event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        state.showNotes = !state.showNotes;
+        renderPresentation();
+      } else if (event.key.toLowerCase() === 't') {
+        event.preventDefault();
+        toggleTour();
+      } else if (event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        toggleFullscreen();
+      } else if (event.key.toLowerCase() === 'p') {
+        event.preventDefault();
+        togglePresenterMode();
+      } else if (event.key.toLowerCase() === 'r') {
+        event.preventDefault();
+        resetFocus();
+      }
+    });
+
+    document.addEventListener('fullscreenchange', renderDemoStatus);
+
+    function animationLoop() {
+      renderCanvas();
+      requestAnimationFrame(animationLoop);
+    }
+
+    renderHero();
+    renderPresentation();
+    renderMetrics();
+    renderFilters();
+    populateEvaluationForm();
+    renderInsights();
+    renderViolations();
+    rerender();
+    renderDemoStatus();
+    evaluateFormSubmission();
+    requestAnimationFrame(animationLoop);
+  </script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+{
+  "name": "simple-upgrade-example",
+  "description": "Upgrade three services with pairwise compatibility constraints.",
+  "services": [
+    {
+      "name": "api-gateway",
+      "current_version": "1.0.0",
+      "target_version": "2.0.0",
+      "schema": {
+        "type": "openapi",
+        "path": "schemas/api-gateway/openapi.yaml"
+      }
+    },
+    {
+      "name": "user-service",
+      "current_version": "2.0.0",
+      "target_version": "3.0.0",
+      "schema": {
+        "type": "protobuf",
+        "path": "schemas/user-service/user.proto"
+      }
+    },
+    {
+      "name": "auth-service",
+      "current_version": "1.0.0",
+      "target_version": "2.0.0",
+      "schema": {
+        "type": "openapi",
+        "path": "schemas/auth-service/openapi.yaml"
+      }
+    }
+  ],
+  "dependencies": [
+    {
+      "from": "api-gateway",
+      "to": "auth-service",
+      "constraint": {
+        "type": "backward_compatible",
+        "description": "api-gateway must be able to talk to both auth-service v1 and v2"
+      }
+    },
+    {
+      "from": "api-gateway",
+      "to": "user-service",
+      "constraint": {
+        "type": "backward_compatible",
+        "description": "api-gateway calls user-service; wire format must remain compatible"
+      }
+    },
+    {
+      "from": "user-service",
+      "to": "auth-service",
+      "constraint": {
+        "type": "exact_version_match",
+        "description": "user-service v3 requires auth-service v2 for new token format"
+      }
+    }
+  ],
+  "options": {
+    "horizon": 6,
+    "k_robustness": 1,
+    "solver": "cadical",
+    "timeout_seconds": 30
+  }
+}

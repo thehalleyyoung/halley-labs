@@ -1,0 +1,2588 @@
+# CascadeVerify Benchmark — 50-Service Linear Chain
+#
+# Topology: svc-0 → svc-1 → … → svc-49
+# Each hop: 3 retries, 5s per-try timeout, 20s overall timeout
+# Amplification at svc-49: (1+3)^49 ≈ 3.2×10^29
+#
+# Scalability stress-test for path enumeration and amplification analysis.
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-0
+  namespace: bench-chain50
+  labels:
+    app: svc-0
+    topology: chain-50
+    tier: "0"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-0
+  template:
+    metadata:
+      labels:
+        app: svc-0
+    spec:
+      containers:
+      - name: svc-0
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-1
+  namespace: bench-chain50
+  labels:
+    app: svc-1
+    topology: chain-50
+    tier: "1"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-1
+  template:
+    metadata:
+      labels:
+        app: svc-1
+    spec:
+      containers:
+      - name: svc-1
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-2
+  namespace: bench-chain50
+  labels:
+    app: svc-2
+    topology: chain-50
+    tier: "2"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-2
+  template:
+    metadata:
+      labels:
+        app: svc-2
+    spec:
+      containers:
+      - name: svc-2
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-3
+  namespace: bench-chain50
+  labels:
+    app: svc-3
+    topology: chain-50
+    tier: "3"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-3
+  template:
+    metadata:
+      labels:
+        app: svc-3
+    spec:
+      containers:
+      - name: svc-3
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-4
+  namespace: bench-chain50
+  labels:
+    app: svc-4
+    topology: chain-50
+    tier: "4"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-4
+  template:
+    metadata:
+      labels:
+        app: svc-4
+    spec:
+      containers:
+      - name: svc-4
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-5
+  namespace: bench-chain50
+  labels:
+    app: svc-5
+    topology: chain-50
+    tier: "5"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-5
+  template:
+    metadata:
+      labels:
+        app: svc-5
+    spec:
+      containers:
+      - name: svc-5
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-6
+  namespace: bench-chain50
+  labels:
+    app: svc-6
+    topology: chain-50
+    tier: "6"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-6
+  template:
+    metadata:
+      labels:
+        app: svc-6
+    spec:
+      containers:
+      - name: svc-6
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-7
+  namespace: bench-chain50
+  labels:
+    app: svc-7
+    topology: chain-50
+    tier: "7"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-7
+  template:
+    metadata:
+      labels:
+        app: svc-7
+    spec:
+      containers:
+      - name: svc-7
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-8
+  namespace: bench-chain50
+  labels:
+    app: svc-8
+    topology: chain-50
+    tier: "8"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-8
+  template:
+    metadata:
+      labels:
+        app: svc-8
+    spec:
+      containers:
+      - name: svc-8
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-9
+  namespace: bench-chain50
+  labels:
+    app: svc-9
+    topology: chain-50
+    tier: "9"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-9
+  template:
+    metadata:
+      labels:
+        app: svc-9
+    spec:
+      containers:
+      - name: svc-9
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-10
+  namespace: bench-chain50
+  labels:
+    app: svc-10
+    topology: chain-50
+    tier: "10"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-10
+  template:
+    metadata:
+      labels:
+        app: svc-10
+    spec:
+      containers:
+      - name: svc-10
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-11
+  namespace: bench-chain50
+  labels:
+    app: svc-11
+    topology: chain-50
+    tier: "11"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-11
+  template:
+    metadata:
+      labels:
+        app: svc-11
+    spec:
+      containers:
+      - name: svc-11
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-12
+  namespace: bench-chain50
+  labels:
+    app: svc-12
+    topology: chain-50
+    tier: "12"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-12
+  template:
+    metadata:
+      labels:
+        app: svc-12
+    spec:
+      containers:
+      - name: svc-12
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-13
+  namespace: bench-chain50
+  labels:
+    app: svc-13
+    topology: chain-50
+    tier: "13"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-13
+  template:
+    metadata:
+      labels:
+        app: svc-13
+    spec:
+      containers:
+      - name: svc-13
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-14
+  namespace: bench-chain50
+  labels:
+    app: svc-14
+    topology: chain-50
+    tier: "14"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-14
+  template:
+    metadata:
+      labels:
+        app: svc-14
+    spec:
+      containers:
+      - name: svc-14
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-15
+  namespace: bench-chain50
+  labels:
+    app: svc-15
+    topology: chain-50
+    tier: "15"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-15
+  template:
+    metadata:
+      labels:
+        app: svc-15
+    spec:
+      containers:
+      - name: svc-15
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-16
+  namespace: bench-chain50
+  labels:
+    app: svc-16
+    topology: chain-50
+    tier: "16"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-16
+  template:
+    metadata:
+      labels:
+        app: svc-16
+    spec:
+      containers:
+      - name: svc-16
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-17
+  namespace: bench-chain50
+  labels:
+    app: svc-17
+    topology: chain-50
+    tier: "17"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-17
+  template:
+    metadata:
+      labels:
+        app: svc-17
+    spec:
+      containers:
+      - name: svc-17
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-18
+  namespace: bench-chain50
+  labels:
+    app: svc-18
+    topology: chain-50
+    tier: "18"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-18
+  template:
+    metadata:
+      labels:
+        app: svc-18
+    spec:
+      containers:
+      - name: svc-18
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-19
+  namespace: bench-chain50
+  labels:
+    app: svc-19
+    topology: chain-50
+    tier: "19"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-19
+  template:
+    metadata:
+      labels:
+        app: svc-19
+    spec:
+      containers:
+      - name: svc-19
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-20
+  namespace: bench-chain50
+  labels:
+    app: svc-20
+    topology: chain-50
+    tier: "20"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-20
+  template:
+    metadata:
+      labels:
+        app: svc-20
+    spec:
+      containers:
+      - name: svc-20
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-21
+  namespace: bench-chain50
+  labels:
+    app: svc-21
+    topology: chain-50
+    tier: "21"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-21
+  template:
+    metadata:
+      labels:
+        app: svc-21
+    spec:
+      containers:
+      - name: svc-21
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-22
+  namespace: bench-chain50
+  labels:
+    app: svc-22
+    topology: chain-50
+    tier: "22"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-22
+  template:
+    metadata:
+      labels:
+        app: svc-22
+    spec:
+      containers:
+      - name: svc-22
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-23
+  namespace: bench-chain50
+  labels:
+    app: svc-23
+    topology: chain-50
+    tier: "23"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-23
+  template:
+    metadata:
+      labels:
+        app: svc-23
+    spec:
+      containers:
+      - name: svc-23
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-24
+  namespace: bench-chain50
+  labels:
+    app: svc-24
+    topology: chain-50
+    tier: "24"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-24
+  template:
+    metadata:
+      labels:
+        app: svc-24
+    spec:
+      containers:
+      - name: svc-24
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-25
+  namespace: bench-chain50
+  labels:
+    app: svc-25
+    topology: chain-50
+    tier: "25"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-25
+  template:
+    metadata:
+      labels:
+        app: svc-25
+    spec:
+      containers:
+      - name: svc-25
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-26
+  namespace: bench-chain50
+  labels:
+    app: svc-26
+    topology: chain-50
+    tier: "26"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-26
+  template:
+    metadata:
+      labels:
+        app: svc-26
+    spec:
+      containers:
+      - name: svc-26
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-27
+  namespace: bench-chain50
+  labels:
+    app: svc-27
+    topology: chain-50
+    tier: "27"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-27
+  template:
+    metadata:
+      labels:
+        app: svc-27
+    spec:
+      containers:
+      - name: svc-27
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-28
+  namespace: bench-chain50
+  labels:
+    app: svc-28
+    topology: chain-50
+    tier: "28"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-28
+  template:
+    metadata:
+      labels:
+        app: svc-28
+    spec:
+      containers:
+      - name: svc-28
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-29
+  namespace: bench-chain50
+  labels:
+    app: svc-29
+    topology: chain-50
+    tier: "29"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-29
+  template:
+    metadata:
+      labels:
+        app: svc-29
+    spec:
+      containers:
+      - name: svc-29
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-30
+  namespace: bench-chain50
+  labels:
+    app: svc-30
+    topology: chain-50
+    tier: "30"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-30
+  template:
+    metadata:
+      labels:
+        app: svc-30
+    spec:
+      containers:
+      - name: svc-30
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-31
+  namespace: bench-chain50
+  labels:
+    app: svc-31
+    topology: chain-50
+    tier: "31"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-31
+  template:
+    metadata:
+      labels:
+        app: svc-31
+    spec:
+      containers:
+      - name: svc-31
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-32
+  namespace: bench-chain50
+  labels:
+    app: svc-32
+    topology: chain-50
+    tier: "32"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-32
+  template:
+    metadata:
+      labels:
+        app: svc-32
+    spec:
+      containers:
+      - name: svc-32
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-33
+  namespace: bench-chain50
+  labels:
+    app: svc-33
+    topology: chain-50
+    tier: "33"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-33
+  template:
+    metadata:
+      labels:
+        app: svc-33
+    spec:
+      containers:
+      - name: svc-33
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-34
+  namespace: bench-chain50
+  labels:
+    app: svc-34
+    topology: chain-50
+    tier: "34"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-34
+  template:
+    metadata:
+      labels:
+        app: svc-34
+    spec:
+      containers:
+      - name: svc-34
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-35
+  namespace: bench-chain50
+  labels:
+    app: svc-35
+    topology: chain-50
+    tier: "35"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-35
+  template:
+    metadata:
+      labels:
+        app: svc-35
+    spec:
+      containers:
+      - name: svc-35
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-36
+  namespace: bench-chain50
+  labels:
+    app: svc-36
+    topology: chain-50
+    tier: "36"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-36
+  template:
+    metadata:
+      labels:
+        app: svc-36
+    spec:
+      containers:
+      - name: svc-36
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-37
+  namespace: bench-chain50
+  labels:
+    app: svc-37
+    topology: chain-50
+    tier: "37"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-37
+  template:
+    metadata:
+      labels:
+        app: svc-37
+    spec:
+      containers:
+      - name: svc-37
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-38
+  namespace: bench-chain50
+  labels:
+    app: svc-38
+    topology: chain-50
+    tier: "38"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-38
+  template:
+    metadata:
+      labels:
+        app: svc-38
+    spec:
+      containers:
+      - name: svc-38
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-39
+  namespace: bench-chain50
+  labels:
+    app: svc-39
+    topology: chain-50
+    tier: "39"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-39
+  template:
+    metadata:
+      labels:
+        app: svc-39
+    spec:
+      containers:
+      - name: svc-39
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-40
+  namespace: bench-chain50
+  labels:
+    app: svc-40
+    topology: chain-50
+    tier: "40"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-40
+  template:
+    metadata:
+      labels:
+        app: svc-40
+    spec:
+      containers:
+      - name: svc-40
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-41
+  namespace: bench-chain50
+  labels:
+    app: svc-41
+    topology: chain-50
+    tier: "41"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-41
+  template:
+    metadata:
+      labels:
+        app: svc-41
+    spec:
+      containers:
+      - name: svc-41
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-42
+  namespace: bench-chain50
+  labels:
+    app: svc-42
+    topology: chain-50
+    tier: "42"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-42
+  template:
+    metadata:
+      labels:
+        app: svc-42
+    spec:
+      containers:
+      - name: svc-42
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-43
+  namespace: bench-chain50
+  labels:
+    app: svc-43
+    topology: chain-50
+    tier: "43"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-43
+  template:
+    metadata:
+      labels:
+        app: svc-43
+    spec:
+      containers:
+      - name: svc-43
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-44
+  namespace: bench-chain50
+  labels:
+    app: svc-44
+    topology: chain-50
+    tier: "44"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-44
+  template:
+    metadata:
+      labels:
+        app: svc-44
+    spec:
+      containers:
+      - name: svc-44
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-45
+  namespace: bench-chain50
+  labels:
+    app: svc-45
+    topology: chain-50
+    tier: "45"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-45
+  template:
+    metadata:
+      labels:
+        app: svc-45
+    spec:
+      containers:
+      - name: svc-45
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-46
+  namespace: bench-chain50
+  labels:
+    app: svc-46
+    topology: chain-50
+    tier: "46"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-46
+  template:
+    metadata:
+      labels:
+        app: svc-46
+    spec:
+      containers:
+      - name: svc-46
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-47
+  namespace: bench-chain50
+  labels:
+    app: svc-47
+    topology: chain-50
+    tier: "47"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-47
+  template:
+    metadata:
+      labels:
+        app: svc-47
+    spec:
+      containers:
+      - name: svc-47
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-48
+  namespace: bench-chain50
+  labels:
+    app: svc-48
+    topology: chain-50
+    tier: "48"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-48
+  template:
+    metadata:
+      labels:
+        app: svc-48
+    spec:
+      containers:
+      - name: svc-48
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: svc-49
+  namespace: bench-chain50
+  labels:
+    app: svc-49
+    topology: chain-50
+    tier: "49"
+  annotations:
+    cascade-verify/capacity: "1000"
+    cascade-verify/baseline-load: "100"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: svc-49
+  template:
+    metadata:
+      labels:
+        app: svc-49
+    spec:
+      containers:
+      - name: svc-49
+        image: bench/svc:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-0-to-svc-1
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-1
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-1
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-1-to-svc-2
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-2
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-2
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-2-to-svc-3
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-3
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-3
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-3-to-svc-4
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-4
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-4
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-4-to-svc-5
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-5
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-5
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-5-to-svc-6
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-6
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-6
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-6-to-svc-7
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-7
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-7
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-7-to-svc-8
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-8
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-8
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-8-to-svc-9
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-9
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-9
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-9-to-svc-10
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-10
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-10
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-10-to-svc-11
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-11
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-11
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-11-to-svc-12
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-12
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-12
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-12-to-svc-13
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-13
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-13
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-13-to-svc-14
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-14
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-14
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-14-to-svc-15
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-15
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-15
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-15-to-svc-16
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-16
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-16
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-16-to-svc-17
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-17
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-17
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-17-to-svc-18
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-18
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-18
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-18-to-svc-19
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-19
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-19
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-19-to-svc-20
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-20
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-20
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-20-to-svc-21
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-21
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-21
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-21-to-svc-22
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-22
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-22
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-22-to-svc-23
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-23
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-23
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-23-to-svc-24
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-24
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-24
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-24-to-svc-25
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-25
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-25
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-25-to-svc-26
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-26
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-26
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-26-to-svc-27
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-27
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-27
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-27-to-svc-28
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-28
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-28
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-28-to-svc-29
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-29
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-29
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-29-to-svc-30
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-30
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-30
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-30-to-svc-31
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-31
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-31
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-31-to-svc-32
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-32
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-32
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-32-to-svc-33
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-33
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-33
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-33-to-svc-34
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-34
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-34
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-34-to-svc-35
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-35
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-35
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-35-to-svc-36
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-36
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-36
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-36-to-svc-37
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-37
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-37
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-37-to-svc-38
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-38
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-38
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-38-to-svc-39
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-39
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-39
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-39-to-svc-40
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-40
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-40
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-40-to-svc-41
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-41
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-41
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-41-to-svc-42
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-42
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-42
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-42-to-svc-43
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-43
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-43
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-43-to-svc-44
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-44
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-44
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-44-to-svc-45
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-45
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-45
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-45-to-svc-46
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-46
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-46
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-46-to-svc-47
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-47
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-47
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-47-to-svc-48
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-48
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-48
+        port:
+          number: 8080
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: svc-48-to-svc-49
+  namespace: bench-chain50
+spec:
+  hosts:
+  - svc-49
+  http:
+  - retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: 5xx,reset,connect-failure
+    timeout: 20s
+    route:
+    - destination:
+        host: svc-49
+        port:
+          number: 8080

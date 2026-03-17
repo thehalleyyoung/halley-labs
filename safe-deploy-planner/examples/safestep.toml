@@ -1,0 +1,117 @@
+# safestep.toml — SafeStep configuration file
+#
+# Place this file in your project root or pass it explicitly:
+#   safestep --config safestep.toml plan input.yaml
+#
+# All keys shown below are optional; defaults are listed in comments.
+
+# ─── General ────────────────────────────────────────────────────────
+
+[general]
+# Project name (used in log output and exported manifests)
+project_name = "my-platform"
+
+# Default input format when auto-detection is ambiguous
+# Options: "json", "yaml", "toml"
+# default_format = "yaml"
+
+# ─── Solver ─────────────────────────────────────────────────────────
+
+[solver]
+# Which solver backend to use
+# Options: "cadical", "z3"
+backend = "cadical"
+
+# Maximum wall-clock time (seconds) before the solver gives up
+timeout_seconds = 60
+
+# Conflict-clause limit (0 = unlimited). Useful for very large instances.
+# conflict_limit = 0
+
+# Random seed for solver heuristics (deterministic replay)
+random_seed = 42
+
+# ─── Planning ───────────────────────────────────────────────────────
+
+[planning]
+# Maximum BMC unrolling horizon (number of time steps)
+# SafeStep will try incrementally from n..horizon where n = number of upgrades
+max_horizon = 20
+
+# Enable interval-compressed encoding (recommended; significantly reduces
+# clause count on large service graphs)
+interval_compression = true
+
+# Check k-robustness of the computed plan (0 = disabled)
+k_robustness = 1
+
+# Allow idle steps (time steps where no service is upgraded)
+# Disabling this forces a tighter plan but may make the problem unsatisfiable
+allow_idle_steps = true
+
+# ─── Schema Compatibility ──────────────────────────────────────────
+
+[schema]
+# Enable automatic schema compatibility checking
+enabled = true
+
+# Directories to search for schema files (relative to project root)
+search_paths = ["schemas/", "api/"]
+
+# Treat missing schemas as compatible (true) or as errors (false)
+# allow_missing = false
+
+# ─── Kubernetes ─────────────────────────────────────────────────────
+
+[kubernetes]
+# Enable Kubernetes integration
+enabled = false
+
+# Path to kubeconfig (defaults to ~/.kube/config)
+# kubeconfig = "~/.kube/config"
+
+# Namespace to operate in
+# namespace = "default"
+
+# Helm values file to read current versions from
+# helm_values = "helm/values.yaml"
+
+# Kustomize overlay directory
+# kustomize_dir = "k8s/overlays/staging"
+
+# ─── Export ─────────────────────────────────────────────────────────
+
+[export]
+# Default export format for the `plan` command
+# Options: "json", "yaml", "table"
+format = "yaml"
+
+# Generate ArgoCD ApplicationSet manifests alongside the plan
+argocd = false
+
+# ArgoCD project name (used in generated manifests)
+# argocd_project = "default"
+
+# Generate Flux HelmRelease / Kustomization manifests alongside the plan
+flux = false
+
+# ─── Envelope ───────────────────────────────────────────────────────
+
+[envelope]
+# Automatically compute the rollback safety envelope after planning
+auto_compute = true
+
+# Write the envelope to a separate file
+# output_path = "envelope.json"
+
+# ─── Logging ────────────────────────────────────────────────────────
+
+[logging]
+# Log level: "error", "warn", "info", "debug", "trace"
+level = "info"
+
+# Output format: "pretty" (human-readable) or "json" (structured)
+format = "pretty"
+
+# Write logs to a file in addition to stderr
+# file = "safestep.log"

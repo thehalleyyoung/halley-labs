@@ -1,0 +1,126 @@
+{
+  "tool": "negsyn",
+  "version": "0.2.1",
+  "benchmark": "scaled_protocol_models",
+  "timestamp": "2026-03-10T12:16:57-0700",
+  "methodology": "Constructs realistic 256+ state protocol models from real TLS (RFC 5246/8446) and SSH (RFC 4253) state machines. Measures slicing effectiveness, merge reduction, and CVE detection. 50 inner iterations, 5 outer runs for statistical stability.",
+  "inner_iterations": 50,
+  "outer_runs": 5,
+  "protocols": {
+    "tls": {
+      "model": {
+        "name": "tls_full",
+        "state_count": 549,
+        "transition_count": 526
+      },
+      "slicing": {
+        "total_states": 549,
+        "negotiation_states": 366,
+        "non_negotiation_states": 183,
+        "reduction_pct": 33.33,
+        "slice_time_ms": 0.077765,
+        "memory_bytes": 93696,
+        "states_per_ms": 4726.2,
+        "tagged_breakdown": {
+          "export": 162,
+          "broken": 279,
+          "ssl3_fallback": 126
+        }
+      },
+      "merge": {
+        "pre_merge_states": 549,
+        "post_merge_states": 108,
+        "reduction_ratio": 0.1967,
+        "merge_time_ms": 0.163587,
+        "states_per_ms": 3356.4
+      },
+      "cve_detections": [
+        {
+          "cve_id": "CVE-2015-0204",
+          "name": "FREAK",
+          "detected": true,
+          "matching_states": 162,
+          "description": "Export cipher suites in model (162 states with export ciphers)",
+          "severity": "HIGH"
+        },
+        {
+          "cve_id": "CVE-2014-3566",
+          "name": "POODLE",
+          "detected": true,
+          "matching_states": 126,
+          "description": "SSL 3.0 fallback path (17 downgrade transitions)",
+          "severity": "HIGH"
+        },
+        {
+          "cve_id": "N/A",
+          "name": "Version downgrade",
+          "detected": true,
+          "matching_states": 27,
+          "description": "38 version downgrade paths",
+          "severity": "MEDIUM"
+        },
+        {
+          "cve_id": "N/A",
+          "name": "Export cipher presence",
+          "detected": true,
+          "matching_states": 162,
+          "description": "162 states with export-grade ciphers",
+          "severity": "HIGH"
+        },
+        {
+          "cve_id": "N/A",
+          "name": "Broken cipher presence",
+          "detected": true,
+          "matching_states": 117,
+          "description": "117 states with broken ciphers (RC4, NULL, etc.)",
+          "severity": "HIGH"
+        }
+      ]
+    },
+    "ssh": {
+      "model": {
+        "name": "ssh_full",
+        "state_count": 336,
+        "transition_count": 1342
+      },
+      "slicing": {
+        "total_states": 336,
+        "negotiation_states": 300,
+        "non_negotiation_states": 36,
+        "reduction_pct": 10.71,
+        "slice_time_ms": 0.208286,
+        "memory_bytes": 76800,
+        "states_per_ms": 1440.9,
+        "tagged_breakdown": {
+          "broken_hostkey": 56,
+          "weak_kex": 48
+        }
+      },
+      "merge": {
+        "pre_merge_states": 336,
+        "post_merge_states": 12,
+        "reduction_ratio": 0.0357,
+        "merge_time_ms": 0.057841,
+        "states_per_ms": 5863.0
+      },
+      "cve_detections": [
+        {
+          "cve_id": "CVE-2023-48795",
+          "name": "Terrapin",
+          "detected": true,
+          "matching_states": 2,
+          "description": "KEX downgrade paths (24 adversary transitions)",
+          "severity": "HIGH"
+        },
+        {
+          "cve_id": "N/A",
+          "name": "Weak SSH algorithms",
+          "detected": true,
+          "matching_states": 96,
+          "description": "96 states with weak/broken algorithms",
+          "severity": "MEDIUM"
+        }
+      ]
+    }
+  }
+}
