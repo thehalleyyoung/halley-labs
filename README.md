@@ -1,10 +1,14 @@
 # halley-labs
 
-A collection of research software repositories built and extensively tested by AI — less so by humans. As such, these projects fall under the **laboratory** scope within the author's collection: they represent serious research artifacts generated through an automated pipeline, but have not undergone the same degree of human validation as production releases.
+`halley-labs` is a curated collection of research software artifacts generated through an AI-first workflow. The repositories gathered here are not intended to present a single unified software stack; rather, they instantiate a broad portfolio of executable research directions spanning formal methods, optimization, systems, machine learning, verification, privacy, and scientific computing.
 
-Despite this, there is genuine reason to believe that each of these repositories could be extremely useful. Each project was selected through a competitive process optimizing for extreme and obvious value, genuine technical difficulty, and best-paper potential — with evaluation automated and adversarially stress-tested at each stage.
+The central claim of the collection is methodological. Each project was selected under an automated process that optimized for technical ambition, prospective usefulness, and paper-worthy novelty, then stress-tested through iterative build, test, and artifact-validation loops. In that sense, `halley-labs` should be read as a laboratory of executable hypotheses: each repository aims to make a concrete research idea inspectable, runnable, and extensible, even when the surrounding evaluation story remains narrower than that of a mature production system.
 
-A paper describing the approach used to generate this collection is forthcoming.
+This monorepo serves as an index over the project set. The linked repositories are the primary homes of the artifacts themselves, including their code, documentation, and project-specific papers. A paper describing the generation and selection process for the collection is forthcoming.
+
+## Collection Overview
+
+The repositories below cover a deliberately wide range of technical domains, but they share a common purpose: to test whether a high-throughput, adversarially checked generation pipeline can produce research software that is substantial enough to support real follow-on work. Some projects are best understood as prototype tools, some as theory-backed artifact demonstrations, and some as early systems papers in executable form. Taken together, they form a benchmark of what an automated research-software workflow can already produce.
 
 ## Projects
 
