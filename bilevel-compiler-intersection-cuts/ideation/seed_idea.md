@@ -1,3 +1,0 @@
-Community: area-013-operations-research-and-optimization
-
-Idea: ● Response was interrupted due to a server error. Retrying...
